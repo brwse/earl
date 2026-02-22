@@ -116,9 +116,11 @@ async fn discover_oidc(issuer: &str, http_client: &Client) -> Result<OidcMetadat
         );
     }
 
-    response
-        .json::<OidcMetadata>()
+    let body = response
+        .text()
         .await
+        .with_context(|| format!("failed reading OIDC discovery response from `{url}`"))?;
+    serde_json::from_str::<OidcMetadata>(&body)
         .with_context(|| format!("invalid OIDC discovery response from `{url}`"))
 }
 

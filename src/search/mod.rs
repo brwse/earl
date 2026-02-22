@@ -1,4 +1,5 @@
 pub mod index;
+#[cfg(feature = "local-search")]
 pub mod local_fastembed;
 pub mod remote_openai_compat;
 pub mod service;

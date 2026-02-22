@@ -41,6 +41,8 @@ rustup target add "$TARGET"
 FEATURES_FLAG=""
 if [[ "$TARGET" == *"windows"* ]]; then
   FEATURES_FLAG="--no-default-features --features http,graphql,grpc,sql"
+elif [[ "$TARGET" == *"musl"* || "$TARGET" == "aarch64-unknown-linux-gnu" ]]; then
+  FEATURES_FLAG="--no-default-features --features http,graphql,grpc,bash,sql"
 fi
 
 case "$BUILD_TOOL" in

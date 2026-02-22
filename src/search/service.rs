@@ -5,7 +5,6 @@ use crate::secrets::SecretManager;
 use crate::template::catalog::TemplateCatalog;
 
 use super::index::{SearchHit, build_documents};
-use super::local_fastembed::search_local;
 use super::remote_openai_compat::search_remote;
 
 pub async fn search_templates(
@@ -23,19 +22,27 @@ pub async fn search_templates(
         return Ok(remote_hits.into_iter().take(limit).collect());
     }
 
-    let query_owned = query.to_string();
-    let docs_owned = documents.clone();
-    let search_cfg = config.search.clone();
+    #[cfg(feature = "local-search")]
+    {
+        use super::local_fastembed::search_local;
 
-    let local_result =
-        tokio::task::spawn_blocking(move || search_local(&query_owned, &docs_owned, &search_cfg))
-            .await;
+        let query_owned = query.to_string();
+        let docs_owned = documents.clone();
+        let search_cfg = config.search.clone();
 
-    let mut hits = match local_result {
-        Ok(Ok(hits)) => hits,
-        _ => lexical_fallback(query, &documents),
-    };
+        let local_result = tokio::task::spawn_blocking(move || {
+            search_local(&query_owned, &docs_owned, &search_cfg)
+        })
+        .await;
 
+        if let Ok(Ok(hits)) = local_result {
+            let mut hits = hits;
+            hits.truncate(limit);
+            return Ok(hits);
+        }
+    }
+
+    let mut hits = lexical_fallback(query, &documents);
     hits.truncate(limit);
     Ok(hits)
 }

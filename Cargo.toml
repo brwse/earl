@@ -38,7 +38,7 @@ clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
 comfy-table = "7.2"
 directories = "6.0"
-fastembed = "5.11"
+fastembed = { version = "5.11", optional = true }
 earl-protocol-grpc = { version = "0.3.0", path = "crates/earl-protocol-grpc", optional = true }
 hcl = { package = "hcl-rs", version = "0.19.5" }
 hickory-resolver = "0.25"
@@ -103,7 +103,8 @@ tower = { version = "0.5", features = ["util"] }
 openssl = { version = "0.10", features = ["vendored"] }
 
 [features]
-default = ["http", "graphql", "grpc", "bash", "sql"]
+default = ["http", "graphql", "grpc", "bash", "sql", "local-search"]
+local-search = ["dep:fastembed"]
 http = ["dep:earl-protocol-http"]
 graphql = ["http"]
 grpc = ["dep:earl-protocol-grpc"]
