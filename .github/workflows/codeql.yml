@@ -8,10 +8,6 @@ on:
   schedule:
     - cron: "0 6 * * 1"
 
-concurrency:
-  group: codeql-${{ github.workflow }}-${{ github.ref }}-${{ matrix.language }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   security-events: write
@@ -34,6 +30,10 @@ jobs:
       - name: Install Rust toolchain
         if: matrix.language == 'rust'
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        if: matrix.language == 'rust'
+        uses: Swatinem/rust-cache@v2
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
