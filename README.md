@@ -10,7 +10,7 @@
 [![gRPC](https://img.shields.io/badge/gRPC-244C5A?logo=google&logoColor=fff)](#)
 [![Bash](https://img.shields.io/badge/Bash-4EAA25?logo=gnubash&logoColor=fff)](#)
 [![SQL](https://img.shields.io/badge/SQL-%23316192.svg?logo=postgresql&logoColor=white)](#)
-&ensp;|&ensp;
+&ensp;
 [![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)](https://github.com/brwse/earl/releases/latest)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](https://github.com/brwse/earl/releases/latest)
 [![Windows](https://img.shields.io/badge/Windows-0078D4?logo=windows&logoColor=white)](https://github.com/brwse/earl/releases/latest)
