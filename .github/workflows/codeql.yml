@@ -15,8 +15,8 @@ permissions:
   security-events: write
 
 jobs:
-  analyze:
-    name: Analyze
+  analyze-rust:
+    name: Analyze (rust)
     runs-on: ubuntu-latest
 
     steps:
@@ -33,6 +33,29 @@ jobs:
 
       - name: Build
         run: cargo build --all-features
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+
+  analyze-other:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - actions
+          - javascript-typescript
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
