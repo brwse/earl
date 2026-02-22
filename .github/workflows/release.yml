@@ -170,8 +170,7 @@ jobs:
     environment: release
     permissions:
       contents: read
-    env:
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -191,14 +190,6 @@ jobs:
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
-
-      - name: Validate token presence
-        shell: bash
-        run: |
-          if [[ -z "${CARGO_REGISTRY_TOKEN}" ]]; then
-            echo "CARGO_REGISTRY_TOKEN is required for release publishing" >&2
-            exit 1
-          fi
 
       - name: Publish workspace crates
         shell: bash
