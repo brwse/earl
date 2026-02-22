@@ -45,18 +45,19 @@ command "disk_usage" {
 
 ## Key Fields
 
-| Field | Required | Description |
-|---|---|---|
-| `bash.script` | Yes | Shell command to execute (supports `{{ args.* }}`) |
-| `bash.sandbox.network` | No | Allow network access (default: false) |
-| `bash.sandbox.max_time_ms` | No | Timeout in milliseconds (default: from config) |
-| `bash.sandbox.max_output_bytes` | No | Max output size (default: from config) |
+| Field                           | Required | Description                                        |
+| ------------------------------- | -------- | -------------------------------------------------- |
+| `bash.script`                   | Yes      | Shell command to execute (supports `{{ args.* }}`) |
+| `bash.sandbox.network`          | No       | Allow network access (default: false)              |
+| `bash.sandbox.max_time_ms`      | No       | Timeout in milliseconds (default: from config)     |
+| `bash.sandbox.max_output_bytes` | No       | Max output size (default: from config)             |
 
 **Note:** Bash uses a nested `bash` block inside `operation`.
 
 ## Sandbox
 
 Bash commands run in a sandbox by default:
+
 - **No network access** unless `network = true`
 - **Configurable timeout** via `max_time_ms`
 - **Output limits** via `max_output_bytes`

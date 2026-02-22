@@ -11,6 +11,7 @@ earl mcp stdio
 ```
 
 This starts Earl in discovery mode (default), exposing two meta-tools:
+
 - `earl.tool_search` — search for templates by natural language query
 - `earl.tool_call` — execute a template by name
 

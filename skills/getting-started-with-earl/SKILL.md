@@ -26,16 +26,19 @@ earl --version
 If not installed, detect the OS and install:
 
 **macOS / Linux:**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 irm https://raw.githubusercontent.com/brwse/earl/main/scripts/install.ps1 | iex
 ```
 
 **Alternative (requires Rust toolchain):**
+
 ```bash
 cargo install earl
 ```
@@ -78,13 +81,13 @@ Ask the user ONE question:
 
 Infer the protocol from their answer:
 
-| User mentions | Protocol | Reference file |
-|---|---|---|
-| REST, HTTP, API, endpoint, webhook, JSON API | HTTP | [http-templates.md](references/http-templates.md) |
-| GraphQL, query/mutation (in API context) | GraphQL | [graphql-templates.md](references/graphql-templates.md) |
-| gRPC, protobuf, service mesh | gRPC | [grpc-templates.md](references/grpc-templates.md) |
-| shell, bash, CLI, script, command line | Bash | [bash-templates.md](references/bash-templates.md) |
-| SQL, database, postgres, mysql, sqlite, query (in DB context) | SQL | [sql-templates.md](references/sql-templates.md) |
+| User mentions                                                 | Protocol | Reference file                                          |
+| ------------------------------------------------------------- | -------- | ------------------------------------------------------- |
+| REST, HTTP, API, endpoint, webhook, JSON API                  | HTTP     | [http-templates.md](references/http-templates.md)       |
+| GraphQL, query/mutation (in API context)                      | GraphQL  | [graphql-templates.md](references/graphql-templates.md) |
+| gRPC, protobuf, service mesh                                  | gRPC     | [grpc-templates.md](references/grpc-templates.md)       |
+| shell, bash, CLI, script, command line                        | Bash     | [bash-templates.md](references/bash-templates.md)       |
+| SQL, database, postgres, mysql, sqlite, query (in DB context) | SQL      | [sql-templates.md](references/sql-templates.md)         |
 
 Only ask a follow-up if the answer is genuinely ambiguous. If the user says "I want to call the GitHub API," infer HTTP with bearer auth — do not ask "which protocol?"
 
@@ -107,13 +110,13 @@ If the user mentions `localhost`, `127.0.0.1`, `10.x.x.x`, `172.16-31.x.x`, `192
 
 Categorize the error before suggesting a fix:
 
-| Error type | Symptoms | Fix |
-|---|---|---|
-| HCL parse error | "expected ...", "unexpected token" | File structure or syntax issue. Check HCL syntax. |
-| Jinja render error | "undefined variable", "template error" | Expression issue. Check `{{ args.* }}` references match param names. |
-| Auth error | HTTP 401 or 403 | Secret not set or expired. Run `earl secrets set <key>`. |
-| SSRF block | "address not allowed", connection refused to private IP | URL points to private/loopback IP. Use a public URL. |
-| API error (4xx/5xx) | HTTP status in response body | Earl ran successfully. The API itself returned an error. Check URL, params, and API docs. |
+| Error type          | Symptoms                                                | Fix                                                                                       |
+| ------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| HCL parse error     | "expected ...", "unexpected token"                      | File structure or syntax issue. Check HCL syntax.                                         |
+| Jinja render error  | "undefined variable", "template error"                  | Expression issue. Check `{{ args.* }}` references match param names.                      |
+| Auth error          | HTTP 401 or 403                                         | Secret not set or expired. Run `earl secrets set <key>`.                                  |
+| SSRF block          | "address not allowed", connection refused to private IP | URL points to private/loopback IP. Use a public URL.                                      |
+| API error (4xx/5xx) | HTTP status in response body                            | Earl ran successfully. The API itself returned an error. Check URL, params, and API docs. |
 
 After suggesting a fix, offer to re-run automatically.
 

@@ -48,14 +48,14 @@ command "health_check" {
 
 ## Key Fields
 
-| Field | Required | Description |
-|---|---|---|
-| `url` | Yes | gRPC server address (include port) |
-| `timeout_ms` | No | Request timeout in milliseconds |
-| `grpc.service` | Yes | Fully qualified service name |
-| `grpc.method` | Yes | RPC method name |
-| `grpc.body` | No | Request message as key-value map |
-| `grpc.descriptor_set_file` | No | Path to offline descriptor set (`.fds.bin`) |
+| Field                      | Required | Description                                 |
+| -------------------------- | -------- | ------------------------------------------- |
+| `url`                      | Yes      | gRPC server address (include port)          |
+| `timeout_ms`               | No       | Request timeout in milliseconds             |
+| `grpc.service`             | Yes      | Fully qualified service name                |
+| `grpc.method`              | Yes      | RPC method name                             |
+| `grpc.body`                | No       | Request message as key-value map            |
+| `grpc.descriptor_set_file` | No       | Path to offline descriptor set (`.fds.bin`) |
 
 **Note:** gRPC uses a nested `grpc` block inside `operation`.
 

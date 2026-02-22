@@ -60,12 +60,12 @@ command "get_user" {
 
 ## Key Fields
 
-| Field | Required | Description |
-|---|---|---|
-| `url` | Yes | GraphQL endpoint URL |
-| `graphql.query` | Yes | The GraphQL query or mutation string |
-| `graphql.variables` | No | Variables as key-value map (supports `{{ args.* }}`) |
-| `auth` | No | Authentication block (same as HTTP) |
+| Field               | Required | Description                                          |
+| ------------------- | -------- | ---------------------------------------------------- |
+| `url`               | Yes      | GraphQL endpoint URL                                 |
+| `graphql.query`     | Yes      | The GraphQL query or mutation string                 |
+| `graphql.variables` | No       | Variables as key-value map (supports `{{ args.* }}`) |
+| `auth`              | No       | Authentication block (same as HTTP)                  |
 
 **Note:** GraphQL uses a nested `graphql` block inside `operation`, unlike HTTP which is flat.
 

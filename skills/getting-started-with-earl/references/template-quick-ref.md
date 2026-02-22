@@ -5,6 +5,7 @@ Compact reference of all Earl template shapes, field types, and options.
 ## Operation Shapes by Protocol
 
 **HTTP** — fields are flat in operation block:
+
 ```hcl
 operation {
   protocol = "http"
@@ -18,6 +19,7 @@ operation {
 ```
 
 **GraphQL** — nested `graphql` block:
+
 ```hcl
 operation {
   protocol = "graphql"
@@ -31,6 +33,7 @@ operation {
 ```
 
 **gRPC** — nested `grpc` block:
+
 ```hcl
 operation {
   protocol   = "grpc"
@@ -46,6 +49,7 @@ operation {
 ```
 
 **Bash** — nested `bash` block:
+
 ```hcl
 operation {
   protocol = "bash"
@@ -61,6 +65,7 @@ operation {
 ```
 
 **SQL** — nested `sql` block:
+
 ```hcl
 operation {
   protocol = "sql"
@@ -78,19 +83,19 @@ operation {
 
 ## Auth Block Kinds
 
-| Kind | Fields | Use case |
-|---|---|---|
-| `bearer` | `secret` | API tokens (most REST/GraphQL APIs) |
-| `basic` | `secret` | Basic HTTP auth (username:password) |
+| Kind     | Fields    | Use case                                 |
+| -------- | --------- | ---------------------------------------- |
+| `bearer` | `secret`  | API tokens (most REST/GraphQL APIs)      |
+| `basic`  | `secret`  | Basic HTTP auth (username:password)      |
 | `oauth2` | `profile` | OAuth2 flows (configured in config.toml) |
 
 ## Body Block Kinds (HTTP only)
 
-| Kind | `value` type | Use case |
-|---|---|---|
-| `json` | Object/map | JSON request body |
-| `form` | Object/map | URL-encoded form data |
-| `raw` | String | Raw text body |
+| Kind   | `value` type | Use case              |
+| ------ | ------------ | --------------------- |
+| `json` | Object/map   | JSON request body     |
+| `form` | Object/map   | URL-encoded form data |
+| `raw`  | String       | Raw text body         |
 
 ## Parameter Types
 
@@ -108,16 +113,16 @@ extract = { json_pointer = "/data/items" }
 
 ## Template Expression Context
 
-| Context | Available in | Example |
-|---|---|---|
-| `args.*` | Everywhere | `{{ args.query }}` |
+| Context     | Available in         | Example                   |
+| ----------- | -------------------- | ------------------------- |
+| `args.*`    | Everywhere           | `{{ args.query }}`        |
 | `secrets.*` | Operation block only | `{{ secrets.myapi_key }}` |
-| `result` | Result block only | `{{ result.total }}` |
+| `result`    | Result block only    | `{{ result.total }}`      |
 
 ## HCL Functions
 
-| Function | Example |
-|---|---|
-| `file("path")` | Read a file relative to template |
-| `base64encode("value")` | Base64 encode |
-| `trimspace("value")` | Trim whitespace |
+| Function                | Example                          |
+| ----------------------- | -------------------------------- |
+| `file("path")`          | Read a file relative to template |
+| `base64encode("value")` | Base64 encode                    |
+| `trimspace("value")`    | Trim whitespace                  |

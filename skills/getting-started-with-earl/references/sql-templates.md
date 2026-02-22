@@ -49,13 +49,13 @@ command "recent_orders" {
 
 ## Key Fields
 
-| Field | Required | Description |
-|---|---|---|
-| `sql.connection_secret` | Yes | Secret key containing the database connection URL |
-| `sql.query` | Yes | SQL query with `?` placeholders for parameters |
-| `sql.params` | No | Array of parameter values (supports `{{ args.* }}`) |
-| `sql.sandbox.read_only` | No | Force read-only mode (default: true) |
-| `sql.sandbox.max_rows` | No | Maximum rows returned |
+| Field                   | Required | Description                                         |
+| ----------------------- | -------- | --------------------------------------------------- |
+| `sql.connection_secret` | Yes      | Secret key containing the database connection URL   |
+| `sql.query`             | Yes      | SQL query with `?` placeholders for parameters      |
+| `sql.params`            | No       | Array of parameter values (supports `{{ args.* }}`) |
+| `sql.sandbox.read_only` | No       | Force read-only mode (default: true)                |
+| `sql.sandbox.max_rows`  | No       | Maximum rows returned                               |
 
 **Note:** SQL uses a nested `sql` block inside `operation`.
 
@@ -64,11 +64,13 @@ command "recent_orders" {
 HCL parsing happens BEFORE Jinja template rendering. This means all `{{ }}` expressions must be valid HCL tokens.
 
 **Correct — string-wrapped params:**
+
 ```hcl
 params = ["{{ args.limit }}"]
 ```
 
 **Wrong — bare expression (invalid HCL):**
+
 ```hcl
 params = [{{ args.limit }}]
 ```
@@ -88,6 +90,7 @@ Set it: `earl secrets set analytics.db_url --stdin` (then paste the URL)
 ## Sandbox
 
 SQL queries run with safety defaults:
+
 - **Read-only by default** (`read_only = true`) — prevents accidental writes
 - **Row limits** — cap output size with `max_rows`
 

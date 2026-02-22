@@ -60,14 +60,14 @@ command "get_items" {
 
 ## Key Fields
 
-| Field | Required | Description |
-|---|---|---|
-| `method` | Yes | HTTP method: GET, POST, PUT, PATCH, DELETE |
-| `url` | Yes | Full URL (supports `{{ args.* }}` expressions) |
-| `query` | No | Query parameters as key-value map |
-| `headers` | No | HTTP headers as key-value map |
-| `body` | No | Request body (see body kinds below) |
-| `auth` | No | Authentication block |
+| Field     | Required | Description                                    |
+| --------- | -------- | ---------------------------------------------- |
+| `method`  | Yes      | HTTP method: GET, POST, PUT, PATCH, DELETE     |
+| `url`     | Yes      | Full URL (supports `{{ args.* }}` expressions) |
+| `query`   | No       | Query parameters as key-value map              |
+| `headers` | No       | HTTP headers as key-value map                  |
+| `body`    | No       | Request body (see body kinds below)            |
+| `auth`    | No       | Authentication block                           |
 
 **Note:** HTTP operation fields are flat (directly in the `operation` block), unlike other protocols which use nested sub-blocks.
 
@@ -129,11 +129,13 @@ For advanced auth (OAuth, profiles), see [secrets-and-auth.md](secrets-and-auth.
 ## Common Patterns
 
 **URL parameters:**
+
 ```hcl
 url = "https://api.example.com/users/{{ args.user_id }}/repos"
 ```
 
 **Result extraction with JSON pointer:**
+
 ```hcl
 result {
   decode  = "json"
@@ -143,6 +145,7 @@ result {
 ```
 
 **Write-mode command (requires user confirmation):**
+
 ```hcl
 annotations {
   mode = "write"

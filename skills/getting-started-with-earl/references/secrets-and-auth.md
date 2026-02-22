@@ -82,16 +82,19 @@ scopes = ["read", "write"]
 Supported flows: `device_code`, `auth_code_pkce`, `client_credentials`.
 
 Log in:
+
 ```bash
 earl auth login myservice
 ```
 
 Check status:
+
 ```bash
 earl auth status myservice
 ```
 
 Then reference it in templates:
+
 ```hcl
 auth {
   kind    = "oauth2"
