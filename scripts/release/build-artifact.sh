@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$TARGET" || -z "$VERSION" ]]; then
-  echo "usage: build-artifact.sh --target <target> --version <version> [--build-tool <cargo|cross|xwin>] [--output-dir <dir>]" >&2
+  echo "usage: build-artifact.sh --target <target> --version <version> [--build-tool <cargo|xwin>] [--output-dir <dir>]" >&2
   exit 1
 fi
 
@@ -48,9 +48,6 @@ fi
 case "$BUILD_TOOL" in
   cargo)
     cargo build --locked --release --target "$TARGET" $FEATURES_FLAG
-    ;;
-  cross)
-    cross build --locked --release --target "$TARGET" $FEATURES_FLAG
     ;;
   xwin)
     cargo xwin build --locked --release --target "$TARGET" $FEATURES_FLAG
