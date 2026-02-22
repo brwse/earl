@@ -41,7 +41,7 @@ jobs:
           fi
 
           VERSION="${TAG#v}"
-          CARGO_VERSION="$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml)"
+          CARGO_VERSION="$(awk -F'"' '/^\[package\]/{p=1} p && /^version = /{print $2; exit}' Cargo.toml)"
           if [[ "$VERSION" != "$CARGO_VERSION" ]]; then
             echo "tag version $VERSION must match Cargo.toml version $CARGO_VERSION" >&2
             exit 1
