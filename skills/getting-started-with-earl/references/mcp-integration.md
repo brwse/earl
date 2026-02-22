@@ -10,24 +10,26 @@ Run Earl as an MCP server:
 earl mcp stdio
 ```
 
-This starts Earl in discovery mode (default), exposing two meta-tools:
-
-- `earl.tool_search` — search for templates by natural language query
-- `earl.tool_call` — execute a template by name
+This starts Earl in full mode (default), where each template becomes a separate MCP tool.
 
 ## Two Modes
 
-**Discovery mode (default, recommended):** Two meta-tools for searching and calling templates. Best for large template catalogs.
+**Full mode (default):** Each template becomes a separate MCP tool. Best for small catalogs (<30 templates).
+
+```bash
+earl mcp stdio --mode full
+```
+
+**Discovery mode (recommended for large catalogs):** Two meta-tools for searching and calling templates.
 
 ```bash
 earl mcp stdio --mode discovery
 ```
 
-**Full mode:** Each template becomes a separate MCP tool. Best for small catalogs (<30 templates).
+Discovery mode exposes two meta-tools:
 
-```bash
-earl mcp stdio --mode full
-```
+- `earl.tool_search` — search for templates by natural language query
+- `earl.tool_call` — execute a template by name
 
 ## Claude Desktop Configuration
 
@@ -64,10 +66,12 @@ Add to `.claude/settings.json` in your project:
 For remote or shared deployments, use HTTP transport:
 
 ```bash
-earl mcp http --listen 127.0.0.1:3000
+earl mcp http --listen 127.0.0.1:8977 --allow-unauthenticated
 ```
 
-This serves MCP at `POST /mcp` with a health check at `GET /health`.
+This serves MCP at `POST /mcp` with a health check at `GET /health`. The default listen address is `127.0.0.1:8977`.
+
+HTTP transport requires either JWT authentication (`[auth.jwt]` in config) or `--allow-unauthenticated`. See the full MCP docs for JWT and policy configuration.
 
 ## Auto-Approve Writes
 
