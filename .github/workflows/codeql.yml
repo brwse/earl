@@ -8,10 +8,6 @@ on:
   schedule:
     - cron: "0 6 * * 1"
 
-concurrency:
-  group: codeql-${{ github.workflow }}-${{ github.ref }}-${{ matrix.language }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   security-events: write
