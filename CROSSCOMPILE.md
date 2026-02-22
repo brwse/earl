@@ -6,13 +6,27 @@ during cross-compilation.
 
 ## Supported Release Targets
 
-| Target                      | Build Tool                                             | Notes                                       |
-| --------------------------- | ------------------------------------------------------ | ------------------------------------------- |
-| `aarch64-apple-darwin`      | cargo (native)                                         | macOS ARM, built on `macos-15` runner       |
-| `x86_64-unknown-linux-gnu`  | cargo (native)                                         | Standard Linux, built on `ubuntu-latest`    |
-| `aarch64-unknown-linux-gnu` | [cross](https://github.com/cross-rs/cross)             | ARM64 Linux, Docker-based cross-compilation |
-| `x86_64-unknown-linux-musl` | [cross](https://github.com/cross-rs/cross)             | Static musl binary                          |
-| `x86_64-pc-windows-msvc`    | [cargo-xwin](https://github.com/rust-cross/cargo-xwin) | Windows x86_64, cross-compiled from Linux   |
+| Target                      | Method                                                 | Notes                                     |
+| --------------------------- | ------------------------------------------------------ | ----------------------------------------- |
+| `aarch64-apple-darwin`      | cargo (native)                                         | macOS ARM, built on `macos-15` runner     |
+| `x86_64-unknown-linux-gnu`  | cargo (native)                                         | Standard Linux, built on `ubuntu-latest`  |
+| `aarch64-unknown-linux-gnu` | cargo + `gcc-aarch64-linux-gnu`                        | ARM64 Linux, cross-compiled from x86_64   |
+| `x86_64-unknown-linux-musl` | cargo + `musl-tools`                                   | Static musl binary                        |
+| `x86_64-pc-windows-msvc`    | [cargo-xwin](https://github.com/rust-cross/cargo-xwin) | Windows x86_64, cross-compiled from Linux |
+
+Cross-compilation uses native cargo with cross-compiler packages installed
+directly on the Ubuntu runner. We previously used
+[cross](https://github.com/cross-rs/cross) (Docker-based), but dropped it
+because the Docker containers lacked Node.js/pnpm (required by `build.rs` for
+web assets), and installing them inside containers caused permission and package
+compatibility issues. Native cross-compilation is simpler and faster.
+
+### Toolchain Setup
+
+- **aarch64-linux-gnu**: Install `gcc-aarch64-linux-gnu` and set
+  `CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc` and
+  `CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc`.
+- **x86_64-linux-musl**: Install `musl-tools` (provides `musl-gcc`).
 
 ## Dropped Targets
 
@@ -53,7 +67,7 @@ cross-compilation.
 ### OpenSSL (`openssl-sys`)
 
 `native-tls` (pulled in by `fastembed` -> `hf-hub` -> `reqwest` with default
-features) depends on `openssl-sys`. For cross targets, we vendor OpenSSL via:
+features) depends on `openssl-sys`. For Linux targets, we vendor OpenSSL via:
 
 ```toml
 # Cargo.toml
@@ -62,12 +76,9 @@ openssl = { version = "0.10", features = ["vendored"] }
 ```
 
 This compiles OpenSSL from source using the correct cross-compiler toolchain,
-avoiding the need for system `libssl-dev` packages in cross containers.
-
-**Important**: When cross-compiling, `openssl-sys` may be compiled for both the
-HOST (for proc macros / build scripts) and the TARGET. The vendored feature
-handles the TARGET compilation, but the HOST still needs system OpenSSL headers.
-The `Cross.toml` pre-build hooks install `libssl-dev` to satisfy the HOST build.
+avoiding the need for system `libssl-dev` packages. The Ubuntu runner already
+has OpenSSL headers for the HOST architecture, so vendored OpenSSL only needs
+to compile for the TARGET.
 
 ### D-Bus (`libdbus-sys`)
 
@@ -75,7 +86,7 @@ The `keyring` crate's `sync-secret-service` feature depends on
 `dbus-secret-service` -> `dbus` -> `libdbus-sys`, which requires the C
 `libdbus-1` library. This is problematic for cross-compilation because:
 
-- musl containers don't have musl-compatible D-Bus libraries
+- musl targets don't have musl-compatible D-Bus libraries
 - Cross-compiled `libdbus-1-dev:arm64` packages can have include path issues
 
 **Solution**: Use `async-secret-service` instead of `sync-secret-service`. This
@@ -100,16 +111,6 @@ keyring = { version = "3.6.3", default-features = false, features = [
 `cargo-xwin` Windows cross-compilation requires `llvm-lib` (the LLVM static
 library archiver) for linking. Install via `sudo apt-get install -y llvm` on
 the CI runner.
-
-## Cross.toml
-
-The `Cross.toml` file configures [cross](https://github.com/cross-rs/cross)
-Docker containers. The `pre-build` hooks install system packages inside the
-container before `cargo build` runs:
-
-- `libssl-dev` + `pkg-config`: Required for the HOST compilation of
-  `openssl-sys` (the TARGET uses vendored OpenSSL)
-- `perl` + `make`: Required by the vendored OpenSSL build script
 
 ## Cargo.toml Version Parsing
 
