@@ -16,7 +16,7 @@ strip = true
 
 [package]
 name = "earl"
-version = "0.3.0"
+version = "0.4.0"
 edition.workspace = true
 build = "build.rs"
 description = "AI-safe CLI for AI agents"
@@ -29,7 +29,7 @@ keywords = ["cli", "security", "ai", "http", "templates"]
 categories = ["command-line-utilities", "network-programming"]
 
 [dependencies]
-earl-core = { version = "0.3.0", path = "crates/earl-core" }
+earl-core = { version = "0.4.0", path = "crates/earl-core" }
 anyhow = "1.0"
 axum = "0.8"
 base64 = "0.22"
@@ -39,7 +39,7 @@ clap_complete = "4.5"
 comfy-table = "7.2"
 directories = "6.0"
 fastembed = { version = "5.11", optional = true }
-earl-protocol-grpc = { version = "0.3.0", path = "crates/earl-protocol-grpc", optional = true }
+earl-protocol-grpc = { version = "0.4.0", path = "crates/earl-protocol-grpc", optional = true }
 jsonwebtoken = "9"
 hcl = { package = "hcl-rs", version = "0.19.5" }
 hickory-resolver = "0.25"
@@ -86,9 +86,9 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 url = "2.5"
 webbrowser = "1.0"
 include_dir = "0.7"
-earl-protocol-http = { version = "0.3.0", path = "crates/earl-protocol-http", optional = true }
-earl-protocol-bash = { version = "0.3.0", path = "crates/earl-protocol-bash", optional = true }
-earl-protocol-sql = { version = "0.3.0", path = "crates/earl-protocol-sql", optional = true }
+earl-protocol-http = { version = "0.4.0", path = "crates/earl-protocol-http", optional = true }
+earl-protocol-bash = { version = "0.4.0", path = "crates/earl-protocol-bash", optional = true }
+earl-protocol-sql = { version = "0.4.0", path = "crates/earl-protocol-sql", optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.0"
