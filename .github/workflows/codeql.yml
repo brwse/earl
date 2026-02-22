@@ -31,6 +31,10 @@ jobs:
         if: matrix.language == 'rust'
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo artifacts
+        if: matrix.language == 'rust'
+        uses: Swatinem/rust-cache@v2
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
