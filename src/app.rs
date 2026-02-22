@@ -236,16 +236,16 @@ async fn run_templates(command: TemplateSubcommand, json_mode: bool, cfg: Config
                     "Imported template from `{}` to `{}`.",
                     imported.source_ref, imported.destination
                 );
-                if imported.required_secrets.is_empty() {
+                if imported.required_credential_names.is_empty() {
                     println!("No required secrets were declared by this template.");
                 } else {
                     println!("Required secrets:");
-                    for secret in &imported.required_secrets {
-                        println!("- {secret}");
+                    for name in &imported.required_credential_names {
+                        println!("- {name}");
                     }
                     println!("Set up with:");
-                    for secret in &imported.required_secrets {
-                        println!("earl secrets set {secret}");
+                    for name in &imported.required_credential_names {
+                        println!("earl secrets set {name}");
                     }
                 }
             }
@@ -277,7 +277,7 @@ fn run_secrets(command: SecretsSubcommand) -> Result<()> {
         }
         SecretsSubcommand::Get(args) => {
             if let Some(meta) = manager.get(&args.key)? {
-                println!("key: {}", meta.key);
+                println!("key: {}", args.key);
                 println!("created_at: {}", meta.created_at.to_rfc3339());
                 println!("updated_at: {}", meta.updated_at.to_rfc3339());
                 println!("value: [REDACTED]");

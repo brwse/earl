@@ -83,8 +83,13 @@ impl OAuthManager {
                 Err(err) => {
                     if profile.device_authorization_url.is_some() {
                         eprintln!(
-                            "auth code flow failed for `{}`; trying device flow fallback: {err:#}",
+                            "auth code flow failed for `{}`; trying device flow fallback",
                             profile.name
+                        );
+                        tracing::debug!(
+                            profile = %profile.name,
+                            error = format!("{err:#}"),
+                            "auth code flow error details"
                         );
                         self.login_device_code(&profile).await?
                     } else {
@@ -249,9 +254,10 @@ impl OAuthManager {
             .await
             .context("failed to request OAuth device code")?;
 
-        println!(
-            "Open this URL in your browser:\n{}\nand enter the code: {}",
-            details.verification_uri(),
+        // The user code is a short-lived, one-time code the user must manually
+        // enter in a browser to complete device authorization — it is not a secret.
+        print_device_code_instructions(
+            details.verification_uri().as_str(),
             details.user_code().secret(),
         );
 
@@ -436,6 +442,20 @@ async fn wait_for_auth_callback(redirect_url: &str) -> Result<(String, String)> 
     socket.write_all(response.as_bytes()).await?;
 
     Ok((code, state))
+}
+
+/// Print device-flow instructions to the terminal.
+///
+/// The `user_code` is an ephemeral, one-time code that the user must enter
+/// in a browser to authorise the device. It is not a long-lived secret.
+fn print_device_code_instructions(verification_uri: &str, user_code: &str) {
+    use std::io::Write;
+    let mut out = std::io::stderr().lock();
+    let _ = writeln!(out, "Open this URL in your browser:");
+    let _ = writeln!(out, "{verification_uri}");
+    let _ = write!(out, "and enter the code: ");
+    let _ = out.write_all(user_code.as_bytes());
+    let _ = writeln!(out);
 }
 
 fn is_loopback_host(host: &str) -> bool {

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result, bail};
 use axum::{
     Json, Router,
-    extract::{FromRequest, State},
+    extract::{DefaultBodyLimit, FromRequest, State},
     http::StatusCode,
     middleware as axum_middleware,
     response::IntoResponse,
@@ -38,6 +38,9 @@ const DISCOVERY_SEARCH_TOOL_NAME: &str = "earl.tool_search";
 const DISCOVERY_CALL_TOOL_NAME: &str = "earl.tool_call";
 const DEFAULT_DISCOVERY_LIMIT: usize = 10;
 const MAX_DISCOVERY_LIMIT: usize = 50;
+
+/// Maximum size of a single JSON-RPC frame over stdio or HTTP (10 MiB).
+const MAX_FRAME_SIZE: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerTransport {
@@ -269,11 +272,13 @@ async fn run_http(state: McpState, listen: SocketAddr) -> Result<()> {
         Router::new()
             .route("/health", get(|| async { StatusCode::NO_CONTENT }))
             .merge(authenticated)
+            .layer(DefaultBodyLimit::max(MAX_FRAME_SIZE))
     } else {
         Router::new()
             .route("/mcp", post(handle_http_rpc))
             .route("/health", get(|| async { StatusCode::NO_CONTENT }))
             .with_state(state)
+            .layer(DefaultBodyLimit::max(MAX_FRAME_SIZE))
     };
 
     let listener = tokio::net::TcpListener::bind(listen)
@@ -947,6 +952,12 @@ async fn read_stdio_frame<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<Opt
         }
 
         if let Some(content_length) = parse_content_length(&line)? {
+            if content_length > MAX_FRAME_SIZE {
+                bail!(
+                    "Content-Length {content_length} exceeds maximum frame size ({MAX_FRAME_SIZE} bytes)"
+                );
+            }
+
             loop {
                 let mut header = String::new();
                 let read = reader.read_line(&mut header).await?;
