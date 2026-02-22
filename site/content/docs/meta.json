@@ -11,6 +11,7 @@
     "secrets",
     "auth",
     "---Integration---",
+    "web",
     "mcp",
     "configuration",
     "---Reference---",
