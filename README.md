@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/brwse/earl/actions/workflows/ci.yml/badge.svg)](https://github.com/brwse/earl/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/earl)](https://crates.io/crates/earl)
-[![docs.rs](https://img.shields.io/docsrs/earl)](https://docs.rs/earl)
+[![Docs](https://img.shields.io/badge/docs-brwse.github.io%2Fearl-blue)](https://brwse.github.io/earl/)
 [![License: MIT](https://img.shields.io/crates/l/earl)](LICENSE)
 
 [![HTTP](https://img.shields.io/badge/HTTP-005CDE?logo=curl&logoColor=fff)](#)
