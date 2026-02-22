@@ -13,7 +13,10 @@ pub struct TemplateImportResult {
     pub source_ref: String,
     pub source: String,
     pub destination: String,
-    pub required_secrets: Vec<String>,
+    /// Names (keys) of secrets that the imported template declares as required.
+    /// These are identifiers like `"GITHUB_TOKEN"`, not actual secret values.
+    #[serde(rename = "required_secrets")]
+    pub required_credential_names: Vec<String>,
 }
 
 pub async fn import_template_from_source_ref(
@@ -48,13 +51,13 @@ pub async fn import_template_from_source_ref(
         )
     })?;
 
-    let required_secrets = scan_required_secrets(&destination_path)?;
+    let required_credential_names = scan_credential_keys(&destination_path)?;
 
     Ok(TemplateImportResult {
         source_ref: source_ref.to_string(),
         source: source_path,
         destination: destination_path.display().to_string(),
-        required_secrets,
+        required_credential_names,
     })
 }
 
@@ -209,7 +212,7 @@ fn resolve_local_source_path(cwd: &Path, path: &Path) -> PathBuf {
     cwd.join(path)
 }
 
-fn scan_required_secrets(template_path: &Path) -> Result<Vec<String>> {
+fn scan_credential_keys(template_path: &Path) -> Result<Vec<String>> {
     let content = fs::read_to_string(template_path).with_context(|| {
         format!(
             "failed reading imported template for secret scan {}",
@@ -225,10 +228,10 @@ fn scan_required_secrets(template_path: &Path) -> Result<Vec<String>> {
             )
         })?;
 
-    Ok(collect_required_secrets(&template_file))
+    Ok(collect_credential_keys(&template_file))
 }
 
-fn collect_required_secrets(template_file: &TemplateFile) -> Vec<String> {
+fn collect_credential_keys(template_file: &TemplateFile) -> Vec<String> {
     let mut secrets = BTreeSet::new();
     for command in template_file.commands.values() {
         for secret in &command.annotations.secrets {
@@ -252,7 +255,7 @@ mod tests {
     };
 
     use super::{
-        ParsedTemplateSourceRef, collect_required_secrets, parse_template_source_ref,
+        ParsedTemplateSourceRef, collect_credential_keys, parse_template_source_ref,
         validate_template_file_name,
     };
 
@@ -377,7 +380,7 @@ mod tests {
             commands,
         };
 
-        let secrets = collect_required_secrets(&template_file);
+        let secrets = collect_credential_keys(&template_file);
         assert_eq!(
             secrets,
             vec![

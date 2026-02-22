@@ -109,8 +109,14 @@ fn template_files_in_dir(dir: &Path) -> Result<Vec<PathBuf>> {
     if !dir.exists() {
         return Ok(Vec::new());
     }
+    let dir = dir.canonicalize().with_context(|| {
+        format!(
+            "failed to canonicalize template directory {}",
+            dir.display()
+        )
+    })?;
     let mut files = Vec::new();
-    collect_template_files(dir, &mut files)?;
+    collect_template_files(&dir, &mut files)?;
     files.sort();
     Ok(files)
 }
