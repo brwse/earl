@@ -118,10 +118,10 @@ session and confirm it is blocked.
 Test that Earl still works:
 
 ```bash
-earl call --yes --json system.list_files --path .
+earl templates list
 ```
 
-Expected: succeeds (Earl is not in the denylist).
+Expected: succeeds and lists available templates (Earl is not in the denylist).
 
 ---
 

@@ -60,7 +60,7 @@ If the answer is genuinely ambiguous, ask one follow-up question.
 
 ### SSRF Warning
 
-If the user mentions `localhost`, `127.0.0.1`, or any private IP range (10.x, 172.16-31.x,
+If the user mentions `localhost`, `127.0.0.1`, `0.0.0.0`, or any private IP range (10.x, 172.16-31.x,
 192.168.x), warn immediately:
 
 > Earl blocks requests to private and loopback IP addresses (SSRF protection). This cannot be

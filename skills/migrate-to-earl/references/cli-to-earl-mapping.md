@@ -49,6 +49,7 @@ For these patterns, no pre-built template exists. Use `create-template` to autho
 Grep across these file patterns:
 - Shell scripts: `*.sh`, `*.bash`, `*.zsh`
 - CI/CD: `.github/workflows/*.yml`, `.gitlab-ci.yml`, `Jenkinsfile`, `*.yaml`
+- Docker: `Dockerfile`, `docker-compose*.yml`, `compose*.yaml`
 - Build tools: `Makefile`, `*.mk`
 - Source code: `*.py`, `*.js`, `*.ts`, `*.rb`, `*.go`, `*.rs`
 - Agent instructions: `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`
