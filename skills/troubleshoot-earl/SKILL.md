@@ -114,7 +114,7 @@ Check that the MCP config file exists and contains the `earl` entry:
 }
 ```
 
-**Claude Desktop:** `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
+**Claude Desktop:** `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
 
 **Cursor:** `.cursor/mcp.json` (project directory)
 

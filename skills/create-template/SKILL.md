@@ -197,10 +197,12 @@ Fix any errors reported and re-validate. Common errors:
 
 ## Phase 7: Set Secrets
 
-After validation, check `annotations.secrets` for required secret keys. Print a checklist:
+Check `annotations.secrets` in the template file for required secret keys. For pre-built
+imports, read the imported file at `~/.config/earl/templates/<provider>.hcl` to find them.
+Print a checklist:
 
 ```
-Template created and validated. Set the required secrets in your terminal:
+Template ready. Set the required secrets in your terminal:
 
   earl secrets set <provider>.<key>
 

@@ -109,8 +109,9 @@ distinguish success from failure by looking at the exit code; look at whether Cl
 blocked it before the shell ran it.
 
 If Claude Code runs `curl` without blocking it, the `deniedTools` pattern syntax is wrong.
-Check the format against current Claude Code documentation — the exact pattern syntax may vary
-by version. Then re-apply with the corrected format.
+Check the format against current Claude Code documentation (search "deniedTools settings" in
+the Claude Code docs or at https://docs.anthropic.com/en/docs/claude-code) — the exact pattern
+syntax may vary by version. Then re-apply with the corrected format.
 
 **For other platforms:** Ask the user to attempt a denied command manually in their agent
 session and confirm it is blocked.
