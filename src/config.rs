@@ -26,6 +26,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct EnvironmentsConfig {
     pub default: Option<String>,
 }

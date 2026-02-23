@@ -98,6 +98,11 @@ pub fn validate_template_file(file: &TemplateFile) -> Result<()> {
                 )
             })?;
             // Per-command environment names must be defined in the provider environments block
+            // when one exists. When there is no provider-level environments block the cross-
+            // reference check is skipped: per-command overrides are valid without a global
+            // block (they activate via `--env <name>` and `vars.*` will be empty). Template
+            // authors relying only on operation overrides without vars injection may omit the
+            // global block intentionally.
             if !defined_env_names.is_empty() && !defined_env_names.contains(env_name) {
                 bail!(
                     "command `{name}` has environment override for `{env_name}` \

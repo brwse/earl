@@ -1005,7 +1005,7 @@ command "ping" {
 
 #[test]
 #[cfg(feature = "bash")]
-fn rejects_protocol_switch_without_annotation() {
+fn accepts_same_protocol_override_without_annotation() {
     let dir = tempdir().unwrap();
     let local_dir = dir.path().join("local");
     let global_dir = dir.path().join("global");
@@ -1054,12 +1054,71 @@ command "ping" {
 "#,
     )
     .unwrap();
-    // Same protocol (both bash) — should pass
+    // Same protocol (bash→bash) — annotation is not required
     validate_all_from_dirs(&global_dir, &local_dir).expect("same protocol is fine");
 }
 
 #[test]
-#[cfg(feature = "bash")]
+#[cfg(all(feature = "bash", feature = "http"))]
+fn rejects_protocol_switch_without_annotation() {
+    let dir = tempdir().unwrap();
+    let local_dir = dir.path().join("local");
+    let global_dir = dir.path().join("global");
+    std::fs::create_dir_all(&local_dir).unwrap();
+    std::fs::create_dir_all(&global_dir).unwrap();
+    std::fs::write(
+        local_dir.join("env_proto_switch.hcl"),
+        r#"version = 1
+provider = "test"
+
+environments {
+  production {
+    base_url = "https://api.example.com"
+  }
+  staging {
+    base_url = "https://staging.example.com"
+  }
+}
+
+command "ping" {
+  title = "Ping"
+  summary = "Ping"
+  description = "Ping"
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+  operation {
+    protocol = "http"
+    method   = "GET"
+    url      = "https://api.example.com/ping"
+  }
+  environment "staging" {
+    operation {
+      protocol = "bash"
+      bash {
+        script = "echo staging"
+      }
+    }
+  }
+  result {
+    output = "ok"
+  }
+}
+"#,
+    )
+    .unwrap();
+    // http→bash protocol switch without annotation must be rejected
+    let err = validate_all_from_dirs(&global_dir, &local_dir).unwrap_err();
+    let rendered = format!("{err:#}");
+    assert!(
+        rendered.contains("switches protocol"),
+        "expected protocol switch error, got: {rendered}"
+    );
+}
+
+#[test]
+#[cfg(all(feature = "bash", feature = "http"))]
 fn allows_protocol_switch_with_annotation() {
     let dir = tempdir().unwrap();
     let local_dir = dir.path().join("local");
@@ -1090,10 +1149,9 @@ command "ping" {
     allow_environment_protocol_switching = true
   }
   operation {
-    protocol = "bash"
-    bash {
-      script = "echo prod"
-    }
+    protocol = "http"
+    method   = "GET"
+    url      = "https://api.example.com/ping"
   }
   environment "staging" {
     operation {
@@ -1110,6 +1168,7 @@ command "ping" {
 "#,
     )
     .unwrap();
+    // http→bash with annotation must pass
     validate_all_from_dirs(&global_dir, &local_dir).expect("annotation allows switching");
 }
 
