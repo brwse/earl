@@ -18,6 +18,7 @@ pub fn parse_template_hcl(content: &str, base_dir: &Path) -> Result<TemplateFile
         _ => bail!("template root must be an object"),
     };
 
+    normalize_environments_block(&mut root)?;
     let commands = normalize_commands(&mut root)?;
     root.insert("commands".to_string(), Value::Object(commands));
 
@@ -51,6 +52,7 @@ fn normalize_command_map(value: Value, field: &str) -> Result<Map<String, Value>
         let command_path = format!("{field}.{command_name}");
         let mut command = expect_object(command_value, &command_path)?;
         normalize_params(&mut command, &command_path)?;
+        normalize_environment_overrides(&mut command, &command_path)?;
         normalized.insert(command_name, Value::Object(command));
     }
 
@@ -100,6 +102,52 @@ fn normalize_params(command: &mut Map<String, Value>, command_path: &str) -> Res
     }
 
     command.insert("params".to_string(), Value::Array(normalized));
+    Ok(())
+}
+
+/// Extracts the provider-level `environments` block from the template root,
+/// normalizing it from HCL's flat map into the canonical shape:
+/// `{ default?, secrets?, environments: { name -> { key -> value } } }`
+fn normalize_environments_block(root: &mut Map<String, Value>) -> Result<()> {
+    let Some(env_value) = root.remove("environments") else {
+        return Ok(());
+    };
+    let env_map = expect_object(env_value, "environments")?;
+
+    let mut default: Option<Value> = None;
+    let mut secrets: Value = Value::Array(vec![]);
+    let mut named_envs = Map::new();
+
+    for (key, val) in env_map {
+        match key.as_str() {
+            "default" => default = Some(val),
+            "secrets" => secrets = val,
+            _ => {
+                let env_obj = expect_object(val, &format!("environments.{key}"))?;
+                named_envs.insert(key, Value::Object(env_obj));
+            }
+        }
+    }
+
+    let mut normalized = Map::new();
+    if let Some(d) = default {
+        normalized.insert("default".to_string(), d);
+    }
+    normalized.insert("secrets".to_string(), secrets);
+    normalized.insert("environments".to_string(), Value::Object(named_envs));
+
+    root.insert("environments".to_string(), Value::Object(normalized));
+    Ok(())
+}
+
+/// Extracts `environment "name" { ... }` blocks from a command object and
+/// renames them to `environment_overrides` so serde can deserialize them.
+fn normalize_environment_overrides(command: &mut Map<String, Value>, command_path: &str) -> Result<()> {
+    let Some(env_blocks) = command.remove("environment") else {
+        return Ok(());
+    };
+    let env_map = expect_object(env_blocks, &format!("{command_path}.environment"))?;
+    command.insert("environment_overrides".to_string(), Value::Object(env_map));
     Ok(())
 }
 
@@ -410,5 +458,92 @@ command "ping" {
         let expr = parse_expr(r#"unknown("arg")"#).unwrap();
         let err = eval_expr(&expr, dummy_dir()).unwrap_err();
         assert!(err.to_string().contains("unknown function"));
+    }
+
+    #[test]
+    fn parses_provider_level_environments_block() {
+        let template = r#"
+version = 1
+provider = "demo"
+
+environments {
+  default = "production"
+  secrets = ["demo.prod_key"]
+  production {
+    base_url = "https://api.demo.com"
+  }
+  staging {
+    base_url = "https://api.staging.demo.com"
+  }
+}
+
+command "ping" {
+  title = "Ping"
+  summary = "Ping"
+  description = "Ping"
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+  operation {
+    protocol = "http"
+    method = "GET"
+    url = "{{ vars.base_url }}/ping"
+  }
+  result {
+    output = "ok"
+  }
+}
+"#;
+        let parsed = parse_template_hcl(template, dummy_dir()).unwrap();
+        let envs = parsed.environments.expect("environments should be present");
+        assert_eq!(envs.default.as_deref(), Some("production"));
+        assert_eq!(envs.secrets, vec!["demo.prod_key"]);
+        assert_eq!(
+            envs.environments["production"]["base_url"],
+            "https://api.demo.com"
+        );
+        assert_eq!(
+            envs.environments["staging"]["base_url"],
+            "https://api.staging.demo.com"
+        );
+    }
+
+    #[test]
+    fn parses_per_command_environment_blocks() {
+        let template = r#"
+version = 1
+provider = "demo"
+
+command "ping" {
+  title = "Ping"
+  summary = "Ping"
+  description = "Ping"
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+  operation {
+    protocol = "http"
+    method = "GET"
+    url = "https://api.demo.com/ping"
+  }
+  environment "staging" {
+    operation {
+      protocol = "bash"
+      bash {
+        script = "echo pong"
+      }
+    }
+  }
+  result {
+    output = "ok"
+  }
+}
+"#;
+        let parsed = parse_template_hcl(template, dummy_dir()).unwrap();
+        let cmd = parsed.commands.get("ping").unwrap();
+        let override_ = cmd.environment_overrides.get("staging").expect("staging override");
+        assert!(matches!(override_.operation, crate::template::schema::OperationTemplate::Bash(_)));
     }
 }
