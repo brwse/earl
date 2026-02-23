@@ -39,6 +39,7 @@ fn prepared_sql_request(
     PreparedRequest {
         key: "test.sql".to_string(),
         mode: CommandMode::Read,
+        stream: false,
         allow_rules: vec![],
         transport: default_transport(),
         result_template: ResultTemplate {

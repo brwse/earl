@@ -133,6 +133,7 @@ fn prepared_request(
     PreparedRequest {
         key: "test.command".to_string(),
         mode: earl::template::schema::CommandMode::Read,
+        stream: false,
         allow_rules: vec![AllowRule {
             scheme: "http".to_string(),
             host,
@@ -167,6 +168,7 @@ fn prepared_grpc_request(
     PreparedRequest {
         key: "test.grpc".to_string(),
         mode: earl::template::schema::CommandMode::Read,
+        stream: false,
         allow_rules: vec![AllowRule {
             scheme: "http".to_string(),
             host,

@@ -41,6 +41,7 @@ impl earl_core::TemplateRenderer for JinjaRenderer {
 pub struct PreparedRequest {
     pub key: String,
     pub mode: CommandMode,
+    pub stream: bool,
     pub allow_rules: Vec<crate::template::schema::AllowRule>,
     pub transport: ResolvedTransport,
     pub result_template: crate::template::schema::ResultTemplate,
@@ -165,6 +166,7 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
+                stream: entry.template.operation.is_streaming(),
                 allow_rules: allow_rules.to_vec(),
                 transport,
                 result_template: entry.template.result.clone(),
@@ -199,6 +201,7 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
+                stream: entry.template.operation.is_streaming(),
                 allow_rules: allow_rules.to_vec(),
                 transport,
                 result_template: entry.template.result.clone(),
@@ -246,6 +249,7 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
+                stream: entry.template.operation.is_streaming(),
                 allow_rules: allow_rules.to_vec(),
                 transport,
                 result_template: entry.template.result.clone(),
@@ -272,6 +276,7 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
+                stream: entry.template.operation.is_streaming(),
                 allow_rules: Vec::new(),
                 transport,
                 result_template: entry.template.result.clone(),
@@ -319,6 +324,7 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
+                stream: entry.template.operation.is_streaming(),
                 allow_rules: Vec::new(),
                 transport,
                 result_template: entry.template.result.clone(),

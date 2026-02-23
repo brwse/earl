@@ -43,6 +43,7 @@ fn prepared_bash_request(script: &str, result_template: ResultTemplate) -> Prepa
     PreparedRequest {
         key: "test.bash".to_string(),
         mode: CommandMode::Read,
+        stream: false,
         allow_rules: vec![],
         transport: default_transport(),
         result_template,

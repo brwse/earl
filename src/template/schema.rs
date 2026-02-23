@@ -146,6 +146,23 @@ impl OperationTemplate {
             _ => None,
         }
     }
+
+    #[allow(unreachable_patterns)]
+    pub fn is_streaming(&self) -> bool {
+        match self {
+            #[cfg(feature = "http")]
+            OperationTemplate::Http(op) => op.stream,
+            #[cfg(feature = "graphql")]
+            OperationTemplate::Graphql(op) => op.stream,
+            #[cfg(feature = "grpc")]
+            OperationTemplate::Grpc(op) => op.stream,
+            #[cfg(feature = "bash")]
+            OperationTemplate::Bash(op) => op.stream,
+            #[cfg(feature = "sql")]
+            OperationTemplate::Sql(_) => false,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
