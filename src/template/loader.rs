@@ -14,7 +14,18 @@ use super::validator::validate_template_file;
 pub fn load_catalog(cwd: &Path) -> Result<TemplateCatalog> {
     let global_dir = config::global_templates_dir();
     let local_dir = config::local_templates_dir(cwd);
-    load_catalog_from_dirs(&global_dir, &local_dir)
+
+    let cache_path = config::catalog_cache_path();
+    let fingerprint = super::cache::collect_fingerprint(&global_dir, &local_dir)?;
+
+    if let Some(catalog) = super::cache::try_load_cache(&cache_path, &fingerprint) {
+        return Ok(catalog);
+    }
+
+    let catalog = load_catalog_from_dirs(&global_dir, &local_dir)?;
+    // Best-effort: ignore write errors (cache is an optimization, not a requirement)
+    let _ = super::cache::save_cache(&cache_path, &fingerprint, &catalog);
+    Ok(catalog)
 }
 
 pub fn load_catalog_from_dirs(global_dir: &Path, local_dir: &Path) -> Result<TemplateCatalog> {
@@ -146,4 +157,57 @@ pub fn is_template_file(path: &Path) -> bool {
         .and_then(|s| s.to_str())
         .map(|s| s == "hcl")
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn write_bash_template(dir: &TempDir, provider: &str, command: &str) {
+        let tdir = dir.path().join("templates");
+        std::fs::create_dir_all(&tdir).unwrap();
+        std::fs::write(
+            tdir.join(format!("{provider}.hcl")),
+            format!(
+                r#"version = 1
+provider = "{provider}"
+command "{command}" {{
+  title = "T"
+  summary = "S"
+  description = "D"
+  operation {{
+    protocol = "bash"
+    bash {{
+      script = "echo hi"
+    }}
+  }}
+}}
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn load_catalog_returns_correct_entries() {
+        let tmp = TempDir::new().unwrap();
+        write_bash_template(&tmp, "myprovider", "mycommand");
+
+        let catalog = load_catalog(tmp.path()).unwrap();
+        assert!(catalog.get("myprovider.mycommand").is_some());
+    }
+
+    #[test]
+    fn load_catalog_is_idempotent_across_two_calls() {
+        let tmp = TempDir::new().unwrap();
+        write_bash_template(&tmp, "myprovider2", "cmd");
+
+        let c1 = load_catalog(tmp.path()).unwrap();
+        let c2 = load_catalog(tmp.path()).unwrap();
+
+        let e1 = c1.get("myprovider2.cmd").unwrap();
+        let e2 = c2.get("myprovider2.cmd").unwrap();
+        assert_eq!(e1.title, e2.title);
+    }
 }
