@@ -219,7 +219,8 @@ async fn read_response_body_limited(
     Ok(out)
 }
 
-use earl_core::ProtocolExecutor;
+use earl_core::{ProtocolExecutor, StreamChunk, StreamMeta, StreamingProtocolExecutor};
+use tokio::sync::mpsc;
 
 /// HTTP/GraphQL protocol executor.
 ///
@@ -241,6 +242,120 @@ where
         ctx: &ExecutionContext,
     ) -> Result<RawExecutionResult> {
         execute_http_once_with_host_validator(data, ctx, &mut self.host_validator).await
+    }
+}
+
+/// Streaming HTTP executor — sends response chunks as they arrive.
+///
+/// Reuses the same connection setup (redirect following, SSRF validation,
+/// client building) as [`HttpExecutor`] but streams chunks through an
+/// `mpsc::Sender` instead of buffering the entire response body.
+pub struct HttpStreamExecutor<F> {
+    pub host_validator: F,
+}
+
+impl<F, Fut> StreamingProtocolExecutor for HttpStreamExecutor<F>
+where
+    F: FnMut(Url) -> Fut + Send,
+    Fut: Future<Output = Result<Vec<IpAddr>>> + Send,
+{
+    type PreparedData = PreparedHttpData;
+
+    async fn execute_stream(
+        &mut self,
+        data: &PreparedHttpData,
+        ctx: &ExecutionContext,
+        sender: mpsc::Sender<StreamChunk>,
+    ) -> anyhow::Result<StreamMeta> {
+        let mut method = data.method.clone();
+        let mut body = data.body.clone();
+        let mut url = data.url.clone();
+
+        for hop in 0..=ctx.transport.max_redirect_hops {
+            ensure_url_allowed(&url, &ctx.allow_rules)?;
+            let resolved_ips = (self.host_validator)(url.clone()).await?;
+            let client = build_http_client(ctx, &url, &resolved_ips)?;
+
+            let request = build_request(
+                &client,
+                &method,
+                &url,
+                &data.headers,
+                &data.cookies,
+                &data.query,
+                &body,
+            )?;
+            let response = request
+                .send()
+                .await
+                .with_context(|| format!("request execution failed for `{}`", url.as_str()))?;
+
+            if response.status().is_redirection() && ctx.transport.follow_redirects {
+                if hop >= ctx.transport.max_redirect_hops {
+                    bail!(
+                        "maximum redirect hops reached ({})",
+                        ctx.transport.max_redirect_hops
+                    );
+                }
+
+                let location = response
+                    .headers()
+                    .get(LOCATION)
+                    .ok_or_else(|| anyhow::anyhow!("redirect response missing Location header"))?
+                    .to_str()
+                    .context("redirect Location header is not valid UTF-8")?
+                    .to_string();
+
+                let new_url = url
+                    .join(&location)
+                    .with_context(|| format!("invalid redirect Location `{location}`"))?;
+
+                let status = response.status().as_u16();
+                if status == 303
+                    || ((status == 301 || status == 302) && method == reqwest::Method::POST)
+                {
+                    method = reqwest::Method::GET;
+                    body = PreparedBody::Empty;
+                }
+                url = new_url;
+                continue;
+            }
+
+            let status = response.status().as_u16();
+            let content_type = response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.to_string());
+
+            // Stream chunks instead of buffering the entire response body.
+            let mut response = response;
+            let mut total_bytes = 0usize;
+            while let Some(chunk) = response.chunk().await? {
+                total_bytes = total_bytes.saturating_add(chunk.len());
+                if total_bytes > ctx.transport.max_response_bytes {
+                    bail!(
+                        "streaming response exceeded configured max_response_bytes ({} bytes)",
+                        ctx.transport.max_response_bytes
+                    );
+                }
+                let stream_chunk = StreamChunk {
+                    data: chunk.to_vec(),
+                    content_type: content_type.clone(),
+                };
+                if sender.send(stream_chunk).await.is_err() {
+                    // Receiver dropped — stop streaming gracefully.
+                    break;
+                }
+            }
+
+            return Ok(StreamMeta {
+                status,
+                url: url.to_string(),
+            });
+        }
+
+        bail!("redirect handling failed unexpectedly")
     }
 }
 
