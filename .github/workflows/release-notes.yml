@@ -32,7 +32,7 @@ jobs:
             Earl is a Rust CLI tool for calling APIs using HCL template files. It supports HTTP, GraphQL, gRPC, Bash, and SQL protocols — letting developers define reusable, parameterised API calls as code.
 
             Steps:
-            1. Run `git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --oneline` to see all commits in this release.
+            1. Run `git describe --tags --abbrev=0 HEAD^` to get the previous tag, then run `git log <previous-tag>..HEAD --oneline` to see all commits in this release.
             2. Read `README.md` and any relevant source files under `src/` and `docs/` to understand the features and syntax.
             3. Write the release body to `/tmp/release-notes.md`. It should:
                - Open with an enthusiastic one-paragraph summary of what's new or why this release is exciting.
