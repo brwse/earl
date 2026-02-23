@@ -258,27 +258,6 @@ jobs:
           fail_on_unmatched_files: true
           make_latest: ${{ needs.meta.outputs.is_prerelease == 'false' }}
 
-      - name: Enhance release notes with Claude
-        uses: anthropics/claude-code-action@v1
-        env:
-          GH_TOKEN: ${{ github.token }}
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: |
-            Write an exciting, polished GitHub release body for Earl ${{ needs.meta.outputs.tag }} and publish it.
-
-            Earl is a Rust CLI tool for calling APIs using HCL template files. It supports HTTP, GraphQL, gRPC, Bash, and SQL protocols — letting developers define reusable, parameterised API calls as code.
-
-            Steps:
-            1. Run `git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --oneline` to see all commits in this release.
-            2. Read `README.md` and any relevant source files under `src/` and `docs/` to understand the features and syntax.
-            3. Write the release body to `/tmp/release-notes.md`. It should:
-               - Open with an enthusiastic one-paragraph summary of what's new or why this release is exciting.
-               - Have clearly labelled sections (e.g. **✨ New Features**, **🐛 Bug Fixes**, **⚡ Improvements**) — only include sections that actually have content.
-               - For any significant new feature, include a short, concrete HCL example snippet showing it in action.
-               - End with a quick installation/upgrade snippet (`cargo install earl` or the shell one-liner from the README).
-               - Be written in an upbeat, developer-friendly tone — celebrate the work!
-            4. Publish it: `gh release edit ${{ needs.meta.outputs.tag }} --repo ${{ github.repository }} --notes-file /tmp/release-notes.md`
 
   attest-provenance:
     name: Attest Build Provenance
