@@ -130,6 +130,10 @@ pub struct SandboxConfig {
     pub bash_max_output_bytes: Option<u64>,
     #[serde(default)]
     pub bash_allow_network: bool,
+    #[serde(default)]
+    pub bash_max_memory_bytes: Option<u64>,
+    #[serde(default)]
+    pub bash_max_cpu_time_ms: Option<u64>,
     #[serde(default = "default_true")]
     pub sql_force_read_only: bool,
     #[serde(default)]
@@ -144,6 +148,8 @@ impl Default for SandboxConfig {
             bash_max_time_ms: None,
             bash_max_output_bytes: None,
             bash_allow_network: false,
+            bash_max_memory_bytes: None,
+            bash_max_cpu_time_ms: None,
             sql_force_read_only: true,
             sql_max_rows: None,
             sql_connection_allowlist: Vec::new(),

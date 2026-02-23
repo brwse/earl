@@ -30,6 +30,8 @@ fn default_sandbox() -> ResolvedBashSandbox {
         writable_paths: vec![],
         max_time_ms: None,
         max_output_bytes: None,
+        max_memory_bytes: None,
+        max_cpu_time_ms: None,
     }
 }
 
@@ -119,6 +121,8 @@ async fn bash_streaming_respects_output_limit() {
             writable_paths: vec![],
             max_time_ms: None,
             max_output_bytes: Some(1024),
+            max_memory_bytes: None,
+            max_cpu_time_ms: None,
         },
     };
 

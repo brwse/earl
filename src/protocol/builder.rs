@@ -264,6 +264,8 @@ where
                 allow_network: sandbox_config.bash_allow_network,
                 max_time_ms: sandbox_config.bash_max_time_ms,
                 max_output_bytes: sandbox_config.bash_max_output_bytes,
+                max_memory_bytes: sandbox_config.bash_max_memory_bytes,
+                max_cpu_time_ms: sandbox_config.bash_max_cpu_time_ms,
             };
 
             let data = earl_protocol_bash::builder::build_bash_request(
