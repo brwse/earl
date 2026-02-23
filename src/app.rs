@@ -97,16 +97,32 @@ async fn run_call(
         &sandbox_config,
     )
     .await?;
-    let execution = execute_prepared_request(&prepared).await?;
+    if prepared.stream {
+        use crate::output::stream::render_streaming_output;
+        use crate::protocol::executor::start_streaming_request;
 
-    if json_mode {
-        let rendered = render_json_output(&execution);
-        let redacted = prepared.redactor.redact_json(&rendered);
-        println!("{}", serde_json::to_string_pretty(&redacted)?);
+        let result_template = prepared.result_template.clone();
+        let args = prepared.args.clone();
+        let redactor = prepared.redactor.clone();
+
+        let (rx, handle) = start_streaming_request(prepared);
+        render_streaming_output(rx, &result_template, &args, &redactor, json_mode).await?;
+        // Wait for the producer to finish and propagate any errors
+        handle.await??;
     } else {
-        let output =
-            render_human_output(&prepared.result_template, &prepared.args, &execution.result)?;
-        println!("{}", prepared.redactor.redact(&output));
+        let execution = execute_prepared_request(&prepared).await?;
+        if json_mode {
+            let rendered = render_json_output(&execution);
+            let redacted = prepared.redactor.redact_json(&rendered);
+            println!("{}", serde_json::to_string_pretty(&redacted)?);
+        } else {
+            let output = render_human_output(
+                &prepared.result_template,
+                &prepared.args,
+                &execution.result,
+            )?;
+            println!("{}", prepared.redactor.redact(&output));
+        }
     }
 
     Ok(())
