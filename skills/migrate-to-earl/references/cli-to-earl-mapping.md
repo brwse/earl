@@ -15,7 +15,7 @@ Use this during the `migrate-to-earl` scan phase to identify which providers to 
 | `curl.*api\.anthropic\.com` | `anthropic` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/anthropic.hcl` |
 | `curl.*discord\.com/api` | `discord` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/discord.hcl` |
 | `curl.*gitlab\.com/api` / `gitlab ` | `gitlab` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/gitlab.hcl` |
-| `curl.*api\.atlassian\.com.*jira` / `jira ` | `jira` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/jira.hcl` |
+| `curl.*atlassian\.(com\|net)` / `jira ` | `jira` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/jira.hcl` |
 | `curl.*api\.linear\.app` / `linear ` | `linear` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/linear.hcl` |
 | `curl.*api\.pagerduty\.com` | `pagerduty` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/pagerduty.hcl` |
 | `curl.*api\.twilio\.com` / `twilio ` | `twilio` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/twilio.hcl` |

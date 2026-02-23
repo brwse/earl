@@ -116,6 +116,10 @@ Check that the MCP config file exists and contains the `earl` entry:
 
 **Claude Desktop:** `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
+**Cursor:** `.cursor/mcp.json` (project directory)
+
+**Windsurf:** `.windsurf/mcp.json` (project directory)
+
 If the config is missing or incorrect, write it (merging with existing entries, not overwriting).
 
 **MCP tools not visible?** The config is correct but MCP tools only activate after restarting
@@ -142,6 +146,7 @@ Match the error to the table:
 | `command not found: earl` | Not installed | Agent: run install script |
 | `no such command` | Wrong command name | Agent: check `earl templates list` |
 | MCP tool not visible in agent | MCP not configured or restart needed | Agent: write/fix config; tell user to restart |
+| `earl call` hangs waiting for input | `--yes` flag in wrong position | Agent: reorder — `earl call --yes --json provider.command ...` |
 | `earl secrets set` hangs | macOS keychain dialog | Human: click "Always Allow" in system dialog |
 | OAuth flow required | Browser-based auth | Human: run `earl auth login <profile>`, complete browser flow |
 
