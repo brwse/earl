@@ -96,6 +96,13 @@ async fn run_call(
         entry.provider_environments.as_ref().and_then(|e| e.default.as_deref()),
     );
 
+    // Display active environment (non-JSON mode only)
+    if let Some(env) = active_env
+        && !json_mode
+    {
+        eprintln!("[env: {env}]");
+    }
+
     let secret_manager = SecretManager::new();
     let allow_rules = cfg.network.allow.clone();
     let proxy_profiles = cfg.network.proxy_profiles.clone();
@@ -152,7 +159,10 @@ async fn run_call(
         let execution = execute_prepared_request(&prepared).await?;
         if json_mode {
             let rendered = render_json_output(&execution);
-            let redacted = prepared.redactor.redact_json(&rendered);
+            let mut redacted = prepared.redactor.redact_json(&rendered);
+            if let (Some(env), Some(obj)) = (active_env, redacted.as_object_mut()) {
+                obj.insert("environment".to_string(), serde_json::Value::String(env.to_string()));
+            }
             println!("{}", serde_json::to_string_pretty(&redacted)?);
         } else {
             let output =
