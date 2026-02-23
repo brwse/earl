@@ -16,6 +16,7 @@ use crate::template::render::{render_json_value, render_string_raw};
 use crate::template::schema::{
     AllowRule, ApiKeyLocation, AuthTemplate, CommandMode, OperationTemplate, ProviderEnvironments,
 };
+use crate::template::environments::select_for_env;
 use earl_core::Redactor;
 
 use super::transport::{ResolvedTransport, resolve_transport};
@@ -79,6 +80,7 @@ pub use earl_protocol_sql::PreparedSqlQuery;
 
 // ── Builder entry-points ─────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 pub async fn build_prepared_request(
     entry: &TemplateCatalogEntry,
     args: Map<String, Value>,
@@ -87,6 +89,7 @@ pub async fn build_prepared_request(
     allow_rules: &[AllowRule],
     proxy_profiles: &BTreeMap<String, ProxyProfile>,
     sandbox_config: &SandboxConfig,
+    active_env: Option<&str>,
 ) -> Result<PreparedRequest> {
     build_prepared_request_with_token_provider(
         entry,
@@ -96,10 +99,12 @@ pub async fn build_prepared_request(
         allow_rules,
         proxy_profiles,
         sandbox_config,
+        active_env,
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn build_prepared_request_with_token_provider<F, Fut>(
     entry: &TemplateCatalogEntry,
     args: Map<String, Value>,
@@ -108,6 +113,7 @@ pub async fn build_prepared_request_with_token_provider<F, Fut>(
     allow_rules: &[AllowRule],
     proxy_profiles: &BTreeMap<String, ProxyProfile>,
     sandbox_config: &SandboxConfig,
+    active_env: Option<&str>,
 ) -> Result<PreparedRequest>
 where
     F: FnMut(String) -> Fut,
@@ -126,16 +132,41 @@ where
         secret_values.push(secret);
     }
 
+    // Load environment-level secrets declared in environments.secrets
+    // (so they're available in the secrets context for vars rendering).
+    if let Some(envs) = &entry.provider_environments {
+        for secret_key in &envs.secrets {
+            if !entry.template.annotations.secrets.contains(secret_key) {
+                let secret = require_secret(secret_manager.store(), secret_key)?;
+                insert_dotted_key(
+                    &mut secrets_context,
+                    secret_key,
+                    Value::String(secret.clone()),
+                );
+                secret_values.push(secret);
+            }
+        }
+    }
+
+    // Resolve vars for the active environment.
+    let vars_context = resolve_vars(
+        entry.provider_environments.as_ref(),
+        active_env,
+        &Value::Object(secrets_context.clone()),
+        &mut secret_values,
+    )?;
+
     let context = Value::Object(Map::from_iter([
         ("args".to_string(), Value::Object(args.clone())),
         (
             "secrets".to_string(),
             Value::Object(secrets_context.clone()),
         ),
+        ("vars".to_string(), Value::Object(vars_context)),
     ]));
 
     let renderer = JinjaRenderer;
-    let operation = &entry.template.operation;
+    let (operation, result_template) = select_for_env(&entry.template, active_env);
     let transport = resolve_transport(operation.transport(), proxy_profiles)?;
 
     #[allow(unreachable_patterns)]
@@ -166,10 +197,10 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
-                stream: entry.template.operation.is_streaming(),
+                stream: operation.is_streaming(),
                 allow_rules: allow_rules.to_vec(),
                 transport,
-                result_template: entry.template.result.clone(),
+                result_template: result_template.clone(),
                 args,
                 redactor: Redactor::new(secret_values),
                 protocol_data: PreparedProtocolData::Http(data),
@@ -201,10 +232,10 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
-                stream: entry.template.operation.is_streaming(),
+                stream: operation.is_streaming(),
                 allow_rules: allow_rules.to_vec(),
                 transport,
-                result_template: entry.template.result.clone(),
+                result_template: result_template.clone(),
                 args,
                 redactor: Redactor::new(secret_values),
                 protocol_data: PreparedProtocolData::Graphql(data),
@@ -249,10 +280,10 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
-                stream: entry.template.operation.is_streaming(),
+                stream: operation.is_streaming(),
                 allow_rules: allow_rules.to_vec(),
                 transport,
-                result_template: entry.template.result.clone(),
+                result_template: result_template.clone(),
                 args,
                 redactor: Redactor::new(secret_values),
                 protocol_data: PreparedProtocolData::Grpc(data),
@@ -278,10 +309,10 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
-                stream: entry.template.operation.is_streaming(),
+                stream: operation.is_streaming(),
                 allow_rules: Vec::new(),
                 transport,
-                result_template: entry.template.result.clone(),
+                result_template: result_template.clone(),
                 args,
                 redactor: Redactor::new(secret_values),
                 protocol_data: PreparedProtocolData::Bash(data),
@@ -326,10 +357,10 @@ where
             Ok(PreparedRequest {
                 key: entry.key.clone(),
                 mode: entry.mode,
-                stream: entry.template.operation.is_streaming(),
+                stream: operation.is_streaming(),
                 allow_rules: Vec::new(),
                 transport,
-                result_template: entry.template.result.clone(),
+                result_template: result_template.clone(),
                 args,
                 redactor: Redactor::new(secret_values),
                 protocol_data: PreparedProtocolData::Sql(data),
@@ -417,7 +448,6 @@ struct AuthOutputs<'a> {
 ///
 /// Returns an empty map if there is no active environment or no environments
 /// block is configured.
-#[allow(dead_code)]
 fn resolve_vars(
     provider_envs: Option<&ProviderEnvironments>,
     env_name: Option<&str>,

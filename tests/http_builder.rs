@@ -123,6 +123,7 @@ async fn builds_api_key_in_all_locations() {
             &default_allow_rules(),
             &default_proxy_profiles(),
             &SandboxConfig::default(),
+            None,
         )
         .await
         .unwrap();
@@ -191,6 +192,7 @@ async fn builds_bearer_basic_and_oauth_profile_auth() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -221,6 +223,7 @@ async fn builds_bearer_basic_and_oauth_profile_auth() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -250,6 +253,7 @@ async fn builds_bearer_basic_and_oauth_profile_auth() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -288,6 +292,7 @@ async fn builds_json_form_and_raw_body_modes() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -317,6 +322,7 @@ async fn builds_json_form_and_raw_body_modes() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -347,6 +353,7 @@ async fn builds_json_form_and_raw_body_modes() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -406,6 +413,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -437,6 +445,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -464,6 +473,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -512,6 +522,7 @@ async fn builds_graphql_payload_and_headers() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();
@@ -597,6 +608,7 @@ async fn builds_grpc_payload_and_headers() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        None,
     )
     .await
     .unwrap();

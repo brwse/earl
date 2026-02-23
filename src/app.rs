@@ -95,6 +95,7 @@ async fn run_call(
         &allow_rules,
         &proxy_profiles,
         &sandbox_config,
+        None, // active_env — will be wired in Task 8
     )
     .await?;
     if prepared.stream {

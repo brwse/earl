@@ -653,6 +653,7 @@ async fn execute_template_tool(
         &allow_rules,
         &proxy_profiles,
         &sandbox_config,
+        None, // active_env — will be wired in Task 11
     )
     .await?;
     let execution = execute_prepared_request(&prepared)

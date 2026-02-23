@@ -189,6 +189,7 @@ async fn execute_entry(
         &allow_rules,
         &proxy_profiles,
         &sandbox_config,
+        None, // active_env — web mode doesn't support environments
     )
     .await?;
 
