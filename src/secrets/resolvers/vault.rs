@@ -97,7 +97,7 @@ impl SecretResolver for VaultResolver {
             .filter(|v| !v.is_empty())
             .ok_or_else(|| {
                 anyhow!(
-                    "Vault credentials not found. Set both VAULT_ADDR and VAULT_TOKEN \
+                    "VAULT_ADDR is not set. Set both VAULT_ADDR and VAULT_TOKEN \
                      environment variables to use vault:// secret references."
                 )
             })?;
@@ -107,7 +107,7 @@ impl SecretResolver for VaultResolver {
             .filter(|v| !v.is_empty())
             .ok_or_else(|| {
                 anyhow!(
-                    "Vault credentials not found. Set both VAULT_ADDR and VAULT_TOKEN \
+                    "VAULT_TOKEN is not set. Set both VAULT_ADDR and VAULT_TOKEN \
                      environment variables to use vault:// secret references."
                 )
             })?;
