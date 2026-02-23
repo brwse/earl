@@ -3,12 +3,16 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use tokio::sync::mpsc;
 use url::Url;
 
 use super::extract::extract_result;
 #[allow(unused_imports)]
 use earl_core::ProtocolExecutor;
+#[allow(unused_imports)]
+use earl_core::StreamingProtocolExecutor;
 use earl_core::decode_response;
+use earl_core::{StreamChunk, StreamMeta};
 
 use crate::security::dns::resolve_and_validate_host;
 
@@ -115,6 +119,80 @@ where
     }
 
     Err(last_err.unwrap_or_else(|| anyhow::anyhow!("request failed without details")))
+}
+
+/// Start a streaming execution of the given prepared request.
+///
+/// Returns a receiver for [`StreamChunk`]s and a [`tokio::task::JoinHandle`]
+/// that resolves to [`StreamMeta`] when the stream finishes.
+///
+/// Unlike [`execute_prepared_request`], this function takes ownership of the
+/// `PreparedRequest` (needed to move data into the spawned task) and does
+/// **not** perform retries — retrying a partially consumed stream would be
+/// nonsensical.
+///
+/// SSRF host validation is still applied before any data flows.
+pub fn start_streaming_request(
+    prepared: PreparedRequest,
+) -> (
+    mpsc::Receiver<StreamChunk>,
+    tokio::task::JoinHandle<Result<StreamMeta>>,
+) {
+    let (tx, rx) = mpsc::channel(64);
+
+    let handle = tokio::spawn(async move {
+        let mut host_validator = |url: Url| async move {
+            let host = url
+                .host_str()
+                .ok_or_else(|| anyhow::anyhow!("request URL missing host"))?;
+            resolve_and_validate_host(host).await
+        };
+
+        let context = to_context(&prepared);
+
+        #[allow(unreachable_patterns)]
+        match prepared.protocol_data {
+            #[cfg(feature = "http")]
+            PreparedProtocolData::Http(ref http_data) => {
+                earl_protocol_http::HttpStreamExecutor {
+                    host_validator: &mut host_validator,
+                }
+                .execute_stream(http_data, &context, tx)
+                .await
+            }
+            #[cfg(feature = "graphql")]
+            PreparedProtocolData::Graphql(ref http_data) => {
+                earl_protocol_http::HttpStreamExecutor {
+                    host_validator: &mut host_validator,
+                }
+                .execute_stream(http_data, &context, tx)
+                .await
+            }
+            #[cfg(feature = "grpc")]
+            PreparedProtocolData::Grpc(ref grpc_data) => {
+                earl_protocol_grpc::GrpcStreamExecutor {
+                    host_validator: &mut host_validator,
+                }
+                .execute_stream(grpc_data, &context, tx)
+                .await
+            }
+            #[cfg(feature = "bash")]
+            PreparedProtocolData::Bash(ref bash_data) => {
+                earl_protocol_bash::BashStreamExecutor
+                    .execute_stream(bash_data, &context, tx)
+                    .await
+            }
+            #[cfg(feature = "sql")]
+            PreparedProtocolData::Sql(_) => {
+                Err(anyhow::anyhow!("streaming not supported for SQL protocol"))
+            }
+            _ => Err(anyhow::anyhow!(
+                "unsupported protocol (feature not enabled)"
+            )),
+        }
+    });
+
+    (rx, handle)
 }
 
 fn backoff(base: Duration, attempt: usize) -> Duration {
