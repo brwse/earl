@@ -25,16 +25,16 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: --allowedTools "Bash(git log:*),Bash(git describe:*),Read,Write(/tmp/release-notes.md)"
+          claude_args: --allowedTools "Bash(git log:*),Bash(git describe:*),Read,Write(release-notes.md)"
           prompt: |
-            Write an exciting, polished GitHub release body for Earl ${{ inputs.tag }} and save it to `/tmp/release-notes.md`.
+            Write an exciting, polished GitHub release body for Earl ${{ inputs.tag }} and save it to `release-notes.md`.
 
             Earl is a Rust CLI tool for calling APIs using HCL template files. It supports HTTP, GraphQL, gRPC, Bash, and SQL protocols — letting developers define reusable, parameterised API calls as code.
 
             Steps:
             1. Run `git describe --tags --abbrev=0 HEAD^` to get the previous tag, then run `git log <previous-tag>..HEAD --oneline` to see all commits in this release.
             2. Read `README.md` and any relevant source files under `src/` and `docs/` to understand the features and syntax.
-            3. Write the release body to `/tmp/release-notes.md`. It should:
+            3. Write the release body to `release-notes.md`. It should:
                - Open with an enthusiastic one-paragraph summary of what's new or why this release is exciting.
                - Have clearly labelled sections (e.g. **✨ New Features**, **🐛 Bug Fixes**, **⚡ Improvements**) — only include sections that actually have content.
                - For any significant new feature, include a short, concrete HCL example snippet showing it in action.
@@ -46,4 +46,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
-          body_path: /tmp/release-notes.md
+          body_path: release-notes.md
