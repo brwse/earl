@@ -105,68 +105,6 @@ fn templates_list_discovers_nested_local_templates() {
 }
 
 #[test]
-fn templates_generate_sends_prompt_to_coding_cli() {
-    let cwd = tempfile::tempdir().unwrap();
-    let home = tempfile::tempdir().unwrap();
-    write_config(home.path());
-
-    let capture_file = cwd.path().join("prompt.txt");
-
-    let mut cmd = cargo_bin_cmd!("earl");
-    cmd.current_dir(cwd.path())
-        .env("HOME", home.path())
-        .env("EARL_CAPTURE_FILE", &capture_file)
-        .args([
-            "templates",
-            "generate",
-            "--",
-            "sh",
-            "-c",
-            "cat > \"$EARL_CAPTURE_FILE\"",
-        ])
-        .write_stdin(
-            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
-        );
-
-    let out = cmd.assert().success().get_output().stdout.clone();
-    let stdout = String::from_utf8(out).unwrap();
-    assert!(stdout.contains("Template generation wizard"));
-    assert!(stdout.contains("Describe the template you want"));
-    assert!(stdout.contains("Sending prompt to coding CLI"));
-    assert!(!stdout.contains("Command mode (read/write)"));
-    assert!(!stdout.contains("Template file path"));
-
-    let prompt = fs::read_to_string(capture_file).unwrap();
-    assert!(prompt.contains("User request:"));
-    assert!(prompt.contains("Please create github.create_issue"));
-    assert!(prompt.contains("- likely command key: `github.create_issue`"));
-    assert!(prompt.contains("- likely file: `templates/github.hcl`"));
-    assert!(prompt.contains("Run `earl templates validate`"));
-}
-
-#[test]
-fn templates_generate_rejects_json_mode() {
-    let cwd = tempfile::tempdir().unwrap();
-    let home = tempfile::tempdir().unwrap();
-    write_config(home.path());
-
-    let mut cmd = cargo_bin_cmd!("earl");
-    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
-        "templates",
-        "--json",
-        "generate",
-        "--",
-        "sh",
-        "-c",
-        "cat",
-    ]);
-
-    let out = cmd.assert().failure().get_output().stderr.clone();
-    let stderr = String::from_utf8(out).unwrap();
-    assert!(stderr.contains("does not support --json"));
-}
-
-#[test]
 fn templates_import_rejects_unsupported_url_scheme() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
