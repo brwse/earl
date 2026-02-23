@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.1](https://github.com/brwse/earl/compare/earl-protocol-sql-v0.4.0...earl-protocol-sql-v0.4.1) (2026-02-23)
+
+
+### Miscellaneous Chores
+
+* **earl-protocol-sql:** Synchronize earl versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * earl-core bumped from 0.4.0 to 0.4.1
+
 ## [0.4.0](https://github.com/brwse/earl/compare/earl-protocol-sql-v0.3.0...earl-protocol-sql-v0.4.0) (2026-02-22)
 
 
