@@ -60,7 +60,7 @@ Import the no-auth system template and run it so the user sees Earl work immedia
 
 ```bash
 earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/bash/system.hcl
-earl call system.list_files --path .
+earl call --yes --json system.list_files --path .
 ```
 
 This lists files in the current directory. The user now has a mental model: templates define
@@ -159,7 +159,7 @@ Earl is configured as an MCP server. Use Earl tools for all API calls, database 
 shell commands — do not use raw curl, gh, stripe-cli, or similar tools directly.
 
 - Discover commands: `earl templates list`
-- Search commands: `earl templates search "what you want to do"`
+- Search commands: `earl templates search --json "what you want to do"`
 - CLI fallback (if MCP tools unavailable): `earl call --yes --json provider.command --param value`
 - Always use `--yes` for write-mode commands (without it, Earl prompts interactively and hangs)
 - Troubleshooting: `earl doctor`
