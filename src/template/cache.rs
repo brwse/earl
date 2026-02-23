@@ -40,7 +40,7 @@ pub struct CacheFile {
 pub fn collect_fingerprint(global_dir: &Path, local_dir: &Path) -> Result<Vec<(PathBuf, u64)>> {
     let mut entries: Vec<(PathBuf, u64)> = Vec::new();
     for dir in [global_dir, local_dir] {
-        for path in super::loader::template_files_in_dir(dir)? {
+        for path in super::files::template_files_in_dir(dir)? {
             let mtime = std::fs::metadata(&path)
                 .ok()
                 .and_then(|m| m.modified().ok())
@@ -156,6 +156,24 @@ mod tests {
 
         let stale = vec![(PathBuf::from("/tmp/foo.hcl"), 99999u64)];
         assert!(try_load_cache(&cache_path, &stale).is_none());
+    }
+
+    #[test]
+    fn version_mismatch_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_path = tmp.path().join("catalog-1.bin");
+        let fp = vec![(PathBuf::from("/tmp/foo.hcl"), 12345u64)];
+
+        // Write a cache file with a future version number.
+        let file = CacheFile {
+            version: CACHE_VERSION + 1,
+            fingerprint: fp.clone(),
+            catalog: TemplateCatalog::empty(),
+        };
+        let bytes = rkyv::to_bytes::<RkyvError>(&file).unwrap();
+        std::fs::write(&cache_path, &bytes).unwrap();
+
+        assert!(try_load_cache(&cache_path, &fp).is_none());
     }
 
     #[test]
