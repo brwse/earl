@@ -85,8 +85,8 @@ esac
 TARGET="${ARCH_PART}-${OS_PART}"
 
 if [[ "$VERSION" == "latest" ]]; then
-  API_URL="https://api.github.com/repos/${REPO}/releases/latest"
-  VERSION="$(downloader "$API_URL" /dev/stdout | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\([^"]*\)".*/\1/p' | head -n1)"
+  API_URL="https://api.github.com/repos/${REPO}/releases?per_page=100"
+  VERSION="$(downloader "$API_URL" /dev/stdout | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\([0-9][^"]*\)".*/\1/p' | head -n1)"
   if [[ -z "$VERSION" ]]; then
     echo "failed to resolve latest version from ${API_URL}" >&2
     exit 1
