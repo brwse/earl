@@ -13,6 +13,11 @@ substring in URLs and strings) — review httpie scan results manually before ac
 **Note:** Always use `grep -E` (ERE mode) for all patterns in this table. `grep -E` works on
 both macOS (BSD grep) and Linux (GNU grep) and is a strict superset for these patterns.
 
+**Scope limitation:** These patterns only cover CLI tool invocations. Interpreter-based API
+calls (Python `requests`, Node.js `fetch`/`axios`, Ruby `Net::HTTP`, etc.) are out of scope
+for this grep scan. If the codebase uses language-level HTTP libraries, those call sites will
+not be surfaced and must be identified manually.
+
 | Grep pattern | Provider | Import command |
 |---|---|---|
 | `curl.*api\.github\.com` / `gh ` / `hub ` | `github` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/github.hcl` |
