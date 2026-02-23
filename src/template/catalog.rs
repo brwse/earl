@@ -82,9 +82,7 @@ mod tests {
         use earl_core::schema::{CommandMode, ResultTemplate};
         use earl_protocol_bash::{BashOperationTemplate, BashScriptTemplate};
 
-        use super::super::schema::{
-            Annotations, CommandTemplate, EnvironmentOverride, OperationTemplate,
-        };
+        use super::super::schema::{Annotations, CommandTemplate, OperationTemplate};
 
         let mut envs = BTreeMap::new();
         let mut prod_vars = BTreeMap::new();
