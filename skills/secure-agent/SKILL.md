@@ -65,6 +65,11 @@ install scripts, etc. If the agent legitimately needs curl for non-API tasks, ad
 `allowedTools` override for those specific patterns, or use `earl call` instead for all
 HTTP operations.
 
+**Note on `Bash(gh *)`:** Denying `gh` also blocks all gh CLI uses that are not API calls:
+`gh pr create`, `gh release upload`, `gh repo clone`, branch management, etc. If the agent
+needs gh for repository operations that don't have Earl templates, add narrow exceptions or
+create templates for those commands before denying `Bash(gh *)`.
+
 ---
 
 ## Step 2: Generate and Present Denylist
