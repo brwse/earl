@@ -77,14 +77,22 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
-    fn catalog_entry_has_provider_environments_field() {
+    #[cfg(feature = "bash")]
+    fn catalog_preserves_provider_environments_through_upsert_and_get() {
+        use earl_core::schema::{CommandMode, ResultTemplate};
+        use earl_protocol_bash::{BashOperationTemplate, BashScriptTemplate};
+
+        use super::super::schema::{
+            Annotations, CommandTemplate, EnvironmentOverride, OperationTemplate,
+        };
+
         let mut envs = BTreeMap::new();
-        let mut prod = BTreeMap::new();
-        prod.insert(
+        let mut prod_vars = BTreeMap::new();
+        prod_vars.insert(
             "base_url".to_string(),
             "https://api.example.com".to_string(),
         );
-        envs.insert("production".to_string(), prod);
+        envs.insert("production".to_string(), prod_vars);
 
         let pe = ProviderEnvironments {
             default: Some("production".to_string()),
@@ -92,8 +100,62 @@ mod tests {
             environments: envs,
         };
 
-        // This test just verifies the field exists and can be accessed.
-        // The None case is the common default.
-        let _: Option<ProviderEnvironments> = Some(pe);
+        let op = OperationTemplate::Bash(BashOperationTemplate {
+            bash: BashScriptTemplate {
+                script: "echo hi".into(),
+                env: None,
+                cwd: None,
+                sandbox: None,
+            },
+            transport: None,
+            stream: false,
+        });
+
+        let cmd = CommandTemplate {
+            title: "T".into(),
+            summary: "S".into(),
+            description: "D".into(),
+            categories: vec![],
+            annotations: Annotations::default(),
+            params: vec![],
+            operation: op,
+            result: ResultTemplate {
+                output: "{{ result }}".into(),
+                ..Default::default()
+            },
+            environment_overrides: BTreeMap::new(),
+        };
+
+        let entry = TemplateCatalogEntry {
+            key: "myservice.ping".to_string(),
+            provider: "myservice".to_string(),
+            command: "ping".to_string(),
+            title: "Ping".to_string(),
+            summary: "Ping the service".to_string(),
+            description: "Ping.".to_string(),
+            categories: vec![],
+            mode: CommandMode::Read,
+            source: TemplateSource {
+                path: PathBuf::from("myservice.hcl"),
+                scope: TemplateScope::Local,
+            },
+            template: cmd,
+            provider_environments: Some(pe),
+        };
+
+        let mut catalog = TemplateCatalog::empty();
+        catalog.upsert("myservice.ping".to_string(), entry);
+
+        let retrieved = catalog.get("myservice.ping").unwrap();
+        let envs = retrieved.provider_environments.as_ref().unwrap();
+        assert_eq!(envs.default.as_deref(), Some("production"));
+        assert!(envs.environments.contains_key("production"));
+        assert_eq!(
+            envs.environments["production"]["base_url"],
+            "https://api.example.com"
+        );
+
+        // Verify missing key returns None
+        assert!(catalog.get("nonexistent.cmd").is_none());
     }
 }

@@ -90,6 +90,9 @@ async fn run_call(
     // Clone the config-level default so we don't hold a borrow into `cfg`
     // when `OAuthManager::new` later takes ownership of it.
     let config_env_default = cfg.environments.default.clone();
+    if let Some(name) = &config_env_default {
+        validate_env_name(name).context("config [environments].default is invalid")?;
+    }
     let active_env = resolve_active_env(
         env_flag.as_deref(),
         config_env_default.as_deref(),

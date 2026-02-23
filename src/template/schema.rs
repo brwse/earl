@@ -73,6 +73,7 @@ pub struct ProviderEnvironments {
 /// Per-command environment override: when active env matches, fully replaces
 /// the command's default operation (and optionally result).
 #[derive(Debug, Clone, Deserialize, Serialize, Archive, RkyvSerialize, RkyvDeserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EnvironmentOverride {
     pub operation: OperationTemplate,
     #[serde(default)]

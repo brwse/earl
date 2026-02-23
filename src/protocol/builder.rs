@@ -442,7 +442,7 @@ struct AuthOutputs<'a> {
 /// Resolves the active environment's variable set.
 ///
 /// Each variable value is rendered as a Jinja template with only `secrets`
-/// and `env` (OS env vars) available — `args` are not available here.
+/// available in the render context — `args` are not available here.
 /// Every resolved value is added to `secret_values` for redaction (since
 /// values may be derived from secrets).
 ///
