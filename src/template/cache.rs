@@ -39,10 +39,44 @@ pub fn collect_fingerprint(global_dir: &Path, local_dir: &Path) -> Result<Vec<(P
     Ok(entries)
 }
 
+/// Attempts to load the catalog from cache.
+/// Returns None on any failure, version mismatch, or stale fingerprint.
+pub fn try_load_cache(cache_path: &Path, fingerprint: &[(PathBuf, u64)]) -> Option<TemplateCatalog> {
+    let bytes = std::fs::read(cache_path).ok()?;
+    let cached: CacheFile = bincode::deserialize(&bytes).ok()?;
+    if cached.version != CACHE_VERSION {
+        return None;
+    }
+    if cached.fingerprint != fingerprint {
+        return None;
+    }
+    Some(cached.catalog)
+}
+
+/// Writes the catalog to cache atomically via temp-file + rename.
+/// Errors are intentionally ignored by callers — the cache is best-effort.
+pub fn save_cache(
+    cache_path: &Path,
+    fingerprint: &[(PathBuf, u64)],
+    catalog: &TemplateCatalog,
+) -> Result<()> {
+    let file = CacheFile {
+        version: CACHE_VERSION,
+        fingerprint: fingerprint.to_vec(),
+        catalog: catalog.clone(),
+    };
+    let bytes = bincode::serialize(&file)?;
+    let tmp = cache_path.with_extension("tmp");
+    std::fs::write(&tmp, &bytes)?;
+    std::fs::rename(&tmp, cache_path)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use crate::template::catalog::TemplateCatalog;
 
     #[test]
     fn cache_file_roundtrips_bincode() {
@@ -75,5 +109,44 @@ mod tests {
 
         assert_ne!(fp1, fp2);
         assert_eq!(fp2.len(), 1);
+    }
+
+    #[test]
+    fn save_and_load_roundtrips_catalog() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_path = tmp.path().join("catalog-1.bin");
+        let fp = vec![(PathBuf::from("/tmp/foo.hcl"), 12345u64)];
+
+        save_cache(&cache_path, &fp, &TemplateCatalog::empty()).unwrap();
+
+        let result = try_load_cache(&cache_path, &fp);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn stale_mtime_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_path = tmp.path().join("catalog-1.bin");
+        let fp = vec![(PathBuf::from("/tmp/foo.hcl"), 12345u64)];
+
+        save_cache(&cache_path, &fp, &TemplateCatalog::empty()).unwrap();
+
+        let stale = vec![(PathBuf::from("/tmp/foo.hcl"), 99999u64)];
+        assert!(try_load_cache(&cache_path, &stale).is_none());
+    }
+
+    #[test]
+    fn missing_cache_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_path = tmp.path().join("catalog-1.bin");
+        assert!(try_load_cache(&cache_path, &[]).is_none());
+    }
+
+    #[test]
+    fn corrupt_cache_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_path = tmp.path().join("catalog-1.bin");
+        std::fs::write(&cache_path, b"garbage").unwrap();
+        assert!(try_load_cache(&cache_path, &[]).is_none());
     }
 }
