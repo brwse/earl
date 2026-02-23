@@ -30,8 +30,17 @@ If the request doesn't name a provider, command, and protocol, ask one question:
 
 ### Check for pre-built templates first
 
-Earl ships with 25 ready-made provider templates. If the user names a known service, offer to
-import the pre-built template instead of building from scratch:
+Earl ships with 25 ready-made provider templates. If the user names a known service, check
+whether it is already imported before offering to import it:
+
+```bash
+earl templates list
+```
+
+If the provider is already present (e.g. `github.get_repo` appears in the list), skip the
+import and go directly to Phase 7 to set any missing secrets.
+
+If not already imported, offer to import the pre-built template:
 
 ```bash
 # Available: github, stripe, slack, notion, openai, anthropic, discord, gitlab, jira, linear,

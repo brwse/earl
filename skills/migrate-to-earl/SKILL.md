@@ -85,7 +85,10 @@ For calls that don't map to any existing command, invoke `create-template` to ad
 
 ## Phase 4: Set Secrets
 
-Print the checklist of required secrets for the imported/created templates:
+**Skip this phase** if Phase 2 invoked `create-template` — that skill already ran secrets setup
+(its own Phase 7 and Phase 8) and confirmed secrets are set. Proceed to Phase 5.
+
+Otherwise, print the checklist of required secrets for the imported templates:
 
 ```
 Before replacing call sites, set the required secrets in your terminal:
