@@ -85,9 +85,15 @@ For calls that don't map to any existing command, invoke `create-template` to ad
 
 ## Phase 4: Set Secrets
 
-**Skip this phase** if `create-template` was invoked in Phase 2 or Phase 3 — that skill
+**Skip this phase** only if Phase 2 took the "no pre-built" path and invoked `create-template`
+directly (i.e., no bare `earl templates import` was run). In that case, `create-template`
 already ran secrets setup (its own Phase 7 and Phase 8) and confirmed secrets are set.
 Proceed to Phase 5.
+
+**Do NOT skip** if Phase 2 ran a bare `earl templates import` — even if Phase 3 also invoked
+`create-template` for an unmapped command. The Phase 3 `create-template` only set secrets for
+the new command it created, not for the Phase 2 pre-built import. Phase 4 must still run for
+the pre-built provider's secrets.
 
 Otherwise, print the checklist of required secrets for the imported templates:
 
