@@ -1,4 +1,6 @@
-# Earl
+<p align="center">
+  <img src="site/public/social-preview.jpg" alt="Earl - AI-safe CLI for AI agents" width="100%" />
+</p>
 
 [![CI](https://github.com/brwse/earl/actions/workflows/ci.yml/badge.svg)](https://github.com/brwse/earl/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/earl)](https://crates.io/crates/earl)

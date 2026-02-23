@@ -9,6 +9,29 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://brwse.github.io/earl"),
+  title: "Earl",
+  description: "AI-safe CLI for AI agents",
+  openGraph: {
+    title: "Earl",
+    description: "AI-safe CLI for AI agents",
+    url: "https://brwse.github.io/earl",
+    siteName: "Earl",
+    images: [
+      {
+        url: "/earl/social-preview.jpg",
+        width: 1280,
+        height: 720,
+        alt: "Earl - AI-safe CLI for AI agents",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Earl",
+    description: "AI-safe CLI for AI agents",
+    images: ["/earl/social-preview.jpg"],
+  },
 };
 
 export default function Layout({ children }: LayoutProps<"/">) {

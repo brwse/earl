@@ -46,5 +46,8 @@ export async function generateMetadata(
   return {
     title: page.data.title,
     description: page.data.description,
+    openGraph: {
+      images: ["/earl/social-preview.jpg"],
+    },
   };
 }
