@@ -61,6 +61,8 @@ pub async fn execute_query(
             .context("failed starting read-only transaction")?;
     }
 
+    // codeql[rust/cleartext-storage-database] - False positive: the connection URL (which may
+    // contain credentials) is used to *connect* to the database, not to store data in it.
     let mut sqlx_query = sqlx::query(query);
     for param in params {
         sqlx_query = bind_json_param(sqlx_query, param);

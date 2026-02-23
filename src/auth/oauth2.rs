@@ -82,6 +82,8 @@ impl OAuthManager {
                 Ok(token) => token,
                 Err(err) => {
                     if profile.device_authorization_url.is_some() {
+                        // codeql[rust/cleartext-logging] - False positive: only `profile.name`
+                        // (the config key, not a secret) and the error message are logged here.
                         eprintln!(
                             "auth code flow failed for `{}`; trying device flow fallback",
                             profile.name
@@ -454,6 +456,9 @@ fn print_device_code_instructions(verification_uri: &str, user_code: &str) {
     let _ = writeln!(out, "Open this URL in your browser:");
     let _ = writeln!(out, "{verification_uri}");
     let _ = write!(out, "and enter the code: ");
+    // codeql[rust/cleartext-logging] - The device flow user_code is intentionally printed to
+    // stderr so the user can enter it in their browser; it is an ephemeral one-time code,
+    // not a long-lived secret.
     let _ = out.write_all(user_code.as_bytes());
     let _ = writeln!(out);
 }

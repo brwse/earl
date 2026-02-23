@@ -117,6 +117,8 @@ fn build_linux_command(
 
     cmd.args(["--", "bash", "-c", script]);
     for (key, value) in env {
+        // codeql[rust/cleartext-logging] - Secrets are passed as subprocess environment variables
+        // by design; env vars are the standard safe mechanism for providing credentials to scripts.
         cmd.env(key, value);
     }
     Ok(cmd)
@@ -135,6 +137,8 @@ fn build_macos_command(
     let mut cmd = Command::new("sandbox-exec");
     cmd.args(["-p", &profile, "bash", "-c", script]);
     for (key, value) in env {
+        // codeql[rust/cleartext-logging] - Secrets are passed as subprocess environment variables
+        // by design; env vars are the standard safe mechanism for providing credentials to scripts.
         cmd.env(key, value);
     }
     if let Some(dir) = cwd {
