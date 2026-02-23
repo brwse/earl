@@ -1,5 +1,6 @@
 pub mod builder;
 pub mod executor;
+pub mod grpc;
 pub mod schema;
 
 pub use executor::GrpcExecutor;

@@ -1385,9 +1385,19 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "earl-core",
- "granc_core",
+ "futures-util",
+ "http",
+ "http-body",
+ "prost",
+ "prost-reflect",
+ "prost-types",
  "serde",
  "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-reflection",
  "url",
 ]
 
@@ -1880,26 +1890,6 @@ checksum = "f5df2ba84018d80c213569363bdcd0c64e6933c67fe4c1d60ecf822971a3c35e"
 dependencies = [
  "color_quant",
  "weezl",
-]
-
-[[package]]
-name = "granc_core"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12684196af508c702e011ed6d6c3272c089b562fdd7a3e4d481d91859f7cfb89"
-dependencies = [
- "futures-util",
- "http",
- "http-body",
- "prost",
- "prost-reflect",
- "prost-types",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-reflection",
 ]
 
 [[package]]

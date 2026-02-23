@@ -2,10 +2,13 @@ use std::future::Future;
 use std::net::IpAddr;
 
 use anyhow::{Context, Result, anyhow, bail};
-use granc_core::client::{DynamicRequest, DynamicResponse, GrancClient};
-use granc_core::tonic;
+use prost_reflect::DescriptorPool;
 use serde_json::{Value, json};
 use url::Url;
+
+use crate::grpc::client::{
+    DynamicRequest, DynamicResponse, dynamic_call, dynamic_call_with_reflection,
+};
 
 use earl_core::allowlist::ensure_url_allowed;
 use earl_core::{ExecutionContext, PreparedBody, RawExecutionResult};
@@ -49,7 +52,7 @@ where
         .timeout(ctx.transport.timeout)
         .connect_timeout(ctx.transport.timeout);
 
-    let channel: tonic::transport::Channel = endpoint
+    let channel = endpoint
         .connect()
         .await
         .with_context(|| format!("failed connecting to gRPC endpoint `{}`", grpc_data.url))?;
@@ -62,17 +65,13 @@ where
     };
 
     let dynamic_response = if let Some(descriptor_set) = &grpc_data.descriptor_set {
-        let mut client = GrancClient::from(channel)
-            .with_file_descriptor(descriptor_set.clone())
+        let pool = DescriptorPool::decode(descriptor_set.as_slice())
             .context("invalid gRPC descriptor set bytes")?;
-        client
-            .dynamic(dynamic_request)
+        dynamic_call(channel, &pool, dynamic_request)
             .await
             .map_err(|err| anyhow!("gRPC request failed: {err}"))?
     } else {
-        let mut client = GrancClient::from(channel);
-        client
-            .dynamic(dynamic_request)
+        dynamic_call_with_reflection(channel, dynamic_request)
             .await
             .map_err(|err| anyhow!("gRPC reflection request failed: {err}"))?
     };
