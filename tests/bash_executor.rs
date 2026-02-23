@@ -242,3 +242,66 @@ async fn bash_json_output() {
     assert_eq!(out.status, 0);
     assert_eq!(out.result, serde_json::json!("hi"));
 }
+
+/// Test that sandbox max_memory_bytes is enforced.
+#[tokio::test]
+async fn bash_sandbox_memory_limit_enforced() {
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Text,
+        extract: None,
+        output: "{{ result }}".to_string(),
+        result_alias: None,
+    };
+
+    // Allocate 300MB; limit is 100MB.
+    let mut prepared = prepared_bash_request(
+        "python3 -c \"x = bytearray(300 * 1024 * 1024)\"",
+        result_template,
+    );
+    if let PreparedProtocolData::Bash(ref mut bash) = prepared.protocol_data {
+        bash.sandbox.max_memory_bytes = Some(100 * 1024 * 1024); // 100 MB
+    }
+
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
+
+    assert_ne!(out.status, 0, "expected non-zero exit due to memory limit");
+}
+
+/// Test that sandbox max_cpu_time_ms is enforced.
+#[tokio::test]
+async fn bash_sandbox_cpu_limit_enforced() {
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Text,
+        extract: None,
+        output: "{{ result }}".to_string(),
+        result_alias: None,
+    };
+
+    // Tight CPU-bound loop; 1 CPU-second limit.
+    let mut prepared = prepared_bash_request(
+        "python3 -c \"while True: pass\"",
+        result_template,
+    );
+    if let PreparedProtocolData::Bash(ref mut bash) = prepared.protocol_data {
+        bash.sandbox.max_cpu_time_ms = Some(1_000); // 1 CPU-second
+        bash.sandbox.max_time_ms = Some(5_000);     // 5s wall-clock guard
+    }
+
+    let start = std::time::Instant::now();
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
+
+    let elapsed = start.elapsed();
+    assert_ne!(out.status, 0, "expected non-zero exit due to CPU limit");
+    assert!(
+        elapsed < std::time::Duration::from_secs(4),
+        "CPU limit should have fired before wall-clock guard"
+    );
+}
