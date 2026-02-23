@@ -40,7 +40,10 @@ import the pre-built template instead of building from scratch:
 earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/<provider>.hcl
 ```
 
-Only proceed to custom template authoring if no pre-built template matches the need.
+If a pre-built template was imported, skip to **Phase 7: Set Secrets** — phases 2–6 are not
+needed. Then continue to Phase 8 to verify the template works.
+
+Only proceed to custom template authoring (phases 2–6) if no pre-built template matches the need.
 
 ---
 

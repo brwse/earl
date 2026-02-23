@@ -5,6 +5,9 @@ Use this during the `migrate-to-earl` scan phase to identify which providers to 
 
 ## Pre-built Provider Mapping
 
+**Note:** All `curl.*` patterns should also be run with `wget` substituted for `curl` — codebases
+may use either tool for the same API calls.
+
 | Grep pattern | Provider | Import command |
 |---|---|---|
 | `curl.*api\.github\.com` / `gh ` / `hub ` | `github` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/github.hcl` |
