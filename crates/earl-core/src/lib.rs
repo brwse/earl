@@ -56,6 +56,20 @@ pub struct RawExecutionResult {
     pub content_type: Option<String>,
 }
 
+/// A single chunk from a streaming response.
+#[derive(Debug, Clone)]
+pub struct StreamChunk {
+    pub data: Vec<u8>,
+    pub content_type: Option<String>,
+}
+
+/// Metadata returned when a streaming execution completes.
+#[derive(Debug, Clone)]
+pub struct StreamMeta {
+    pub status: u16,
+    pub url: String,
+}
+
 /// Shared execution context passed to all protocol executors alongside
 /// their protocol-specific prepared data.
 #[derive(Debug, Clone)]
@@ -84,4 +98,28 @@ pub trait ProtocolExecutor {
         data: &Self::PreparedData,
         context: &ExecutionContext,
     ) -> impl Future<Output = anyhow::Result<RawExecutionResult>> + Send;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stream_chunk_can_be_created() {
+        let chunk = StreamChunk {
+            data: b"hello".to_vec(),
+            content_type: Some("application/json".to_string()),
+        };
+        assert_eq!(chunk.data, b"hello");
+        assert_eq!(chunk.content_type.as_deref(), Some("application/json"));
+    }
+
+    #[test]
+    fn stream_meta_can_be_created() {
+        let meta = StreamMeta {
+            status: 200,
+            url: "https://example.com".to_string(),
+        };
+        assert_eq!(meta.status, 200);
+    }
 }
