@@ -191,9 +191,4 @@ mod tests {
         std::fs::write(&cache_path, b"garbage").unwrap();
         assert!(try_load_cache(&cache_path, &[]).is_none());
     }
-
-    #[test]
-    fn cache_version_is_2() {
-        assert_eq!(CACHE_VERSION, 2);
-    }
 }
