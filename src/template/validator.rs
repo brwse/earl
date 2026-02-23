@@ -35,11 +35,96 @@ pub fn validate_template_file(file: &TemplateFile) -> Result<()> {
         bail!("provider {} defines no commands", file.provider);
     }
 
+    // Build set of defined environment names for cross-reference checks
+    let defined_env_names: std::collections::HashSet<String> = file
+        .environments
+        .as_ref()
+        .map(|e| e.environments.keys().cloned().collect())
+        .unwrap_or_default();
+
+    if let Some(envs) = &file.environments {
+        // environments.default must reference a defined environment
+        if let Some(default_name) = &envs.default
+            && !envs.environments.contains_key(default_name.as_str())
+        {
+            bail!(
+                "provider `{}` environments.default is `{default_name}` but that environment is not defined; \
+                 available: {}",
+                file.provider,
+                envs.environments.keys().cloned().collect::<Vec<_>>().join(", ")
+            );
+        }
+        // All secrets referenced in vars values must be declared in environments.secrets
+        let declared_secrets: std::collections::HashSet<&str> =
+            envs.secrets.iter().map(String::as_str).collect();
+        for (env_name, vars) in &envs.environments {
+            for (var_name, value) in vars {
+                for secret_ref in extract_secret_refs(value) {
+                    if !declared_secrets.contains(secret_ref) {
+                        bail!(
+                            "provider `{}` environments.{env_name}.{var_name} references secret \
+                             `{secret_ref}` which is not declared in environments.secrets",
+                            file.provider
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     for (name, cmd) in &file.commands {
+        for (env_name, override_) in &cmd.environment_overrides {
+            // Per-command environment names must be defined in the provider environments block
+            if !defined_env_names.is_empty() && !defined_env_names.contains(env_name) {
+                bail!(
+                    "command `{name}` has environment override for `{env_name}` \
+                     which is not defined in the provider environments block; \
+                     defined: {}",
+                    defined_env_names.iter().cloned().collect::<Vec<_>>().join(", ")
+                );
+            }
+            // Protocol switching requires annotation
+            if override_.operation.protocol() != cmd.operation.protocol()
+                && !cmd.annotations.allow_environment_protocol_switching
+            {
+                bail!(
+                    "command `{name}` environment `{env_name}` switches protocol \
+                     from {:?} to {:?}; add `annotations {{ allow_environment_protocol_switching = true }}` \
+                     to opt in",
+                    cmd.operation.protocol(),
+                    override_.operation.protocol()
+                );
+            }
+        }
         validate_command(name, cmd)?;
     }
 
     Ok(())
+}
+
+/// Extracts `secrets.X.Y` references from Jinja `{{ secrets.X.Y }}` expressions.
+fn extract_secret_refs(value: &str) -> Vec<&str> {
+    let mut refs = Vec::new();
+    let mut remaining = value;
+    while let Some(start) = remaining.find("{{") {
+        remaining = &remaining[start + 2..];
+        let end = match remaining.find("}}") {
+            Some(e) => e,
+            None => break,
+        };
+        let expr = remaining[..end].trim();
+        if let Some(key) = expr.strip_prefix("secrets.") {
+            // Take everything up to the first whitespace or pipe
+            let key = key
+                .split(|c: char| c.is_whitespace() || c == '|')
+                .next()
+                .unwrap_or(key);
+            let key = key.trim_end_matches('.');
+            refs.push(key);
+        }
+        remaining = &remaining[end + 2..];
+    }
+    refs
 }
 
 fn validate_command(command_name: &str, cmd: &CommandTemplate) -> Result<()> {

@@ -856,6 +856,258 @@ command "fetch" {
     );
 }
 
+// ── Environment validation tests ─────────────────────────
+
+#[test]
+#[cfg(feature = "bash")]
+fn rejects_undefined_default_env() {
+    let dir = tempdir().unwrap();
+    let local_dir = dir.path().join("local");
+    let global_dir = dir.path().join("global");
+    std::fs::create_dir_all(&local_dir).unwrap();
+    std::fs::create_dir_all(&global_dir).unwrap();
+    std::fs::write(
+        local_dir.join("env_default.hcl"),
+        r#"version = 1
+provider = "test"
+
+environments {
+  default = "ghost"
+  production {
+    base_url = "https://api.example.com"
+  }
+}
+
+command "ping" {
+  title = "Ping"
+  summary = "Ping"
+  description = "Ping"
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+  operation {
+    protocol = "bash"
+    bash {
+      script = "echo hi"
+    }
+  }
+  result {
+    output = "ok"
+  }
+}
+"#,
+    ).unwrap();
+    let err = validate_all_from_dirs(&global_dir, &local_dir).unwrap_err();
+    let rendered = format!("{err:#}");
+    assert!(rendered.contains("ghost"), "error: {rendered}");
+}
+
+#[test]
+#[cfg(feature = "bash")]
+fn rejects_undeclared_secret_in_vars() {
+    let dir = tempdir().unwrap();
+    let local_dir = dir.path().join("local");
+    let global_dir = dir.path().join("global");
+    std::fs::create_dir_all(&local_dir).unwrap();
+    std::fs::create_dir_all(&global_dir).unwrap();
+    std::fs::write(
+        local_dir.join("env_secret.hcl"),
+        r#"version = 1
+provider = "test"
+
+environments {
+  secrets = []
+  production {
+    token = "{{ secrets.test.key }}"
+  }
+}
+
+command "ping" {
+  title = "Ping"
+  summary = "Ping"
+  description = "Ping"
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+  operation {
+    protocol = "bash"
+    bash {
+      script = "echo hi"
+    }
+  }
+  result {
+    output = "ok"
+  }
+}
+"#,
+    ).unwrap();
+    let err = validate_all_from_dirs(&global_dir, &local_dir).unwrap_err();
+    let rendered = format!("{err:#}");
+    assert!(rendered.contains("test.key"), "error: {rendered}");
+}
+
+#[test]
+#[cfg(feature = "bash")]
+fn rejects_command_override_for_undefined_env() {
+    let dir = tempdir().unwrap();
+    let local_dir = dir.path().join("local");
+    let global_dir = dir.path().join("global");
+    std::fs::create_dir_all(&local_dir).unwrap();
+    std::fs::create_dir_all(&global_dir).unwrap();
+    std::fs::write(
+        local_dir.join("env_orphan.hcl"),
+        r#"version = 1
+provider = "test"
+
+environments {
+  production {
+    base_url = "https://api.example.com"
+  }
+}
+
+command "ping" {
+  title = "Ping"
+  summary = "Ping"
+  description = "Ping"
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+  operation {
+    protocol = "bash"
+    bash {
+      script = "echo hi"
+    }
+  }
+  environment "shadow" {
+    operation {
+      protocol = "bash"
+      bash {
+        script = "echo shadow"
+      }
+    }
+  }
+  result {
+    output = "ok"
+  }
+}
+"#,
+    ).unwrap();
+    let err = validate_all_from_dirs(&global_dir, &local_dir).unwrap_err();
+    let rendered = format!("{err:#}");
+    assert!(rendered.contains("shadow"), "error: {rendered}");
+}
+
+#[test]
+#[cfg(feature = "bash")]
+fn rejects_protocol_switch_without_annotation() {
+    let dir = tempdir().unwrap();
+    let local_dir = dir.path().join("local");
+    let global_dir = dir.path().join("global");
+    std::fs::create_dir_all(&local_dir).unwrap();
+    std::fs::create_dir_all(&global_dir).unwrap();
+    std::fs::write(
+        local_dir.join("env_protocol.hcl"),
+        r#"version = 1
+provider = "test"
+
+environments {
+  production {
+    base_url = "https://api.example.com"
+  }
+  staging {
+    base_url = "https://staging.example.com"
+  }
+}
+
+command "ping" {
+  title = "Ping"
+  summary = "Ping"
+  description = "Ping"
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+  operation {
+    protocol = "bash"
+    bash {
+      script = "echo prod"
+    }
+  }
+  environment "staging" {
+    operation {
+      protocol = "bash"
+      bash {
+        script = "echo staging"
+      }
+    }
+  }
+  result {
+    output = "ok"
+  }
+}
+"#,
+    ).unwrap();
+    // Same protocol (both bash) — should pass
+    validate_all_from_dirs(&global_dir, &local_dir).expect("same protocol is fine");
+}
+
+#[test]
+#[cfg(feature = "bash")]
+fn allows_protocol_switch_with_annotation() {
+    let dir = tempdir().unwrap();
+    let local_dir = dir.path().join("local");
+    let global_dir = dir.path().join("global");
+    std::fs::create_dir_all(&local_dir).unwrap();
+    std::fs::create_dir_all(&global_dir).unwrap();
+    std::fs::write(
+        local_dir.join("env_proto_ok.hcl"),
+        r#"version = 1
+provider = "test"
+
+environments {
+  production {
+    base_url = "https://api.example.com"
+  }
+  staging {
+    base_url = "https://staging.example.com"
+  }
+}
+
+command "ping" {
+  title = "Ping"
+  summary = "Ping"
+  description = "Ping"
+  annotations {
+    mode = "read"
+    secrets = []
+    allow_environment_protocol_switching = true
+  }
+  operation {
+    protocol = "bash"
+    bash {
+      script = "echo prod"
+    }
+  }
+  environment "staging" {
+    operation {
+      protocol = "bash"
+      bash {
+        script = "echo staging"
+      }
+    }
+  }
+  result {
+    output = "ok"
+  }
+}
+"#,
+    ).unwrap();
+    validate_all_from_dirs(&global_dir, &local_dir).expect("annotation allows switching");
+}
+
 #[test]
 #[cfg(feature = "http")]
 fn validates_all_example_templates() {
