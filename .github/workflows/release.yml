@@ -256,6 +256,7 @@ jobs:
           prerelease: ${{ needs.meta.outputs.is_prerelease == 'true' }}
           files: dist/*
           fail_on_unmatched_files: true
+          make_latest: ${{ needs.meta.outputs.is_prerelease == 'false' }}
 
       - name: Enhance release notes with Claude
         uses: anthropics/claude-code-action@v1
