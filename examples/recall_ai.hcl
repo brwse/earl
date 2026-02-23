@@ -544,3 +544,207 @@ command "send_chat_message" {
     output = "Chat message sent to meeting."
   }
 }
+
+command "get_transcript" {
+  title       = "Get transcript"
+  summary     = "Get transcript metadata and download URL"
+  description = <<-EOT
+    Retrieves transcript metadata including status and a pre-signed download URL.
+    The download URL is a temporary S3 link — use download_transcript to fetch
+    the actual text content.
+
+    The transcript ID comes from media_shortcuts.transcript.id in the get_bot response.
+
+    Parameters:
+    - transcript_id: UUID of the transcript (from get_bot media_shortcuts.transcript.id)
+
+    ## Guidance for AI agents
+    Only call this after get_bot shows media_shortcuts.transcript.status.code == "done".
+    The response contains data.download_url — pass that URL directly to
+    download_transcript to get the full transcript text.
+    Example: `earl call --yes --json recall_ai.get_transcript --transcript_id <id>`
+  EOT
+
+  annotations {
+    mode    = "read"
+    secrets = ["recall_ai.api_key"]
+  }
+
+  param "transcript_id" {
+    type        = "string"
+    required    = true
+    description = "Transcript UUID (from get_bot response: media_shortcuts.transcript.id)"
+  }
+
+  operation {
+    protocol = "http"
+    method   = "GET"
+    url      = "https://api.recall.ai/api/v1/transcript/{{ args.transcript_id }}/"
+
+    auth {
+      kind   = "bearer"
+      secret = "recall_ai.api_key"
+    }
+
+    headers = {
+      Accept = "application/json"
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "Transcript {{ result.id }}\nStatus: {{ result.status.code }}\nCreated: {{ result.created_at }}\n\nDownload URL (pass to download_transcript):\n{{ result.data.download_url | default('not ready yet') }}"
+  }
+}
+
+command "download_transcript" {
+  title       = "Download transcript text"
+  summary     = "Fetch full transcript text from a download URL"
+  description = <<-EOT
+    Downloads and returns the complete transcript text from a pre-signed S3 URL.
+    The URL comes from the data.download_url field returned by get_transcript.
+
+    The transcript is returned as speaker-attributed JSON segments, each with
+    participant name and word-level timestamps.
+
+    WARNING: Download URLs expire in approximately 5 hours. Retrieve and process
+    the content before expiry.
+
+    Parameters:
+    - url: Pre-signed S3 download URL from get_transcript response
+
+    ## Guidance for AI agents
+    This is the final step to get readable transcript text. Pass the download_url
+    from get_transcript directly to this command. The result contains the full
+    transcript you can summarize, search, or extract action items from.
+    Example: `earl call --yes --json recall_ai.download_transcript --url "https://s3..."`
+  EOT
+
+  annotations {
+    mode    = "read"
+    secrets = []
+  }
+
+  param "url" {
+    type        = "string"
+    required    = true
+    description = "Pre-signed S3 download URL from get_transcript response (data.download_url)"
+  }
+
+  operation {
+    protocol = "http"
+    method   = "GET"
+    url      = "{{ args.url }}"
+
+    headers = {
+      Accept = "application/json"
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "Transcript ({{ result | length }} speaker segment(s)):\n\n{% for segment in result %}[{{ segment.participant.name | default('Unknown') }}]\n{% for word in segment.words %}{{ word.text }} {% endfor %}\n\n{% endfor %}"
+  }
+}
+
+command "get_video" {
+  title       = "Get video download URL"
+  summary     = "Get the mixed video recording download URL"
+  description = <<-EOT
+    Retrieves the download URL for the mixed video recording (MP4). The URL is
+    a pre-signed S3 link that expires in approximately 5 hours.
+
+    The video ID comes from media_shortcuts.video_mixed.id in the get_bot response.
+
+    Parameters:
+    - video_id: UUID of the video_mixed artifact (from get_bot media_shortcuts.video_mixed.id)
+
+    ## Guidance for AI agents
+    Only call this when media_shortcuts.video_mixed.status.code == "done".
+    Present the download URL to the user as a link — do NOT attempt to download
+    or process binary video content.
+    Example: `earl call --yes --json recall_ai.get_video --video_id <id>`
+  EOT
+
+  annotations {
+    mode    = "read"
+    secrets = ["recall_ai.api_key"]
+  }
+
+  param "video_id" {
+    type        = "string"
+    required    = true
+    description = "video_mixed artifact UUID (from get_bot response: media_shortcuts.video_mixed.id)"
+  }
+
+  operation {
+    protocol = "http"
+    method   = "GET"
+    url      = "https://api.recall.ai/api/v1/video_mixed/{{ args.video_id }}/"
+
+    auth {
+      kind   = "bearer"
+      secret = "recall_ai.api_key"
+    }
+
+    headers = {
+      Accept = "application/json"
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "Video recording ({{ result.format | default('mp4') }}) — status: {{ result.status.code }}\n\nDownload link (expires ~5 hours, share with user):\n{{ result.data.download_url | default('not ready yet') }}"
+  }
+}
+
+command "get_audio" {
+  title       = "Get audio download URL"
+  summary     = "Get the mixed audio recording download URL"
+  description = <<-EOT
+    Retrieves the download URL for the mixed audio recording (MP3 or raw).
+    The URL is a pre-signed S3 link that expires in approximately 5 hours.
+
+    The audio ID comes from media_shortcuts.audio_mixed.id in the get_bot response.
+
+    Parameters:
+    - audio_id: UUID of the audio_mixed artifact (from get_bot media_shortcuts.audio_mixed.id)
+
+    ## Guidance for AI agents
+    Only call this when media_shortcuts.audio_mixed.status.code == "done".
+    Present the download URL to the user as a link — do NOT attempt to download
+    or process binary audio content.
+    Example: `earl call --yes --json recall_ai.get_audio --audio_id <id>`
+  EOT
+
+  annotations {
+    mode    = "read"
+    secrets = ["recall_ai.api_key"]
+  }
+
+  param "audio_id" {
+    type        = "string"
+    required    = true
+    description = "audio_mixed artifact UUID (from get_bot response: media_shortcuts.audio_mixed.id)"
+  }
+
+  operation {
+    protocol = "http"
+    method   = "GET"
+    url      = "https://api.recall.ai/api/v1/audio_mixed/{{ args.audio_id }}/"
+
+    auth {
+      kind   = "bearer"
+      secret = "recall_ai.api_key"
+    }
+
+    headers = {
+      Accept = "application/json"
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "Audio recording ({{ result.format | default('mp3') }}) — status: {{ result.status.code }}\n\nDownload link (expires ~5 hours, share with user):\n{{ result.data.download_url | default('not ready yet') }}"
+  }
+}
