@@ -15,6 +15,9 @@ use earl_core::with::AsJson;
 // Also bump when adding or removing cfg-gated variants from OperationTemplate: rkyv
 // serializes enum variants by index, so changing which features are compiled in shifts
 // indices and corrupts existing caches.
+// Also bump when upgrading rkyv to a version that changes archive layout; bytecheck
+// will reject stale archives safely (cache miss rather than UB), but a version bump
+// prevents unnecessary re-parses once the old cache file ages out.
 pub const CACHE_VERSION: u32 = 1;
 
 /// Serialized catalog cache file stored at `~/.cache/earl/catalog-{CACHE_VERSION}.bin`.
