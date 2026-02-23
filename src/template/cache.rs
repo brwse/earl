@@ -44,7 +44,10 @@ pub fn collect_fingerprint(global_dir: &Path, local_dir: &Path) -> Result<Vec<(P
 
 /// Attempts to load the catalog from cache.
 /// Returns None on any failure, version mismatch, or stale fingerprint.
-pub fn try_load_cache(cache_path: &Path, fingerprint: &[(PathBuf, u64)]) -> Option<TemplateCatalog> {
+pub fn try_load_cache(
+    cache_path: &Path,
+    fingerprint: &[(PathBuf, u64)],
+) -> Option<TemplateCatalog> {
     let bytes = std::fs::read(cache_path).ok()?;
     let cached: CacheFile = bincode::deserialize(&bytes).ok()?;
     if cached.version != CACHE_VERSION {
@@ -78,8 +81,8 @@ pub fn save_cache(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use crate::template::catalog::TemplateCatalog;
+    use std::path::PathBuf;
 
     #[test]
     fn cache_file_roundtrips_bincode() {
