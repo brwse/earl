@@ -125,12 +125,10 @@ pub fn validate_template_file(file: &TemplateFile) -> Result<()> {
             // Validate the override operation itself
             validate_operation(name, &override_.operation, &cmd.annotations.secrets)?;
             // Validate override result if provided
-            if let Some(result) = &override_.result {
-                if result.output.trim().is_empty() {
-                    bail!(
-                        "command `{name}` environment override `{env_name}` has empty result.output"
-                    );
-                }
+            if let Some(result) = &override_.result
+                && result.output.trim().is_empty()
+            {
+                bail!("command `{name}` environment override `{env_name}` has empty result.output");
             }
         }
         validate_command(name, cmd)?;
