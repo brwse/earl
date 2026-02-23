@@ -110,7 +110,8 @@ written to disk only after Phase 5 human review and approval.
 
 **Target path** (determine now, write after approval):
 - Local (project-specific): `./templates/<provider>.hcl`
-- Global (all projects): `~/.config/earl/templates/<provider>.hcl`
+- Global (all projects): `~/.config/earl/templates/<provider>.hcl` (macOS/Linux) or
+  `%APPDATA%\earl\templates\<provider>.hcl` (Windows)
 
 Default to local if the current directory is a project (contains `.git/`, `package.json`,
 `Cargo.toml`, or similar). Default to global otherwise.
@@ -207,7 +208,8 @@ Fix any errors reported and re-validate. Common errors:
 ## Phase 7: Set Secrets
 
 Check `annotations.secrets` in the template file for required secret keys. For pre-built
-imports, read the imported file at `~/.config/earl/templates/<provider>.hcl` to find them.
+imports, read the imported file at `~/.config/earl/templates/<provider>.hcl` (macOS/Linux)
+or `%APPDATA%\earl\templates\<provider>.hcl` (Windows) to find them.
 Print a checklist:
 
 ```

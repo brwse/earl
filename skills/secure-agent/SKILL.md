@@ -141,7 +141,8 @@ Expected: succeeds and lists available templates (Earl is not in the denylist).
 
 Without egress rules, Earl is an open proxy — any HTTP template with a parameterized URL can
 reach any public endpoint. Add `[[network.allow]]` rules to
-`~/.config/earl/config.toml` to restrict which hosts Earl templates can contact.
+`~/.config/earl/config.toml` (macOS/Linux) or `%APPDATA%\earl\config.toml` (Windows)
+to restrict which hosts Earl templates can contact.
 
 **Note:** Egress rules are global — they apply to all projects using this Earl install.
 Earl does not currently support per-project config files.
