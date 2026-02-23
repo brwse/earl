@@ -1,5 +1,5 @@
 ---
-name: getting-started-with-earl
+name: setup-earl
 description: Guides developers through installing Earl, running a quick demo, and creating their first API template. Use when someone is new to Earl, wants to set up Earl, or needs help creating their first template.
 ---
 

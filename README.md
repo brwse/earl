@@ -38,9 +38,9 @@ arbitrary API calls. Earl eliminates that risk:
 Prompt your coding agent:
 
 ```
-Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/getting-started-with-earl/SKILL.md
+Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/setup-earl/SKILL.md
 and any files it references under
-https://raw.githubusercontent.com/brwse/earl/main/skills/getting-started-with-earl/references/
+https://raw.githubusercontent.com/brwse/earl/main/skills/setup-earl/references/
 then follow the skill to help me get started with Earl.
 ```
 
