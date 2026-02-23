@@ -11,7 +11,15 @@ provider = "myservice"
 command "health_check" {
   title       = "Health Check"
   summary     = "Check gRPC service health"
-  description = "Calls the standard gRPC health check endpoint"
+  description = <<-EOT
+    Calls the standard gRPC health check endpoint to verify service availability.
+
+    ## Guidance for AI agents
+
+    Use this command to check whether the gRPC service is running and healthy. Leave service empty to check server-wide health.
+
+    Example: `earl call myservice.health_check --service ""`
+  EOT
 
   annotations {
     mode = "read"

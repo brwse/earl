@@ -11,7 +11,15 @@ provider = "tools"
 command "disk_usage" {
   title       = "Disk Usage"
   summary     = "Check disk usage for a path"
-  description = "Reports disk usage using du"
+  description = <<-EOT
+    Reports disk usage for a given path using the du command.
+
+    ## Guidance for AI agents
+
+    Use this command to check how much disk space a directory is using.
+
+    Example: `earl call tools.disk_usage --path /var/log`
+  EOT
 
   annotations {
     mode = "read"

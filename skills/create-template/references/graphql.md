@@ -11,7 +11,15 @@ provider = "myapi_graphql"
 command "get_user" {
   title       = "Get User"
   summary     = "Fetch user profile from GraphQL API"
-  description = "Queries the authenticated user's profile"
+  description = <<-EOT
+    Queries the authenticated user's profile from the GraphQL API.
+
+    ## Guidance for AI agents
+
+    Use this command to look up a user's profile by username.
+
+    Example: `earl call myapi_graphql.get_user --username "alice"`
+  EOT
 
   annotations {
     mode    = "read"

@@ -11,7 +11,15 @@ provider = "myapi"
 command "get_items" {
   title       = "Get Items"
   summary     = "Fetch items from the API"
-  description = "Retrieves a list of items with optional filtering"
+  description = <<-EOT
+    Retrieves a list of items with optional filtering.
+
+    ## Guidance for AI agents
+
+    Use this command to search or list items from the API. Provide a search query and an optional result limit.
+
+    Example: `earl call myapi.get_items --query "widgets" --limit 5`
+  EOT
 
   annotations {
     mode = "read"

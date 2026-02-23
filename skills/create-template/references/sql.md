@@ -11,7 +11,15 @@ provider = "analytics"
 command "recent_orders" {
   title       = "Recent Orders"
   summary     = "Fetch recent orders from the database"
-  description = "Queries the orders table with a configurable limit"
+  description = <<-EOT
+    Fetches recent orders from the database, sorted by creation date descending.
+
+    ## Guidance for AI agents
+
+    Use this command to retrieve the most recently placed orders. Adjust the limit to control how many rows are returned.
+
+    Example: `earl call analytics.recent_orders --limit 25`
+  EOT
 
   annotations {
     mode    = "read"
