@@ -244,6 +244,8 @@ async fn bash_json_output() {
 }
 
 /// Test that sandbox max_memory_bytes is enforced.
+/// macOS does not enforce RLIMIT_AS, so this test only runs on Linux.
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn bash_sandbox_memory_limit_enforced() {
     let result_template = ResultTemplate {

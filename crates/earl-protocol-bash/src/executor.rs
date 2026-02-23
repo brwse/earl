@@ -34,11 +34,30 @@ pub async fn execute_bash_once(
         command.stdin(Stdio::null());
     }
 
+    let max_memory = data.sandbox.max_memory_bytes;
+    let max_cpu_secs = data.sandbox.max_cpu_time_ms.map(|ms| (ms + 999) / 1000);
+
     // SAFETY: setsid() creates a new session / process group so that we can
     // kill the entire group on timeout without leaking children.
+    // setrlimit() calls are safe in a post-fork, pre-exec context.
     unsafe {
-        command.pre_exec(|| {
+        command.pre_exec(move || {
             libc::setsid();
+            if let Some(bytes) = max_memory {
+                let rlim = libc::rlimit {
+                    rlim_cur: bytes as libc::rlim_t,
+                    rlim_max: bytes as libc::rlim_t,
+                };
+                let _ = libc::setrlimit(libc::RLIMIT_AS, &rlim);
+            }
+            if let Some(secs) = max_cpu_secs {
+                // Note: RLIMIT_CPU grace period sends SIGXCPU then SIGKILL ~1s later.
+                let rlim = libc::rlimit {
+                    rlim_cur: secs as libc::rlim_t,
+                    rlim_max: secs as libc::rlim_t,
+                };
+                let _ = libc::setrlimit(libc::RLIMIT_CPU, &rlim);
+            }
             Ok(())
         });
     }
@@ -181,11 +200,30 @@ impl StreamingProtocolExecutor for BashStreamExecutor {
             command.stdin(Stdio::null());
         }
 
+        let max_memory = data.sandbox.max_memory_bytes;
+        let max_cpu_secs = data.sandbox.max_cpu_time_ms.map(|ms| (ms + 999) / 1000);
+
         // SAFETY: setsid() creates a new session / process group so that we
         // can kill the entire group on timeout without leaking children.
+        // setrlimit() calls are safe in a post-fork, pre-exec context.
         unsafe {
-            command.pre_exec(|| {
+            command.pre_exec(move || {
                 libc::setsid();
+                if let Some(bytes) = max_memory {
+                    let rlim = libc::rlimit {
+                        rlim_cur: bytes as libc::rlim_t,
+                        rlim_max: bytes as libc::rlim_t,
+                    };
+                    let _ = libc::setrlimit(libc::RLIMIT_AS, &rlim);
+                }
+                if let Some(secs) = max_cpu_secs {
+                    // Note: RLIMIT_CPU grace period sends SIGXCPU then SIGKILL ~1s later.
+                    let rlim = libc::rlimit {
+                        rlim_cur: secs as libc::rlim_t,
+                        rlim_max: secs as libc::rlim_t,
+                    };
+                    let _ = libc::setrlimit(libc::RLIMIT_CPU, &rlim);
+                }
                 Ok(())
             });
         }
