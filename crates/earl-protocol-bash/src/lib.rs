@@ -4,6 +4,7 @@ pub mod sandbox;
 pub mod schema;
 
 pub use executor::BashExecutor;
+pub use executor::BashStreamExecutor;
 pub use schema::{BashOperationTemplate, BashSandboxTemplate, BashScriptTemplate};
 
 /// Resolved sandbox settings for bash execution.

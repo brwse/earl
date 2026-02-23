@@ -2,9 +2,9 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 
-use earl_core::{ExecutionContext, RawExecutionResult};
+use earl_core::{ExecutionContext, RawExecutionResult, StreamChunk, StreamMeta};
 
 use crate::PreparedBashScript;
 use crate::sandbox::{build_sandboxed_command, sandbox_available, sandbox_tool_name};
@@ -127,7 +127,8 @@ pub async fn execute_bash_once(
     })
 }
 
-use earl_core::ProtocolExecutor;
+use earl_core::{ProtocolExecutor, StreamingProtocolExecutor};
+use tokio::sync::mpsc;
 
 /// Bash protocol executor.
 pub struct BashExecutor;
@@ -141,6 +142,162 @@ impl ProtocolExecutor for BashExecutor {
         ctx: &ExecutionContext,
     ) -> anyhow::Result<RawExecutionResult> {
         execute_bash_once(data, ctx).await
+    }
+}
+
+/// Streaming bash protocol executor.
+///
+/// Reuses the same sandboxed process setup as [`BashExecutor`] but streams
+/// stdout line-by-line through an `mpsc::Sender<StreamChunk>` instead of
+/// buffering the entire output.
+pub struct BashStreamExecutor;
+
+impl StreamingProtocolExecutor for BashStreamExecutor {
+    type PreparedData = PreparedBashScript;
+
+    async fn execute_stream(
+        &mut self,
+        data: &PreparedBashScript,
+        ctx: &ExecutionContext,
+        sender: mpsc::Sender<StreamChunk>,
+    ) -> anyhow::Result<StreamMeta> {
+        if !sandbox_available() {
+            bail!(
+                "bash sandbox tool ({}) is not available on this system; \
+                 install it or disable the bash feature",
+                sandbox_tool_name()
+            );
+        }
+
+        let mut command = build_sandboxed_command(
+            &data.script,
+            &data.env,
+            data.cwd.as_deref(),
+            &data.sandbox,
+        )?;
+
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
+        if data.stdin.is_some() {
+            command.stdin(Stdio::piped());
+        } else {
+            command.stdin(Stdio::null());
+        }
+
+        // SAFETY: setsid() creates a new session / process group so that we
+        // can kill the entire group on timeout without leaking children.
+        unsafe {
+            command.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+
+        let mut child = command
+            .spawn()
+            .context("failed spawning sandboxed bash command")?;
+
+        let pid = child
+            .id()
+            .ok_or_else(|| anyhow::anyhow!("failed to obtain PID of spawned bash process"))?;
+
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("failed capturing bash stdout"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("failed capturing bash stderr"))?;
+
+        // Use sandbox output limit if set, otherwise fall back to transport limit.
+        let max_bytes = data
+            .sandbox
+            .max_output_bytes
+            .unwrap_or(ctx.transport.max_response_bytes);
+
+        // Drain stderr in a background task so the child process does not block.
+        let stderr_task =
+            tokio::spawn(async move { read_stream_limited(stderr, max_bytes, "stderr").await });
+
+        // Write stdin if present, then drop the handle so the child sees EOF.
+        if let Some(input) = &data.stdin
+            && let Some(mut stdin_handle) = child.stdin.take()
+        {
+            stdin_handle
+                .write_all(input.as_bytes())
+                .await
+                .context("failed writing stdin to bash process")?;
+        }
+
+        // Stream stdout line-by-line.
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        let mut total_bytes: usize = 0;
+
+        loop {
+            line.clear();
+            let bytes_read = reader
+                .read_line(&mut line)
+                .await
+                .context("failed reading bash stdout")?;
+            if bytes_read == 0 {
+                break;
+            }
+
+            total_bytes = total_bytes.saturating_add(bytes_read);
+            if total_bytes > max_bytes {
+                bail!(
+                    "bash stdout exceeded configured max output bytes ({max_bytes} bytes)"
+                );
+            }
+
+            let chunk = StreamChunk {
+                data: line.as_bytes().to_vec(),
+                content_type: None,
+            };
+            if sender.send(chunk).await.is_err() {
+                // Receiver dropped — stop streaming gracefully.
+                break;
+            }
+        }
+
+        // Drop the sender so the consumer sees the end of the stream.
+        drop(sender);
+
+        // Use sandbox timeout if set, otherwise fall back to transport timeout.
+        let timeout = data
+            .sandbox
+            .max_time_ms
+            .map(Duration::from_millis)
+            .unwrap_or(ctx.transport.timeout);
+
+        let status = match tokio::time::timeout(timeout, child.wait()).await {
+            Ok(wait_result) => wait_result.context("failed waiting for bash process")?,
+            Err(_) => {
+                // Timeout: kill the entire process group.
+                if let Ok(pgid) = i32::try_from(pid) {
+                    unsafe { libc::killpg(pgid, libc::SIGKILL) };
+                }
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                bail!("bash script timed out after {timeout:?}");
+            }
+        };
+
+        // Wait for stderr drain to finish (ignore errors — we don't stream stderr).
+        let _ = stderr_task.await;
+
+        let exit_code = status
+            .code()
+            .map(|c| c.clamp(0, u16::MAX as i32) as u16)
+            .unwrap_or(1);
+
+        Ok(StreamMeta {
+            status: exit_code,
+            url: "bash://script".into(),
+        })
     }
 }
 
