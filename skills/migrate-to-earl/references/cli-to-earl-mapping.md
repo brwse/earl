@@ -27,7 +27,7 @@ may use either tool for the same API calls.
 | `curl.*api\.vercel\.com` / `vercel ` | `vercel` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/vercel.hcl` |
 | `curl.*api\.render\.com` | `render` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/render.hcl` |
 | `curl.*shopify\.com/admin` | `shopify` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/shopify.hcl` |
-| `curl.*api\.hubapi\.com` | `hubspot` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/hubspot.hcl` |
+| `curl.*api\.hub(api\|spot)\.com` | `hubspot` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/hubspot.hcl` |
 | `curl.*api\.mailchimp\.com` | `mailchimp` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/mailchimp.hcl` |
 | `curl.*api\.datadoghq\.com` / `datadog ` | `datadog` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/datadog.hcl` |
 | `curl.*sentry\.io/api` | `sentry` | `earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/sentry.hcl` |

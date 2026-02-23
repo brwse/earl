@@ -120,6 +120,10 @@ Run a test call for each mapped command before touching any call sites:
 earl call --yes --json <provider>.<command> --<param> <representative_value>
 ```
 
+**Important:** If a command has `annotations.mode = "write"`, the test call will create/modify/
+delete real data. Use read-only commands for verification where possible, or use a test/sandbox
+account. Warn the user before running any write-mode test calls.
+
 If any call fails, resolve it (via `troubleshoot-earl` if needed) before proceeding.
 
 ---

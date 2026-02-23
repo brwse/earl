@@ -37,10 +37,14 @@ whether it is already imported before offering to import it:
 earl templates list
 ```
 
-If the provider is already present (e.g. `github.get_repo` appears in the list), skip the
-import and go directly to Phase 7 to set any missing secrets.
+Check the list carefully:
 
-If not already imported, offer to import the pre-built template:
+- If the **specific command** needed is already present (e.g. `github.create_issue` appears in
+  the list), skip the import and go directly to Phase 7 to set any missing secrets.
+- If the **provider** is imported but the specific command is **not** in the list (e.g. `github`
+  commands appear but not `github.create_issue`), skip the import and proceed to custom template
+  authoring (phases 2–6) to add the missing command to the existing file.
+- If the provider is **not imported at all**, offer to import the pre-built template:
 
 ```bash
 # Available: github, stripe, slack, notion, openai, anthropic, discord, gitlab, jira, linear,
@@ -52,7 +56,8 @@ earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples
 If a pre-built template was imported, skip to **Phase 7: Set Secrets** — phases 2–6 are not
 needed. Then continue to Phase 8 to verify the template works.
 
-Only proceed to custom template authoring (phases 2–6) if no pre-built template matches the need.
+Only proceed to custom template authoring (phases 2–6) if no pre-built template covers the
+needed command.
 
 ---
 
@@ -235,6 +240,11 @@ Run a test call with representative parameters:
 ```bash
 earl call --yes --json <provider>.<command> --<param> <test_value>
 ```
+
+**Important:** If `annotations.mode = "write"`, the test call will create/modify/delete real
+data. Use a test or sandbox account, a safe test value (e.g. a dedicated test repo), or choose
+a read-only command for the initial verification. Warn the user before running write-mode
+test calls.
 
 If the call fails:
 - HTTP 401/403 → secret not set or wrong key name
