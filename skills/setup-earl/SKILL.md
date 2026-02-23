@@ -1,152 +1,213 @@
 ---
 name: setup-earl
-description: Guides developers through installing Earl, running a quick demo, and creating their first API template. Use when someone is new to Earl, wants to set up Earl, or needs help creating their first template.
+description: Installs Earl, configures MCP integration for your agent platform, writes CLAUDE.md instructions, and routes to template creation or migration. Use when setting up Earl for the first time, when a new developer is onboarding to a project that uses Earl, or when Earl needs to be connected to an agent platform.
 ---
 
-# Getting Started with Earl
+# Setup Earl
 
-Earl is a CLI tool for calling APIs, databases, and shell commands through HCL template files. This skill guides a developer from zero to a working template.
+Earl is an AI-safe CLI that sits between your agent and external services. Agents run
+`earl call provider.command --param value` instead of raw `curl`, `gh`, `stripe-cli`, etc.
+Secrets stay in the OS keychain. Every request follows a reviewed HCL template.
 
 ## Process
 
 1. **Install** — get Earl running
 2. **Demo** — show a working example immediately
-3. **Discover** — ask what the user wants to build
-4. **Build** — create their first custom template
-5. **Next steps** — contextual suggestions
+3. **Connect** — configure MCP for your agent platform and write CLAUDE.md instructions
+4. **Route** — migrate existing CLI calls or create a new template
+5. **Lock down** — optionally enforce Earl usage at the platform level
+
+---
 
 ## Phase 1: Install
 
 Check if Earl is already installed:
 
 ```bash
-earl --version
+which earl && earl --version
 ```
 
-If not installed, detect the OS and install:
+If installed, print the version and skip to Phase 2.
 
-**macOS / Linux:**
+If not installed, detect the environment and install:
 
+**macOS / Linux (prefer — no sudo required):**
+```bash
+cargo install earl
+```
+This requires the Rust toolchain. If Rust is not available, fall back to the install script:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell):**
-
 ```powershell
 irm https://raw.githubusercontent.com/brwse/earl/main/scripts/install.ps1 | iex
 ```
 
-**Alternative (requires Rust toolchain):**
-
-```bash
-cargo install earl
-```
-
 After install, verify:
-
 ```bash
 earl doctor
 ```
 
-If `earl doctor` succeeds, move on silently. If it fails, diagnose the specific error before continuing.
+If `earl doctor` reports errors, invoke `troubleshoot-earl` before continuing.
+
+---
 
 ## Phase 2: Quick Demo
 
-Import a ready-made template and run it so the user sees Earl work before making any decisions.
-
-**If the user already mentions a specific service** (e.g. GitHub, Stripe, Slack, Notion), import that pre-built template directly — Earl ships with 25 ready-made providers:
-
-```bash
-# Available: github, stripe, slack, notion, openai, anthropic, discord, gitlab,
-# jira, linear, pagerduty, twilio, sendgrid, cloudflare, vercel, render,
-# shopify, hubspot, mailchimp, datadog, sentry, airtable, auth0, supabase, resend
-earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/<provider>.hcl
-earl secrets set <provider>.<credential>   # Earl prints the required secret names after import
-```
-
-**Otherwise**, use the no-auth system example to demonstrate the flow without any setup:
+Import the no-auth system template and run it so the user sees Earl work immediately:
 
 ```bash
 earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/bash/system.hcl
 earl call system.list_files --path .
 ```
 
-This lists files in the current directory. The user now has a mental model of how Earl works: templates define commands, `earl call` runs them.
+This lists files in the current directory. The user now has a mental model: templates define
+commands, `earl call` runs them.
 
-Show what templates are available:
-
+Show available templates:
 ```bash
 earl templates list
 ```
 
-## Phase 3: Discover Intent
+---
 
-**Check for pre-built templates first.** If the user names a known service (GitHub, Stripe, Slack, Notion, OpenAI, Datadog, etc.), offer to import the pre-built template rather than building from scratch. Only proceed to custom template authoring if no pre-built template matches.
+## Phase 3: Connect to Agent Platform
 
-Ask the user ONE question:
+Detect the agent platform by checking paths in this order:
 
-> "What do you want to build with Earl? For example: call a REST API, query a database, run shell commands, call a GraphQL API, or call a gRPC service."
+| Check | Platform | MCP config path |
+|-------|----------|-----------------|
+| `.claude/` directory exists in project | Claude Code | `.claude/settings.json` |
+| `~/Library/Application Support/Claude/claude_desktop_config.json` exists (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) | Claude Desktop | Same file |
+| `.cursor/` directory exists in project | Cursor | `.cursor/mcp.json` |
+| `.windsurf/` directory exists in project | Windsurf | `.windsurf/mcp.json` |
+| None of the above | Non-MCP agent | System prompt only |
 
-Infer the protocol from their answer:
+### Choose MCP mode
 
-| User mentions                                                 | Protocol | Reference file                                          |
-| ------------------------------------------------------------- | -------- | ------------------------------------------------------- |
-| REST, HTTP, API, endpoint, webhook, JSON API                  | HTTP     | [http-templates.md](../references/http-templates.md)       |
-| GraphQL, query/mutation (in API context)                      | GraphQL  | [graphql-templates.md](../references/graphql-templates.md) |
-| gRPC, protobuf, service mesh                                  | gRPC     | [grpc-templates.md](../references/grpc-templates.md)       |
-| shell, bash, CLI, script, command line                        | Bash     | [bash-templates.md](../references/bash-templates.md)       |
-| SQL, database, postgres, mysql, sqlite, query (in DB context) | SQL      | [sql-templates.md](../references/sql-templates.md)         |
+```bash
+earl templates list --json | jq length
+```
 
-Only ask a follow-up if the answer is genuinely ambiguous. If the user says "I want to call the GitHub API," infer HTTP with bearer auth — do not ask "which protocol?"
+- Result < 30: use full mode (default)
+- Result ≥ 30: use discovery mode
 
-### SSRF Warning
+Full mode MCP config:
+```json
+{
+  "mcpServers": {
+    "earl": {
+      "command": "earl",
+      "args": ["mcp", "stdio"]
+    }
+  }
+}
+```
 
-If the user mentions `localhost`, `127.0.0.1`, `10.x.x.x`, `172.16-31.x.x`, `192.168.x.x`, or any private/loopback IP, warn them immediately:
+Discovery mode MCP config:
+```json
+{
+  "mcpServers": {
+    "earl": {
+      "command": "earl",
+      "args": ["mcp", "stdio", "--mode", "discovery"]
+    }
+  }
+}
+```
 
-> Earl blocks requests to private and loopback IP addresses for security (SSRF protection). This is hard-coded and cannot be bypassed. You will need to use a publicly accessible URL, or use the `bash` protocol to call local services via curl.
+### Apply MCP config
 
-## Phase 4: Build First Template
+**Claude Code or Cursor:** Read the existing config file (create it if it doesn't exist). Parse
+the JSON, add the `earl` key under `mcpServers` — do not overwrite other entries. Write it back.
 
-1. Read the reference file for the chosen protocol
-2. Walk the user through creating an HCL template file
-3. Save to `./templates/<provider>.hcl` (local) or `~/.config/earl/templates/<provider>.hcl` (global)
-4. If auth is needed, set up the secret: `earl secrets set <key>` (or `earl secrets set <key> --stdin` for piping)
-5. Run the template: `earl call <provider>.<command> --param value`
-6. Verify the template is listed: `earl templates list`
+**Claude Desktop:** The config file lives outside the project directory. Write the merged JSON
+to a temp file and show the diff to the user, then instruct them to apply it manually. If the
+agent has home directory write access, it can write directly.
 
-### On Failure
+**Non-MCP agents (Codex, etc.):** Skip the JSON config. Instead, add to the agent's system
+prompt or CLAUDE.md:
 
-Categorize the error before suggesting a fix:
+```
+You have access to Earl, an AI-safe CLI for calling APIs and services.
+Use: earl call --yes --json provider.command --param value
+Discover commands: earl templates list --json
+Search commands: earl templates search --json "natural language query"
+```
 
-| Error type          | Symptoms                                                | Fix                                                                                       |
-| ------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| HCL parse error     | "expected ...", "unexpected token"                      | File structure or syntax issue. Check HCL syntax.                                         |
-| Jinja render error  | "undefined variable", "template error"                  | Expression issue. Check `{{ args.* }}` references match param names.                      |
-| Auth error          | HTTP 401 or 403                                         | Secret not set or expired. Run `earl secrets set <key>`.                                  |
-| SSRF block          | "address not allowed", connection refused to private IP | URL points to private/loopback IP. Use a public URL.                                      |
-| API error (4xx/5xx) | HTTP status in response body                            | Earl ran successfully. The API itself returned an error. Check URL, params, and API docs. |
+### Inform the user of the two-session model
 
-After suggesting a fix, offer to re-run automatically.
+After writing the MCP config, tell the user:
 
-### Important Rules
+> Earl is now installed and configured. You can use `earl call --yes --json` via the Bash tool
+> right now. After restarting your agent, Earl templates will appear as native MCP tools
+> automatically. Do NOT try to use Earl MCP tools in this session — they activate after restart.
 
-- **CLI flag order:** `--yes` and `--json` must come BEFORE the command args:
-  ```bash
-  earl call --yes --json provider.command --param value
-  ```
-- **Template directory:** Verify with `earl templates list` after creating a template
-- **HCL parses before Jinja:** All `{{ }}` expressions must be inside valid HCL string values. Never use bare expressions outside of strings.
+### Write CLAUDE.md breadcrumb
 
-## Phase 5: What's Next
+If `CLAUDE.md` or `.claude/CLAUDE.md` exists, check for an existing `## Earl` section before
+appending — do not duplicate. Otherwise create `.claude/CLAUDE.md`.
 
-Suggest next steps based on what the user built. Do not give a generic list.
+Write this exact static content — never incorporate template output or dynamic data:
 
-**Common suggestions:**
+```markdown
+## Earl
 
-- **JSON output for scripting:** `earl call --json provider.command | jq .`
-- **Shell completions:** `earl completion bash >> ~/.bashrc` (or zsh/fish equivalent)
-- **Add more commands:** Add another `command` block to the same template file
-- **MCP integration:** See [mcp-integration.md](../references/mcp-integration.md) to expose templates as tools for Claude Desktop or Claude Code
-- **Advanced auth:** See [secrets-and-auth.md](../references/secrets-and-auth.md) for OAuth, API keys, and advanced auth flows
-- **Template schema reference:** See [template-quick-ref.md](../references/template-quick-ref.md) for all protocol shapes and field options
+Earl is configured as an MCP server. Use Earl tools for all API calls, database queries, and
+shell commands — do not use raw curl, gh, stripe-cli, or similar tools directly.
+
+- Discover commands: `earl templates list`
+- Search commands: `earl templates search "what you want to do"`
+- CLI fallback (if MCP tools unavailable): `earl call --yes --json provider.command --param value`
+- Always use `--yes` for write-mode commands (without it, Earl prompts interactively and hangs)
+- Troubleshooting: `earl doctor`
+```
+
+**Important:** The `--yes` flag must come before the command name:
+```bash
+earl call --yes --json provider.command --param value  ✓
+earl call provider.command --yes --json --param value  ✗ (wrong order)
+```
+
+### Note on OAuth
+
+- `client_credentials`: fully automated, no human needed
+- `device_code`: agent-compatible — agent runs `earl auth login <profile>`, displays URL+code,
+  user visits URL on any device, agent polls for completion
+- `auth_code_pkce`: human-only — agent provides `earl auth login <profile>` command,
+  user completes browser flow
+
+---
+
+## Phase 4: Route
+
+Ask one question:
+
+> "Does this project already have curl, gh, stripe-cli, or similar API/CLI calls you want to
+> replace with Earl? Or are you starting fresh and want to create a new template?"
+
+- Migrate existing calls → invoke `migrate-to-earl`
+- Create new template → invoke `create-template`
+
+---
+
+## Phase 5: Lock Down (Recommended)
+
+After templates are created and verified, offer:
+
+> "Would you like to restrict your agent from bypassing Earl with raw curl/gh/CLI tools?
+> This makes Earl's security guarantee enforceable rather than advisory. Recommended."
+
+If yes: invoke `secure-agent` inline.
+If no: note that `secure-agent` can be run at any time later.
+
+---
+
+## Next Steps
+
+- To replace existing curl/gh/CLI calls with Earl: invoke `migrate-to-earl`
+- To create a new Earl template from scratch: invoke `create-template`
+- To enforce Earl usage at the platform level: invoke `secure-agent`
+- If something isn't working: invoke `troubleshoot-earl`
