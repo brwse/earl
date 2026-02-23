@@ -5,6 +5,7 @@ use secrecy::SecretString;
 use serde::Deserialize;
 
 use crate::secrets::resolver::SecretResolver;
+use crate::secrets::resolvers::{validate_azure_vault_name, validate_path_segment};
 
 /// A parsed `az://vault-name/secret-name` reference.
 #[derive(Debug)]
@@ -31,10 +32,16 @@ impl AzureReference {
                     "invalid Azure reference: expected az://vault-name/secret-name, got: {reference}"
                 );
             }
-            2 => Ok(Self {
-                vault_name: segments[0].to_string(),
-                secret_name: segments[1].to_string(),
-            }),
+            2 => {
+                let vault_name = segments[0].to_string();
+                let secret_name = segments[1].to_string();
+                validate_azure_vault_name(&vault_name)?;
+                validate_path_segment(&secret_name, "secret name")?;
+                Ok(Self {
+                    vault_name,
+                    secret_name,
+                })
+            }
             _ => {
                 bail!(
                     "invalid Azure reference: too many path segments, expected az://vault-name/secret-name, got: {reference}"
@@ -249,5 +256,55 @@ mod tests {
     fn parse_rejects_wrong_scheme() {
         let err = AzureReference::parse("aws://vault/secret").unwrap_err();
         assert!(err.to_string().contains("invalid"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_rejects_dot_in_vault_name() {
+        let err = AzureReference::parse("az://my.vault/secret").unwrap_err();
+        assert!(
+            err.to_string().contains("alphanumeric"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_short_vault_name() {
+        let err = AzureReference::parse("az://ab/secret").unwrap_err();
+        assert!(err.to_string().contains("3-24"), "got: {err}");
+    }
+
+    #[test]
+    fn parse_rejects_long_vault_name() {
+        let long_name = "a".repeat(25);
+        let reference = format!("az://{long_name}/secret");
+        let err = AzureReference::parse(&reference).unwrap_err();
+        assert!(err.to_string().contains("3-24"), "got: {err}");
+    }
+
+    #[test]
+    fn parse_rejects_leading_hyphen_vault() {
+        let err = AzureReference::parse("az://-vault/secret").unwrap_err();
+        assert!(
+            err.to_string().contains("must not start or end"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_hash_in_secret_name() {
+        let err = AzureReference::parse("az://my-vault/sec#ret").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_whitespace_in_secret_name() {
+        let err = AzureReference::parse("az://my-vault/my secret").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
     }
 }

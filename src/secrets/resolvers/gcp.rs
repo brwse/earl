@@ -6,6 +6,7 @@ use secrecy::SecretString;
 use serde::Deserialize;
 
 use crate::secrets::resolver::SecretResolver;
+use crate::secrets::resolvers::validate_path_segment;
 
 /// A parsed `gcp://project/secret-name` or `gcp://project/secret-name/version` reference.
 #[derive(Debug)]
@@ -33,16 +34,30 @@ impl GcpReference {
                     "invalid GCP reference: expected gcp://project/secret-name[/version], got: {reference}"
                 );
             }
-            2 => Ok(Self {
-                project: segments[0].to_string(),
-                secret: segments[1].to_string(),
-                version: "latest".to_string(),
-            }),
-            3 => Ok(Self {
-                project: segments[0].to_string(),
-                secret: segments[1].to_string(),
-                version: segments[2].to_string(),
-            }),
+            2 => {
+                let project = segments[0].to_string();
+                let secret = segments[1].to_string();
+                validate_path_segment(&project, "project name")?;
+                validate_path_segment(&secret, "secret name")?;
+                Ok(Self {
+                    project,
+                    secret,
+                    version: "latest".to_string(),
+                })
+            }
+            3 => {
+                let project = segments[0].to_string();
+                let secret = segments[1].to_string();
+                let version = segments[2].to_string();
+                validate_path_segment(&project, "project name")?;
+                validate_path_segment(&secret, "secret name")?;
+                validate_path_segment(&version, "version")?;
+                Ok(Self {
+                    project,
+                    secret,
+                    version,
+                })
+            }
             _ => {
                 bail!(
                     "invalid GCP reference: too many path segments, expected gcp://project/secret-name[/version], got: {reference}"
@@ -190,27 +205,26 @@ struct CredentialsFile {
 /// Obtain an access token using Application Default Credentials.
 fn obtain_access_token() -> Result<String> {
     // 1. Check GOOGLE_APPLICATION_CREDENTIALS env var
-    if let Ok(path) = std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
-        if !path.is_empty() {
-            let creds_path = std::path::Path::new(&path);
-            if creds_path.exists() {
-                return token_from_credentials_file(creds_path);
-            }
+    if let Ok(path) = std::env::var("GOOGLE_APPLICATION_CREDENTIALS")
+        && !path.is_empty()
+    {
+        let creds_path = std::path::Path::new(&path);
+        if creds_path.exists() {
+            return token_from_credentials_file(creds_path);
         }
     }
 
     // 2. Check well-known user credentials location
     let well_known = well_known_credentials_path();
-    if let Some(ref path) = well_known {
-        if path.exists() {
-            return token_from_credentials_file(path);
-        }
+    if let Some(ref path) = well_known
+        && path.exists()
+    {
+        return token_from_credentials_file(path);
     }
 
     // 3. Try GCE metadata server
-    match token_from_metadata_server() {
-        Ok(token) => return Ok(token),
-        Err(_) => {}
+    if let Ok(token) = token_from_metadata_server() {
+        return Ok(token);
     }
 
     bail!(
@@ -455,5 +469,32 @@ mod tests {
     fn parse_rejects_wrong_scheme() {
         let err = GcpReference::parse("aws://project/secret").unwrap_err();
         assert!(err.to_string().contains("invalid"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_rejects_question_mark_in_project() {
+        let err = GcpReference::parse("gcp://proj?ect/secret").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_hash_in_secret() {
+        let err = GcpReference::parse("gcp://project/sec#ret").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_whitespace_in_project() {
+        let err = GcpReference::parse("gcp://my project/secret").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
     }
 }

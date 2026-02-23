@@ -21,6 +21,7 @@ pub struct SecretManager {
     index_path: std::path::PathBuf,
 }
 
+#[allow(clippy::vec_init_then_push)]
 fn default_resolvers() -> Vec<Box<dyn SecretResolver>> {
     #[allow(unused_mut)]
     let mut resolvers: Vec<Box<dyn SecretResolver>> = Vec::new();

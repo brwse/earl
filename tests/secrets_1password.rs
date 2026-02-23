@@ -14,7 +14,6 @@ fn op_resolver_parses_reference() {
     // Remove env vars so the resolver always reports missing credentials.
     // SAFETY: This test is single-threaded and no other threads read these env vars.
     unsafe {
-        std::env::remove_var("OP_SERVICE_ACCOUNT_TOKEN");
         std::env::remove_var("OP_CONNECT_TOKEN");
         std::env::remove_var("OP_CONNECT_HOST");
     }
@@ -22,8 +21,7 @@ fn op_resolver_parses_reference() {
     let resolver = OpResolver::new();
     let err = resolver.resolve("op://vault/item/field").unwrap_err();
     assert!(
-        err.to_string().contains("OP_CONNECT_TOKEN")
-            || err.to_string().contains("OP_SERVICE_ACCOUNT_TOKEN"),
+        err.to_string().contains("OP_CONNECT_TOKEN"),
         "error should mention required env vars: {}",
         err
     );

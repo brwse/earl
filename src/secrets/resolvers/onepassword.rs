@@ -2,6 +2,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use secrecy::SecretString;
 
 use crate::secrets::resolver::SecretResolver;
+use crate::secrets::resolvers::validate_path_segment;
 
 /// A parsed `op://vault/item/field` reference.
 #[derive(Debug)]
@@ -25,19 +26,24 @@ impl OpReference {
             );
         }
 
-        Ok(Self {
-            vault: segments[0].to_string(),
-            item: segments[1].to_string(),
-            field: segments[2].to_string(),
-        })
+        let vault = segments[0].to_string();
+        let item = segments[1].to_string();
+        let field = segments[2].to_string();
+
+        validate_path_segment(&vault, "vault name")?;
+        validate_path_segment(&item, "item name")?;
+        validate_path_segment(&field, "field name")?;
+
+        Ok(Self { vault, item, field })
     }
 }
 
 /// Resolver for 1Password secrets using the `op://` URI scheme.
 ///
-/// Supports two authentication modes:
-/// 1. **Service Account**: Set `OP_SERVICE_ACCOUNT_TOKEN` env var.
-/// 2. **Connect Server**: Set both `OP_CONNECT_TOKEN` and `OP_CONNECT_HOST` env vars.
+/// Authentication uses the 1Password Connect Server API. Set both
+/// `OP_CONNECT_TOKEN` and `OP_CONNECT_HOST` environment variables.
+///
+/// See <https://developer.1password.com/docs/connect/> for setup instructions.
 ///
 /// References must be in the format `op://vault/item/field`.
 pub struct OpResolver;
@@ -55,41 +61,23 @@ impl Default for OpResolver {
 }
 
 /// Authentication configuration resolved from environment variables.
-enum OpAuth {
-    ServiceAccount { token: String },
-    Connect { host: String, token: String },
+struct OpAuth {
+    host: String,
+    token: String,
 }
 
 impl OpAuth {
     fn from_env() -> Result<Self> {
-        if let Ok(token) = std::env::var("OP_SERVICE_ACCOUNT_TOKEN") {
-            if !token.is_empty() {
-                return Ok(Self::ServiceAccount { token });
-            }
-        }
-
         let token = std::env::var("OP_CONNECT_TOKEN").ok().filter(|t| !t.is_empty());
         let host = std::env::var("OP_CONNECT_HOST").ok().filter(|h| !h.is_empty());
 
         match (token, host) {
-            (Some(token), Some(host)) => Ok(Self::Connect { host, token }),
+            (Some(token), Some(host)) => Ok(Self { host, token }),
             _ => bail!(
-                "1Password credentials not found. Set OP_SERVICE_ACCOUNT_TOKEN, \
-                 or both OP_CONNECT_TOKEN and OP_CONNECT_HOST environment variables."
+                "1Password secret resolution requires OP_CONNECT_TOKEN + OP_CONNECT_HOST \
+                 environment variables. Earl uses the 1Password Connect Server API. \
+                 See https://developer.1password.com/docs/connect/"
             ),
-        }
-    }
-
-    fn base_url(&self) -> &str {
-        match self {
-            Self::ServiceAccount { .. } => "https://events.1password.com",
-            Self::Connect { host, .. } => host.as_str(),
-        }
-    }
-
-    fn token(&self) -> &str {
-        match self {
-            Self::ServiceAccount { token } | Self::Connect { token, .. } => token,
         }
     }
 }
@@ -105,7 +93,7 @@ impl SecretResolver for OpResolver {
 
         let url = format!(
             "{}/v1/vaults/{}/items/{}",
-            auth.base_url().trim_end_matches('/'),
+            auth.host.trim_end_matches('/'),
             op_ref.vault,
             op_ref.item,
         );
@@ -117,7 +105,7 @@ impl SecretResolver for OpResolver {
 
         let request = client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", auth.token()))
+            .header("Authorization", format!("Bearer {}", auth.token))
             .header("Accept", "application/json")
             .build()
             .context("failed to build 1Password request")?;
@@ -205,5 +193,41 @@ mod tests {
     fn parse_rejects_wrong_scheme() {
         let err = OpReference::parse("vault://a/b/c").unwrap_err();
         assert!(err.to_string().contains("invalid"));
+    }
+
+    #[test]
+    fn parse_rejects_control_char_in_vault() {
+        let err = OpReference::parse("op://my\x00vault/item/field").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_question_mark_in_item() {
+        let err = OpReference::parse("op://vault/item?q=1/field").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_hash_in_field() {
+        let err = OpReference::parse("op://vault/item/field#frag").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_whitespace_in_vault() {
+        let err = OpReference::parse("op://my vault/item/field").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
     }
 }

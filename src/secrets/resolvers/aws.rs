@@ -67,6 +67,7 @@ impl Default for AwsResolver {
     }
 }
 
+#[allow(clippy::result_large_err)]
 impl SecretResolver for AwsResolver {
     fn scheme(&self) -> &str {
         "aws"

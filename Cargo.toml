@@ -93,8 +93,6 @@ earl-protocol-sql = { version = "0.4.1", path = "crates/earl-protocol-sql", opti
 vaultrs = { version = "0.7", optional = true }
 aws-config = { version = "1", optional = true }
 aws-sdk-secretsmanager = { version = "1", optional = true }
-azure_security_keyvault_secrets = { version = "0.11", optional = true }
-azure_identity = { version = "0.32", optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.0"
@@ -122,4 +120,4 @@ secrets-1password = []
 secrets-vault = ["dep:vaultrs"]
 secrets-aws = ["dep:aws-config", "dep:aws-sdk-secretsmanager"]
 secrets-gcp = []
-secrets-azure = ["dep:azure_security_keyvault_secrets", "dep:azure_identity"]
+secrets-azure = []
