@@ -35,7 +35,7 @@ If not installed, detect the environment and install:
 ```bash
 cargo install earl
 ```
-This requires the Rust toolchain. If Rust is not available, fall back to the install script:
+This requires the Rust toolchain **and Node.js + pnpm** (Earl embeds web playground assets at compile time). If either is missing, fall back to the install script:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
 ```
@@ -88,7 +88,7 @@ Detect the agent platform by checking paths in this order:
 ### Choose MCP mode
 
 ```bash
-earl templates list --json | jq length
+earl templates list --json | jq length  # requires jq
 ```
 
 - Result < 30: use full mode (default)

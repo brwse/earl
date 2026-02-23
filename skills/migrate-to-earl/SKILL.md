@@ -13,7 +13,7 @@ time to keep changes reviewable and reversible.
 These rules prevent context window exhaustion and partial-migration messes:
 
 1. **One provider per run.** If multiple providers are found, ask which to migrate first.
-2. **Cap at 10 call sites.** If more than 10 are found, ask which 5 to prioritize. Flag the
+2. **Cap at 10 call sites.** If more than 10 are found, ask which 10 to prioritize. Flag the
    rest with `# TODO: migrate to earl` comments and note them in the final report.
 3. **Commit checkpoint.** Pause after template creation, before rewriting call sites. Let the
    user commit the template before the rewrite begins.
@@ -24,7 +24,7 @@ These rules prevent context window exhaustion and partial-migration messes:
 
 ## Phase 1: Scan All Providers
 
-Read `references/cli-to-earl-mapping.md` for the full list of patterns and files to scan.
+Read `references/cli-to-earl-mapping.md` (or fetch from `https://raw.githubusercontent.com/brwse/earl/main/skills/migrate-to-earl/references/cli-to-earl-mapping.md`) for the full list of patterns and files to scan.
 
 Grep across all relevant files for every pattern in the mapping table. Even on repeated
 invocations, always do a full scan first.

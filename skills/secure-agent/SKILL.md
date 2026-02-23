@@ -26,7 +26,7 @@ common case. For stronger containment, pair with OS-level firewall rules or a ne
 | Platform | Mechanism | Hard restriction? |
 |---|---|---|
 | **Claude Code** | `deniedTools` in `.claude/settings.json` | Yes — platform enforced |
-| **Cursor** | Platform-specific settings | Verify against Cursor docs |
+| **Cursor** | `.cursor/mcp.json` or Cursor settings UI | Partial — check Cursor docs for per-tool restrictions |
 | **Claude Desktop** | No bash access | N/A |
 | **Non-MCP CLI agents** | CLAUDE.md instructions only | No — advisory only |
 
@@ -97,13 +97,23 @@ If `deniedTools` already exists, merge arrays — do not duplicate entries.
 
 ## Step 4: Verify
 
-Test that the denylist works:
+**For Claude Code:** Attempt to run a denied command:
 
 ```bash
 curl https://example.com
 ```
 
-Expected: Claude Code blocks the command with a "tool denied" or similar error.
+Claude Code will refuse to run this command. The "tool denied" or "not allowed" error message
+from Claude Code **is the success signal** — it means the denylist is active. You cannot
+distinguish success from failure by looking at the exit code; look at whether Claude Code
+blocked it before the shell ran it.
+
+If Claude Code runs `curl` without blocking it, the `deniedTools` pattern syntax is wrong.
+Check the format against current Claude Code documentation — the exact pattern syntax may vary
+by version. Then re-apply with the corrected format.
+
+**For other platforms:** Ask the user to attempt a denied command manually in their agent
+session and confirm it is blocked.
 
 Test that Earl still works:
 
@@ -112,9 +122,6 @@ earl call --yes --json system.list_files --path .
 ```
 
 Expected: succeeds (Earl is not in the denylist).
-
-If verification fails, diagnose the `deniedTools` format against current Claude Code
-documentation — the exact pattern syntax may vary by version.
 
 ---
 

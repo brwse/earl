@@ -35,7 +35,7 @@ earl doctor
 
 If this fails with `command not found: earl`, Earl is not installed. Install it:
 ```bash
-cargo install earl
+cargo install earl  # requires Rust toolchain + Node.js + pnpm
 # or: curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
 # Windows: irm https://raw.githubusercontent.com/brwse/earl/main/scripts/install.ps1 | iex
 ```
