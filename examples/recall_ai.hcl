@@ -77,7 +77,7 @@ command "create_bot" {
       value = {
         meeting_url = "{{ args.meeting_url }}"
         bot_name    = "{{ args.bot_name }}"
-        join_at     = "{{ args.join_at if args.join_at else none }}"
+        join_at     = "{{ args.join_at or '' }}"
         recording_config = {
           transcript = {
             provider = {
@@ -210,7 +210,7 @@ command "list_bots" {
 
   result {
     decode = "json"
-    output = "{{ result | length }} bot(s):\n{% for bot in result %}  {{ bot.id }} [{{ bot.status | default('?') }}] {{ bot.bot_name }} — {{ bot.meeting_url }}{% if bot.join_at %} (scheduled: {{ bot.join_at }}){% endif %}\n{% endfor %}"
+    output = "{{ result.results | length }} bot(s) (total: {{ result.count }}):\n{% for bot in result.results %}  {{ bot.id }} [{{ bot.status | default('?') }}] {{ bot.bot_name }} — {{ bot.meeting_url }}{% if bot.join_at %} (scheduled: {{ bot.join_at }}){% endif %}\n{% endfor %}"
   }
 }
 
