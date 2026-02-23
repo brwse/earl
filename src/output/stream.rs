@@ -3,8 +3,8 @@ use serde_json::{Map, Value};
 use tokio::sync::mpsc;
 
 use earl_core::decode::DecodedBody;
-use earl_core::{Redactor, StreamChunk, decode_response};
 use earl_core::schema::ResultTemplate;
+use earl_core::{Redactor, StreamChunk, decode_response};
 
 use crate::output::human::render_human_output;
 use crate::protocol::extract::extract_result;

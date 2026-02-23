@@ -169,12 +169,8 @@ impl StreamingProtocolExecutor for BashStreamExecutor {
             );
         }
 
-        let mut command = build_sandboxed_command(
-            &data.script,
-            &data.env,
-            data.cwd.as_deref(),
-            &data.sandbox,
-        )?;
+        let mut command =
+            build_sandboxed_command(&data.script, &data.env, data.cwd.as_deref(), &data.sandbox)?;
 
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
@@ -248,9 +244,7 @@ impl StreamingProtocolExecutor for BashStreamExecutor {
 
             total_bytes = total_bytes.saturating_add(bytes_read);
             if total_bytes > max_bytes {
-                bail!(
-                    "bash stdout exceeded configured max output bytes ({max_bytes} bytes)"
-                );
+                bail!("bash stdout exceeded configured max output bytes ({max_bytes} bytes)");
             }
 
             let chunk = StreamChunk {

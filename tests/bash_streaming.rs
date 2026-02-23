@@ -130,10 +130,7 @@ async fn bash_streaming_respects_output_limit() {
 
     assert!(result.is_err(), "expected output limit error");
     let err = format!("{:#}", result.unwrap_err());
-    assert!(
-        err.contains("exceeded"),
-        "unexpected error message: {err}"
-    );
+    assert!(err.contains("exceeded"), "unexpected error message: {err}");
 }
 
 #[tokio::test]

@@ -89,11 +89,7 @@ command "fetch" {
     fs::write(local_dir.join("no_stream.hcl"), hcl).unwrap();
 
     let files = validate_all_from_dirs(&global_dir, &local_dir).unwrap();
-    assert_eq!(
-        files.len(),
-        1,
-        "stream=false HTTP template should be valid"
-    );
+    assert_eq!(files.len(), 1, "stream=false HTTP template should be valid");
 }
 
 #[test]

@@ -91,8 +91,7 @@ where
     F: FnMut(Url) -> Fut,
     Fut: Future<Output = Result<Vec<IpAddr>>>,
 {
-    let (rpc_url, dynamic_response) =
-        grpc_connect_and_call(grpc_data, ctx, host_validator).await?;
+    let (rpc_url, dynamic_response) = grpc_connect_and_call(grpc_data, ctx, host_validator).await?;
 
     let (status, payload) = normalize_dynamic_response(dynamic_response);
     let payload_bytes = serde_json::to_vec(&payload).context("failed serializing gRPC payload")?;
@@ -168,8 +167,8 @@ where
 
         let status = match dynamic_response {
             DynamicResponse::Unary(Ok(value)) => {
-                let bytes = serde_json::to_vec(&value)
-                    .context("failed serializing gRPC unary payload")?;
+                let bytes =
+                    serde_json::to_vec(&value).context("failed serializing gRPC unary payload")?;
                 let _ = sender
                     .send(StreamChunk {
                         data: bytes,

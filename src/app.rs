@@ -116,11 +116,8 @@ async fn run_call(
             let redacted = prepared.redactor.redact_json(&rendered);
             println!("{}", serde_json::to_string_pretty(&redacted)?);
         } else {
-            let output = render_human_output(
-                &prepared.result_template,
-                &prepared.args,
-                &execution.result,
-            )?;
+            let output =
+                render_human_output(&prepared.result_template, &prepared.args, &execution.result)?;
             println!("{}", prepared.redactor.redact(&output));
         }
     }

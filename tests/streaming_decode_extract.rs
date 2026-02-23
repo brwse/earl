@@ -7,15 +7,15 @@
 
 use earl::protocol::extract::extract_result;
 use earl::template::schema::{ResultDecode, ResultExtract};
-use earl_core::decode::{DecodedBody, decode_response};
 use earl_core::StreamChunk;
+use earl_core::decode::{DecodedBody, decode_response};
 use serde_json::json;
 
 // ── JSON chunks ───────────────────────────────────────────
 
 #[test]
 fn streaming_json_chunks_are_independently_decodable() {
-    let chunks = vec![
+    let chunks = [
         StreamChunk {
             data: br#"{"msg":"hello"}"#.to_vec(),
             content_type: Some("application/json".to_string()),
@@ -42,7 +42,7 @@ fn streaming_json_chunks_are_independently_decodable() {
 
 #[test]
 fn streaming_json_chunks_with_extract_json_pointer() {
-    let chunks = vec![
+    let chunks = [
         StreamChunk {
             data: br#"{"data":{"id":1}}"#.to_vec(),
             content_type: Some("application/json".to_string()),
@@ -80,7 +80,7 @@ fn streaming_json_chunks_with_extract_json_pointer() {
 
 #[test]
 fn streaming_text_chunks_with_regex_extract() {
-    let chunks = vec![
+    let chunks = [
         StreamChunk {
             data: b"event_id=abc-001 status=ok".to_vec(),
             content_type: Some("text/plain".to_string()),
@@ -97,9 +97,12 @@ fn streaming_text_chunks_with_regex_extract() {
 
     let mut event_ids = vec![];
     for chunk in &chunks {
-        let decoded =
-            decode_response(ResultDecode::Text, chunk.content_type.as_deref(), &chunk.data)
-                .unwrap();
+        let decoded = decode_response(
+            ResultDecode::Text,
+            chunk.content_type.as_deref(),
+            &chunk.data,
+        )
+        .unwrap();
         let value = extract_result(Some(&extract), &decoded).unwrap();
         event_ids.push(value);
     }
@@ -116,8 +119,12 @@ fn streaming_auto_decode_infers_json_from_content_type() {
         content_type: Some("application/json".to_string()),
     };
 
-    let decoded =
-        decode_response(ResultDecode::Auto, chunk.content_type.as_deref(), &chunk.data).unwrap();
+    let decoded = decode_response(
+        ResultDecode::Auto,
+        chunk.content_type.as_deref(),
+        &chunk.data,
+    )
+    .unwrap();
     match decoded {
         DecodedBody::Json(v) => assert_eq!(v, json!({"ok": true})),
         other => panic!("expected Json, got {other:?}"),
@@ -131,8 +138,12 @@ fn streaming_auto_decode_infers_text_from_content_type() {
         content_type: Some("text/plain".to_string()),
     };
 
-    let decoded =
-        decode_response(ResultDecode::Auto, chunk.content_type.as_deref(), &chunk.data).unwrap();
+    let decoded = decode_response(
+        ResultDecode::Auto,
+        chunk.content_type.as_deref(),
+        &chunk.data,
+    )
+    .unwrap();
     match decoded {
         DecodedBody::Text(v) => assert_eq!(v, "plain text line"),
         other => panic!("expected Text, got {other:?}"),
@@ -146,8 +157,12 @@ fn streaming_auto_decode_falls_back_to_json_for_valid_json_without_content_type(
         content_type: None,
     };
 
-    let decoded =
-        decode_response(ResultDecode::Auto, chunk.content_type.as_deref(), &chunk.data).unwrap();
+    let decoded = decode_response(
+        ResultDecode::Auto,
+        chunk.content_type.as_deref(),
+        &chunk.data,
+    )
+    .unwrap();
     match decoded {
         DecodedBody::Json(v) => assert_eq!(v, json!({"key": "value"})),
         other => panic!("expected Json, got {other:?}"),
@@ -163,8 +178,12 @@ fn streaming_chunk_with_no_extract_returns_full_decoded_value() {
         content_type: Some("application/json".to_string()),
     };
 
-    let decoded =
-        decode_response(ResultDecode::Json, chunk.content_type.as_deref(), &chunk.data).unwrap();
+    let decoded = decode_response(
+        ResultDecode::Json,
+        chunk.content_type.as_deref(),
+        &chunk.data,
+    )
+    .unwrap();
     let value = extract_result(None, &decoded).unwrap();
 
     assert_eq!(value, json!({"a": 1, "b": "two"}));
@@ -174,7 +193,7 @@ fn streaming_chunk_with_no_extract_returns_full_decoded_value() {
 
 #[test]
 fn streaming_html_chunks_with_css_selector_extract() {
-    let chunks = vec![
+    let chunks = [
         StreamChunk {
             data: b"<html><body><span class=\"val\">100</span></body></html>".to_vec(),
             content_type: Some("text/html".to_string()),
@@ -191,9 +210,12 @@ fn streaming_html_chunks_with_css_selector_extract() {
 
     let mut values = vec![];
     for chunk in &chunks {
-        let decoded =
-            decode_response(ResultDecode::Html, chunk.content_type.as_deref(), &chunk.data)
-                .unwrap();
+        let decoded = decode_response(
+            ResultDecode::Html,
+            chunk.content_type.as_deref(),
+            &chunk.data,
+        )
+        .unwrap();
         let value = extract_result(Some(&extract), &decoded).unwrap();
         values.push(value);
     }
@@ -205,7 +227,7 @@ fn streaming_html_chunks_with_css_selector_extract() {
 
 #[test]
 fn streaming_xml_chunks_with_xpath_extract() {
-    let chunks = vec![
+    let chunks = [
         StreamChunk {
             data: b"<root><item>alpha</item></root>".to_vec(),
             content_type: Some("application/xml".to_string()),
@@ -222,9 +244,12 @@ fn streaming_xml_chunks_with_xpath_extract() {
 
     let mut values = vec![];
     for chunk in &chunks {
-        let decoded =
-            decode_response(ResultDecode::Xml, chunk.content_type.as_deref(), &chunk.data)
-                .unwrap();
+        let decoded = decode_response(
+            ResultDecode::Xml,
+            chunk.content_type.as_deref(),
+            &chunk.data,
+        )
+        .unwrap();
         let value = extract_result(Some(&extract), &decoded).unwrap();
         values.push(value);
     }
@@ -241,8 +266,12 @@ fn streaming_binary_chunks_decode_without_error() {
         content_type: Some("application/octet-stream".to_string()),
     };
 
-    let decoded =
-        decode_response(ResultDecode::Binary, chunk.content_type.as_deref(), &chunk.data).unwrap();
+    let decoded = decode_response(
+        ResultDecode::Binary,
+        chunk.content_type.as_deref(),
+        &chunk.data,
+    )
+    .unwrap();
     let value = extract_result(None, &decoded).unwrap();
 
     // Binary data is base64 encoded when converted to JSON.
@@ -259,7 +288,11 @@ fn streaming_chunk_with_malformed_json_returns_error() {
         content_type: Some("application/json".to_string()),
     };
 
-    let result = decode_response(ResultDecode::Json, chunk.content_type.as_deref(), &chunk.data);
+    let result = decode_response(
+        ResultDecode::Json,
+        chunk.content_type.as_deref(),
+        &chunk.data,
+    );
     assert!(
         result.is_err(),
         "malformed JSON in a chunk should produce an error"

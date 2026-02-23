@@ -73,7 +73,8 @@ mod tests {
 
     #[test]
     fn graphql_operation_accepts_stream_true() {
-        let json = r#"{"url":"https://example.com","stream":true,"graphql":{"query":"{ users { id } }"}}"#;
+        let json =
+            r#"{"url":"https://example.com","stream":true,"graphql":{"query":"{ users { id } }"}}"#;
         let op: GraphqlOperationTemplate = serde_json::from_str(json).unwrap();
         assert!(op.stream);
     }
