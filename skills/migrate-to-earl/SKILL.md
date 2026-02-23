@@ -50,7 +50,8 @@ Check if a pre-built template exists for the chosen provider (see `references/cl
 
 **If pre-built exists:**
 
-Check `earl templates list` first — if the provider is already imported, skip this step.
+Check `earl templates list` first — if the provider is already imported, skip the import
+command below and go directly to showing available commands.
 
 ```bash
 earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/<provider>.hcl
@@ -95,7 +96,11 @@ Proceed to Phase 5.
 the new command it created, not for the Phase 2 pre-built import. Phase 4 must still run for
 the pre-built provider's secrets.
 
-Otherwise, print the checklist of required secrets for the imported templates:
+Check `annotations.secrets` in the template file for required secret keys. For pre-built
+imports, read the imported file at `~/.config/earl/templates/<provider>.hcl` (macOS/Linux)
+or `%APPDATA%\earl\templates\<provider>.hcl` (Windows) to find them.
+
+Print the checklist of required secrets for the imported templates:
 
 ```
 Before replacing call sites, set the required secrets in your terminal:
@@ -127,8 +132,9 @@ earl call --yes --json <provider>.<command> --<param> <representative_value>
 ```
 
 **Important:** If a command has `annotations.mode = "write"`, the test call will create/modify/
-delete real data. If the template defines a staging environment, use `--env staging` for the
-test call. Otherwise, use read-only commands for verification where possible, or use a
+delete real data. If the template defines environments, use `--env <name>` to select a
+non-production environment for the test call. Otherwise, use read-only commands for
+verification where possible, or use a
 test/sandbox account. Warn the user before running any write-mode test calls.
 
 If any call fails, resolve it (via `troubleshoot-earl` if needed) before proceeding.

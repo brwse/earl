@@ -250,8 +250,9 @@ earl call --yes --json <provider>.<command> --<param> <test_value>
 ```
 
 **Important:** If `annotations.mode = "write"`, the test call will create/modify/delete real
-data. If the template defines a staging environment, use `--env staging` for the test call.
-Otherwise, use a test or sandbox account, a safe test value (e.g. a dedicated test repo), or
+data. If the template defines environments, use `--env <name>` to select a non-production
+environment for the test call. Otherwise, use a test or sandbox account, a safe test value
+(e.g. a dedicated test repo), or
 choose a read-only command for the initial verification. Warn the user before running
 write-mode test calls.
 

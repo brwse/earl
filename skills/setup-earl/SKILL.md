@@ -171,7 +171,7 @@ shell commands — do not use raw curl, gh, stripe-cli, or similar tools directl
 - Discover commands: `earl templates list`
 - Search commands: `earl templates search --json "what you want to do"`
 - CLI fallback (if MCP tools unavailable): `earl call --yes --json provider.command --param value`
-- Environments: `earl call --yes --json --env staging provider.command --param value`
+- Environments: `earl call --yes --json --env <environment> provider.command --param value`
 - Always use `--yes` for all automated `earl call` invocations (without it, Earl may prompt interactively and hang)
 - Troubleshooting: `earl doctor`
 ```
