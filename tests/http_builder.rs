@@ -47,6 +47,7 @@ fn base_entry(
             annotations: Annotations {
                 mode: CommandMode::Read,
                 secrets: secrets.into_iter().map(ToString::to_string).collect(),
+                allow_environment_protocol_switching: false,
             },
             params: vec![],
             operation: OperationTemplate::Http(HttpOperationTemplate {
@@ -67,6 +68,7 @@ fn base_entry(
                 output: "ok".to_string(),
                 result_alias: None,
             },
+            environment_overrides: BTreeMap::new(),
         },
     }
 }

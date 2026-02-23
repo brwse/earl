@@ -1012,6 +1012,7 @@ async fn write_stdio_frame<W: AsyncWrite + Unpin>(
 
 #[cfg(all(test, feature = "http"))]
 mod tests {
+    use std::collections::BTreeMap;
     use std::io::Cursor;
     use std::path::PathBuf;
 
@@ -1071,6 +1072,7 @@ mod tests {
                 annotations: Annotations {
                     mode,
                     secrets: vec![],
+                    allow_environment_protocol_switching: false,
                 },
                 params,
                 operation: OperationTemplate::Http(HttpOperationTemplate {
@@ -1091,6 +1093,7 @@ mod tests {
                     output: "{{ result }}".to_string(),
                     result_alias: None,
                 },
+                environment_overrides: BTreeMap::new(),
             },
         }
     }

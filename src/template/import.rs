@@ -316,6 +316,7 @@ mod tests {
                 annotations: Annotations {
                     mode: CommandMode::Read,
                     secrets: vec!["github.token".to_string(), "api.key".to_string()],
+                    allow_environment_protocol_switching: false,
                 },
                 params: vec![],
                 operation: OperationTemplate::Http(HttpOperationTemplate {
@@ -336,6 +337,7 @@ mod tests {
                     output: "{{ result }}".to_string(),
                     result_alias: None,
                 },
+                environment_overrides: BTreeMap::new(),
             },
         );
         commands.insert(
@@ -352,6 +354,7 @@ mod tests {
                         " ".to_string(),
                         "service.secret".to_string(),
                     ],
+                    allow_environment_protocol_switching: false,
                 },
                 params: vec![],
                 operation: OperationTemplate::Http(HttpOperationTemplate {
@@ -372,6 +375,7 @@ mod tests {
                     output: "{{ result }}".to_string(),
                     result_alias: None,
                 },
+                environment_overrides: BTreeMap::new(),
             },
         );
 
@@ -379,6 +383,7 @@ mod tests {
             version: 1,
             provider: "demo".to_string(),
             categories: vec![],
+            environments: None,
             commands,
         };
 

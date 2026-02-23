@@ -16,6 +16,8 @@ pub struct TemplateFile {
     pub provider: String,
     #[serde(default)]
     pub categories: Vec<String>,
+    #[serde(default)]
+    pub environments: Option<ProviderEnvironments>,
     pub commands: BTreeMap<String, CommandTemplate>,
 }
 
@@ -34,6 +36,8 @@ pub struct CommandTemplate {
     pub operation: OperationTemplate,
     #[serde(default)]
     pub result: ResultTemplate,
+    #[serde(default)]
+    pub environment_overrides: BTreeMap<String, EnvironmentOverride>,
 }
 
 #[derive(
@@ -45,6 +49,31 @@ pub struct Annotations {
     pub mode: CommandMode,
     #[serde(default)]
     pub secrets: Vec<String>,
+    #[serde(default)]
+    pub allow_environment_protocol_switching: bool,
+}
+
+/// Provider-level environments block stored at the TemplateFile level.
+/// Carried into TemplateCatalogEntry so it's available at call time.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Archive, RkyvSerialize, RkyvDeserialize)]
+pub struct ProviderEnvironments {
+    #[serde(default)]
+    pub default: Option<String>,
+    /// Secrets that must be loaded before rendering vars values.
+    #[serde(default)]
+    pub secrets: Vec<String>,
+    /// Named environments, each mapping variable name → Jinja template string.
+    #[serde(default)]
+    pub environments: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+/// Per-command environment override: when active env matches, fully replaces
+/// the command's default operation (and optionally result).
+#[derive(Debug, Clone, Deserialize, Serialize, Archive, RkyvSerialize, RkyvDeserialize)]
+pub struct EnvironmentOverride {
+    pub operation: OperationTemplate,
+    #[serde(default)]
+    pub result: Option<ResultTemplate>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Archive, RkyvSerialize, RkyvDeserialize)]
@@ -200,3 +229,36 @@ pub use earl_protocol_bash::{BashOperationTemplate, BashSandboxTemplate, BashScr
 
 #[cfg(feature = "sql")]
 pub use earl_protocol_sql::{SqlOperationTemplate, SqlQueryTemplate, SqlSandboxTemplate};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_environments_deserializes_from_normalized_json() {
+        let json = serde_json::json!({
+            "default": "production",
+            "secrets": ["myservice.prod_token"],
+            "environments": {
+                "production": { "base_url": "https://api.myservice.com" },
+                "staging":    { "base_url": "https://staging.myservice.com" }
+            }
+        });
+        let pe: ProviderEnvironments = serde_json::from_value(json).unwrap();
+        assert_eq!(pe.default.as_deref(), Some("production"));
+        assert_eq!(pe.secrets, vec!["myservice.prod_token"]);
+        assert_eq!(pe.environments["production"]["base_url"], "https://api.myservice.com");
+        assert_eq!(pe.environments["staging"]["base_url"], "https://staging.myservice.com");
+    }
+
+    #[test]
+    fn provider_environments_defaults_work() {
+        let json = serde_json::json!({
+            "environments": { "staging": { "url": "https://staging.example.com" } }
+        });
+        let pe: ProviderEnvironments = serde_json::from_value(json).unwrap();
+        assert!(pe.default.is_none());
+        assert!(pe.secrets.is_empty());
+        assert!(pe.environments.contains_key("staging"));
+    }
+}
