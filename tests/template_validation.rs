@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, path::Path};
 
 use earl::template::loader::validate_all_from_dirs;
 use tempfile::tempdir;
@@ -853,5 +853,21 @@ command "fetch" {
     assert!(
         rendered.contains("is not declared in annotations.secrets"),
         "unexpected error: {rendered}"
+    );
+}
+
+#[test]
+#[cfg(feature = "http")]
+fn validates_all_example_templates() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let examples_dir = manifest_dir.join("examples");
+    let empty_dir = tempdir().unwrap();
+
+    let files = validate_all_from_dirs(empty_dir.path(), &examples_dir)
+        .expect("example templates should all be valid");
+
+    assert!(
+        !files.is_empty(),
+        "no .hcl files found in examples/ directory"
     );
 }
