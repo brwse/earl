@@ -48,7 +48,9 @@ pub async fn execute_bash_once(
                     rlim_cur: bytes as libc::rlim_t,
                     rlim_max: bytes as libc::rlim_t,
                 };
-                let _ = libc::setrlimit(libc::RLIMIT_AS, &rlim);
+                if libc::setrlimit(libc::RLIMIT_AS, &rlim) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
             }
             if let Some(secs) = max_cpu_secs {
                 // Note: RLIMIT_CPU grace period sends SIGXCPU then SIGKILL ~1s later.
@@ -56,7 +58,9 @@ pub async fn execute_bash_once(
                     rlim_cur: secs as libc::rlim_t,
                     rlim_max: secs as libc::rlim_t,
                 };
-                let _ = libc::setrlimit(libc::RLIMIT_CPU, &rlim);
+                if libc::setrlimit(libc::RLIMIT_CPU, &rlim) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
             }
             Ok(())
         });
@@ -214,7 +218,9 @@ impl StreamingProtocolExecutor for BashStreamExecutor {
                         rlim_cur: bytes as libc::rlim_t,
                         rlim_max: bytes as libc::rlim_t,
                     };
-                    let _ = libc::setrlimit(libc::RLIMIT_AS, &rlim);
+                    if libc::setrlimit(libc::RLIMIT_AS, &rlim) != 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
                 }
                 if let Some(secs) = max_cpu_secs {
                     // Note: RLIMIT_CPU grace period sends SIGXCPU then SIGKILL ~1s later.
@@ -222,7 +228,9 @@ impl StreamingProtocolExecutor for BashStreamExecutor {
                         rlim_cur: secs as libc::rlim_t,
                         rlim_max: secs as libc::rlim_t,
                     };
-                    let _ = libc::setrlimit(libc::RLIMIT_CPU, &rlim);
+                    if libc::setrlimit(libc::RLIMIT_CPU, &rlim) != 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
                 }
                 Ok(())
             });
