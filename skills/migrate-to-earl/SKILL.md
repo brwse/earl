@@ -85,8 +85,9 @@ For calls that don't map to any existing command, invoke `create-template` to ad
 
 ## Phase 4: Set Secrets
 
-**Skip this phase** if Phase 2 invoked `create-template` — that skill already ran secrets setup
-(its own Phase 7 and Phase 8) and confirmed secrets are set. Proceed to Phase 5.
+**Skip this phase** if `create-template` was invoked in Phase 2 or Phase 3 — that skill
+already ran secrets setup (its own Phase 7 and Phase 8) and confirmed secrets are set.
+Proceed to Phase 5.
 
 Otherwise, print the checklist of required secrets for the imported templates:
 

@@ -98,9 +98,12 @@ params = ["{{ args.limit }}"]
 
 ---
 
-## Phase 4: Write Template
+## Phase 4: Draft Template
 
-**Target path:**
+**Do NOT write the file to disk yet.** Compose the template content in memory — it will be
+written to disk only after Phase 5 human review and approval.
+
+**Target path** (determine now, write after approval):
 - Local (project-specific): `./templates/<provider>.hcl`
 - Global (all projects): `~/.config/earl/templates/<provider>.hcl`
 
@@ -165,16 +168,17 @@ command "<command_name>" {
 
 ## Phase 5: Human Review (Required)
 
-Show the user the complete template file before running any Earl commands:
+Show the user the complete template content before writing the file:
 
-> "Here is the template I've created. Please review it before I proceed:
+> "Here is the template I've drafted. Please review it before I write it to disk:
 >
-> [show full file contents]
+> [show full template content]
 >
-> Does this look correct? Should I run `earl templates validate`?"
+> Does this look correct? Should I write it and run `earl templates validate`?"
 
-Do not proceed until the user explicitly approves. Agent-created templates are immediately
-callable — there is no staging step.
+Do not write the file or proceed until the user explicitly approves. Once written to disk,
+the template is immediately callable — there is no staging step. Approval here is the only
+gate before it becomes live.
 
 ---
 

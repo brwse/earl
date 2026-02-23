@@ -56,10 +56,11 @@ If `earl doctor` reports errors, invoke `troubleshoot-earl` before continuing.
 
 ## Phase 2: Quick Demo
 
-Import the no-auth system template and run it so the user sees Earl work immediately:
+Import the no-auth system template and run it so the user sees Earl work immediately.
+First check if it's already imported to avoid overwriting any customizations:
 
 ```bash
-earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/bash/system.hcl
+earl templates list | grep system || earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/bash/system.hcl
 earl call --yes --json system.list_files --path .
 ```
 
