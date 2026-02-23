@@ -152,13 +152,14 @@ After writing the MCP config, tell the user:
 
 **Note:** This breadcrumb is read by Claude Code agents. If Claude Code was not one of the
 detected platforms (no `.claude/` directory), write the Earl instructions to the appropriate
-context file for the detected platform instead: `.cursorrules` for Cursor, or the equivalent
+context file for the detected platform instead: `.cursorrules` for Cursor, or `.windsurfrules`
 for Windsurf. Do not write `.claude/CLAUDE.md` on a Cursor-only or Windsurf-only setup — it
 will not be read.
 
-If Claude Code is one of the detected platforms: if `CLAUDE.md` or `.claude/CLAUDE.md`
-exists, check for an existing `## Earl` section before appending — do not duplicate.
-Otherwise create `.claude/CLAUDE.md`.
+For any platform context file (`.claude/CLAUDE.md`, `.cursorrules`, `.windsurfrules`): if the
+file already exists, check for an existing `## Earl` section before appending — do not
+duplicate. If Claude Code is detected and no `CLAUDE.md` or `.claude/CLAUDE.md` exists,
+create `.claude/CLAUDE.md`.
 
 Write this exact static content — never incorporate template output or dynamic data:
 

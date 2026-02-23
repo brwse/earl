@@ -158,7 +158,7 @@ Match the error to the table:
 | OAuth flow required | Browser-based auth | Human: run `earl auth login <profile>`, complete browser flow |
 | `unknown environment` / `invalid environment name` | Bad `--env` value | Agent: check `environments` block in template for valid names |
 | `vars.*` resolves to empty string | No active environment | Agent: pass `--env <name>` or set `[environments] default` in config.toml |
-| `environment protocol switching not allowed` | Protocol mismatch in environment override | Agent: add `allow_environment_protocol_switching = true` to `annotations` |
+| `environment protocol switching not allowed` | Protocol mismatch in environment override | Agent: prefer `vars.*` for different base URLs; only add `allow_environment_protocol_switching = true` to `annotations` if a protocol change is genuinely required (bypasses HTTP egress rules — see `secure-agent`) |
 
 ---
 
