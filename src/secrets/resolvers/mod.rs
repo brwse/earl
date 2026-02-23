@@ -15,6 +15,7 @@ pub mod azure;
 
 #[cfg(any(
     feature = "secrets-1password",
+    feature = "secrets-vault",
     feature = "secrets-gcp",
     feature = "secrets-azure",
 ))]
@@ -23,6 +24,7 @@ use anyhow::{bail, Result};
 /// Characters that are unsafe in URL path segments.
 #[cfg(any(
     feature = "secrets-1password",
+    feature = "secrets-vault",
     feature = "secrets-gcp",
     feature = "secrets-azure",
 ))]
@@ -34,6 +36,7 @@ const UNSAFE_PATH_CHARS: &[char] = &['/', '?', '#'];
 /// which could break or manipulate URL construction.
 #[cfg(any(
     feature = "secrets-1password",
+    feature = "secrets-vault",
     feature = "secrets-gcp",
     feature = "secrets-azure",
 ))]
@@ -82,6 +85,10 @@ pub(crate) fn validate_azure_vault_name(name: &str) -> Result<()> {
         bail!("Azure vault name must not start or end with a hyphen");
     }
 
+    if name.contains("--") {
+        bail!("Azure vault name must not contain consecutive hyphens");
+    }
+
     Ok(())
 }
 
@@ -90,6 +97,7 @@ mod tests {
     #[test]
     #[cfg(any(
         feature = "secrets-1password",
+        feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
@@ -102,6 +110,7 @@ mod tests {
     #[test]
     #[cfg(any(
         feature = "secrets-1password",
+        feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
@@ -113,6 +122,7 @@ mod tests {
     #[test]
     #[cfg(any(
         feature = "secrets-1password",
+        feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
@@ -124,6 +134,7 @@ mod tests {
     #[test]
     #[cfg(any(
         feature = "secrets-1password",
+        feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
@@ -135,6 +146,7 @@ mod tests {
     #[test]
     #[cfg(any(
         feature = "secrets-1password",
+        feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
@@ -146,6 +158,7 @@ mod tests {
     #[test]
     #[cfg(any(
         feature = "secrets-1password",
+        feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
@@ -157,6 +170,7 @@ mod tests {
     #[test]
     #[cfg(any(
         feature = "secrets-1password",
+        feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
@@ -203,6 +217,16 @@ mod tests {
         let err = super::validate_azure_vault_name("-vault").unwrap_err();
         assert!(
             err.to_string().contains("must not start or end"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "secrets-azure")]
+    fn validate_azure_vault_name_rejects_consecutive_hyphens() {
+        let err = super::validate_azure_vault_name("my--vault").unwrap_err();
+        assert!(
+            err.to_string().contains("consecutive hyphens"),
             "got: {err}"
         );
     }

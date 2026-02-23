@@ -47,6 +47,10 @@ impl SecretManager {
         }
     }
 
+    /// Create a `SecretManager` with a custom store and index path.
+    ///
+    /// No external secret resolvers are registered — this is intended for
+    /// testing scenarios that only need the local keychain store.
     pub fn with_store_and_index(
         store: Box<dyn SecretStore + Send + Sync>,
         index_path: PathBuf,

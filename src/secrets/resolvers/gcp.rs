@@ -200,6 +200,12 @@ struct CredentialsFile {
 
 // ---------------------------------------------------------------------------
 // Application Default Credentials (ADC)
+//
+// This is a minimal hand-rolled implementation of the ADC flow. The
+// `secrets-gcp` feature flag carries no extra dependencies (only `reqwest`,
+// `jsonwebtoken`, `chrono`, and `base64` which are already in the tree).
+// A full GCP auth crate (e.g. `google-authz`) would reduce this code but
+// would add a significant dependency for a single feature.
 // ---------------------------------------------------------------------------
 
 /// Obtain an access token using Application Default Credentials.

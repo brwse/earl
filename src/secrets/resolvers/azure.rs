@@ -291,6 +291,15 @@ mod tests {
     }
 
     #[test]
+    fn parse_rejects_consecutive_hyphens_in_vault() {
+        let err = AzureReference::parse("az://my--vault/secret").unwrap_err();
+        assert!(
+            err.to_string().contains("consecutive hyphens"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
     fn parse_rejects_hash_in_secret_name() {
         let err = AzureReference::parse("az://my-vault/sec#ret").unwrap_err();
         assert!(

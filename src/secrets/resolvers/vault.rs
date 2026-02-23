@@ -5,6 +5,7 @@ use secrecy::SecretString;
 use vaultrs::client::{VaultClient, VaultClientSettingsBuilder};
 
 use crate::secrets::resolver::SecretResolver;
+use crate::secrets::resolvers::validate_path_segment;
 
 /// A parsed `vault://mount/path#field` reference.
 #[derive(Debug)]
@@ -40,6 +41,12 @@ impl VaultReference {
 
         let mount = segments[0].to_string();
         let path = segments[1..].join("/");
+
+        validate_path_segment(&mount, "mount point")?;
+        for segment in &segments[1..] {
+            validate_path_segment(segment, "secret path segment")?;
+        }
+        validate_path_segment(field, "field name")?;
 
         Ok(Self {
             mount,
@@ -85,19 +92,29 @@ impl SecretResolver for VaultResolver {
     fn resolve(&self, reference: &str) -> Result<SecretString> {
         let vault_ref = VaultReference::parse(reference)?;
 
-        // Validate that VAULT_ADDR is set (the builder defaults to 127.0.0.1 if unset,
-        // but we want an explicit error for users who haven't configured it).
-        let addr = std::env::var("VAULT_ADDR").ok().filter(|v| !v.is_empty());
-        let token = std::env::var("VAULT_TOKEN").ok().filter(|v| !v.is_empty());
+        let addr = std::env::var("VAULT_ADDR")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| {
+                anyhow!(
+                    "Vault credentials not found. Set both VAULT_ADDR and VAULT_TOKEN \
+                     environment variables to use vault:// secret references."
+                )
+            })?;
 
-        if addr.is_none() || token.is_none() {
-            bail!(
-                "Vault credentials not found. Set both VAULT_ADDR and VAULT_TOKEN \
-                 environment variables to use vault:// secret references."
-            );
-        }
+        let token = std::env::var("VAULT_TOKEN")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| {
+                anyhow!(
+                    "Vault credentials not found. Set both VAULT_ADDR and VAULT_TOKEN \
+                     environment variables to use vault:// secret references."
+                )
+            })?;
 
         let settings = VaultClientSettingsBuilder::default()
+            .address(&addr)
+            .token(token)
             .build()
             .context("failed to build Vault client settings")?;
 
@@ -189,5 +206,32 @@ mod tests {
     fn parse_rejects_empty_uri() {
         let err = VaultReference::parse("vault://").unwrap_err();
         assert!(err.to_string().contains("invalid"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_rejects_question_mark_in_mount() {
+        let err = VaultReference::parse("vault://sec?ret/path#field").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_whitespace_in_path() {
+        let err = VaultReference::parse("vault://secret/my path#field").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_control_char_in_field() {
+        let err = VaultReference::parse("vault://secret/path#fi\x00eld").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid character"),
+            "got: {err}"
+        );
     }
 }
