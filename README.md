@@ -40,7 +40,7 @@ Prompt your coding agent:
 ```
 Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/setup-earl/SKILL.md
 and any files it references under
-https://raw.githubusercontent.com/brwse/earl/main/skills/setup-earl/references/
+https://raw.githubusercontent.com/brwse/earl/main/skills/references/
 then follow the skill to help me get started with Earl.
 ```
 
