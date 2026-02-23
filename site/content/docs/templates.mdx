@@ -431,6 +431,31 @@ command "recent_orders" {
 </Tab>
 </Tabs>
 
+## Pre-built Templates
+
+Earl ships with a library of ready-made templates for 25 popular APIs. Import any of them with a single command:
+
+```bash
+earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/stripe.hcl
+earl secrets set stripe.api_key
+earl call stripe.list_customers
+```
+
+| Category | Providers |
+| -------- | --------- |
+| Developer Tools | `github`, `gitlab`, `jira`, `linear`, `pagerduty` |
+| Communication | `slack`, `discord`, `twilio`, `sendgrid` |
+| Cloud | `cloudflare`, `vercel`, `render` |
+| Payments | `stripe`, `shopify` |
+| CRM | `hubspot`, `mailchimp` |
+| Analytics | `datadog`, `sentry` |
+| AI / ML | `openai`, `anthropic` |
+| Productivity | `notion`, `airtable` |
+| Auth | `auth0` |
+| Storage & Email | `supabase`, `resend` |
+
+All templates live under [`examples/`](https://github.com/brwse/earl/tree/main/examples) in the repository. Each provider file declares the required secrets — Earl prints them after import.
+
 ## Importing Templates
 
 Import templates from a local file path or a direct HTTP(S) URL.

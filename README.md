@@ -53,10 +53,13 @@ Or do it manually:
 curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
 # Or: cargo install earl
 
-# Import a template
-earl templates import ./examples/bash/system.hcl
+# Import a pre-built template (25 providers available: stripe, slack, github, notion, openai, ...)
+earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/stripe.hcl
+earl secrets set stripe.api_key
+earl call stripe.list_customers
 
-# Call a command defined in the template
+# Or start with the no-auth system example
+earl templates import ./examples/bash/system.hcl
 earl call system.disk_usage --path /tmp
 ```
 

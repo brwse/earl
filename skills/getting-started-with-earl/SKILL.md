@@ -53,15 +53,22 @@ If `earl doctor` succeeds, move on silently. If it fails, diagnose the specific 
 
 ## Phase 2: Quick Demo
 
-Import a ready-made template and run it so the user sees Earl work before making any decisions:
+Import a ready-made template and run it so the user sees Earl work before making any decisions.
+
+**If the user already mentions a specific service** (e.g. GitHub, Stripe, Slack, Notion), import that pre-built template directly — Earl ships with 25 ready-made providers:
+
+```bash
+# Available: github, stripe, slack, notion, openai, anthropic, discord, gitlab,
+# jira, linear, pagerduty, twilio, sendgrid, cloudflare, vercel, render,
+# shopify, hubspot, mailchimp, datadog, sentry, airtable, auth0, supabase, resend
+earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/<provider>.hcl
+earl secrets set <provider>.<credential>   # Earl prints the required secret names after import
+```
+
+**Otherwise**, use the no-auth system example to demonstrate the flow without any setup:
 
 ```bash
 earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/bash/system.hcl
-```
-
-Run it:
-
-```bash
 earl call system.list_files --path .
 ```
 
@@ -74,6 +81,8 @@ earl templates list
 ```
 
 ## Phase 3: Discover Intent
+
+**Check for pre-built templates first.** If the user names a known service (GitHub, Stripe, Slack, Notion, OpenAI, Datadog, etc.), offer to import the pre-built template rather than building from scratch. Only proceed to custom template authoring if no pre-built template matches.
 
 Ask the user ONE question:
 

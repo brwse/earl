@@ -133,7 +133,7 @@ Earl executes `ls -la /tmp` inside a sandboxed Bash environment and prints the r
 ### Import the GitHub template
 
 ```bash
-earl templates import https://raw.githubusercontent.com/brwse/earl/main/templates/github.hcl
+earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/github.hcl
 ```
 
 Earl prints the required secrets for this template. The GitHub template uses `github.token` for authentication.
@@ -182,6 +182,7 @@ Earl resolves the `github.token` secret from your keychain, builds the HTTP requ
 
 ## What's Next
 
+- **Pre-built templates** — Import ready-made templates for Stripe, Slack, Notion, OpenAI, and 21 more providers. See [Templates → Pre-built Templates](/docs/templates#pre-built-templates).
 - **Browse commands** — Run `earl templates search "what you want to do"` for semantic search across all loaded templates.
 - **Web playground** — Run `earl web` to launch a local web UI for browsing and testing commands.
 - **MCP integration** — Run `earl mcp` to expose your templates as MCP tools for AI agents. See [MCP Integration](/docs/mcp).
