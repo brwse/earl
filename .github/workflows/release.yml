@@ -258,6 +258,14 @@ jobs:
           fail_on_unmatched_files: true
           make_latest: ${{ needs.meta.outputs.is_prerelease == 'false' }}
 
+      - name: Trigger release notes workflow
+        uses: peter-evans/workflow-dispatch@v3
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          workflow: release-notes.yml
+          inputs: >-
+            {"tag": "${{ needs.meta.outputs.tag }}"}
+
 
   attest-provenance:
     name: Attest Build Provenance
