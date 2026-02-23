@@ -105,7 +105,7 @@ fn load_file_into_catalog(
     Ok(())
 }
 
-fn template_files_in_dir(dir: &Path) -> Result<Vec<PathBuf>> {
+pub(super) fn template_files_in_dir(dir: &Path) -> Result<Vec<PathBuf>> {
     if !dir.exists() {
         return Ok(Vec::new());
     }
