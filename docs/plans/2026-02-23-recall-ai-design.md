@@ -1,5 +1,12 @@
 # Recall.ai Agent Automation Design Document
 
+> **Note for contributors:** This is an initial design draft and contains inconsistencies
+> with the final implementation. For the authoritative spec see `examples/recall_ai.hcl`:
+> - `recording_config.transcript.provider` is a **nested discriminated object** in the
+>   final implementation (not a plain string as shown in sections 3.2 and 6.1 below)
+> - The field is `media_shortcuts` (not `artifacts`) in the actual bot response
+> - Base URL is `https://api.recall.ai/api/v1/` (not `us-east-1.recall.ai`)
+
 **Date:** 2026-02-23
 **Purpose:** Enable autonomous agents to automate meeting recording, transcription, and data extraction via recall.ai REST API
 **Audience:** AI agents, developers building agent workflows, platform architects
