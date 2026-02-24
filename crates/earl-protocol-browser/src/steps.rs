@@ -131,7 +131,53 @@ pub async fn execute_step(ctx: &StepContext<'_>, step: &BrowserStep) -> Result<V
         BrowserStep::Screenshot { path, full_page, .. } => {
             step_screenshot(ctx, path.as_deref(), Some(*full_page)).await
         }
-        // All other steps: stub for now, implemented in Tasks 8 and 9.
+        BrowserStep::Click { r#ref, selector, button: _, double_click, modifiers: _, .. } => {
+            step_click(ctx, r#ref.as_deref(), selector.as_deref(), *double_click).await
+        }
+        BrowserStep::Hover { r#ref, selector, .. } => {
+            step_hover(ctx, r#ref.as_deref(), selector.as_deref()).await
+        }
+        BrowserStep::Fill { r#ref, selector, text, submit, slowly: _, .. } => {
+            step_fill(ctx, r#ref.as_deref(), selector.as_deref(), text, *submit).await
+        }
+        BrowserStep::SelectOption { r#ref, selector, values, .. } => {
+            step_select_option(ctx, r#ref.as_deref(), selector.as_deref(), values).await
+        }
+        BrowserStep::PressKey { key, .. } => step_press_key(ctx, key).await,
+        BrowserStep::Check { r#ref, selector, .. } => {
+            step_set_checked(ctx, r#ref.as_deref(), selector.as_deref(), true).await
+        }
+        BrowserStep::Uncheck { r#ref, selector, .. } => {
+            step_set_checked(ctx, r#ref.as_deref(), selector.as_deref(), false).await
+        }
+        BrowserStep::Drag { start_ref, start_selector, end_ref, end_selector, .. } => {
+            step_drag(
+                ctx,
+                start_ref.as_deref(),
+                start_selector.as_deref(),
+                end_ref.as_deref(),
+                end_selector.as_deref(),
+            )
+            .await
+        }
+        BrowserStep::FillForm { fields, .. } => step_fill_form(ctx, fields).await,
+        BrowserStep::MouseMove { x, y, .. } => step_mouse_move(ctx, *x, *y).await,
+        BrowserStep::MouseClick { x, y, button, .. } => {
+            step_mouse_click(ctx, *x, *y, button.as_deref()).await
+        }
+        BrowserStep::MouseDrag { start_x, start_y, end_x, end_y, .. } => {
+            step_mouse_drag(ctx, *start_x, *start_y, *end_x, *end_y).await
+        }
+        BrowserStep::MouseDown { button, .. } => {
+            step_mouse_button(ctx, button.as_deref(), true).await
+        }
+        BrowserStep::MouseUp { button, .. } => {
+            step_mouse_button(ctx, button.as_deref(), false).await
+        }
+        BrowserStep::MouseWheel { delta_x, delta_y, .. } => {
+            step_mouse_wheel(ctx, *delta_x, *delta_y).await
+        }
+        // All other steps: stub for now, implemented in Task 9.
         other => {
             tracing::warn!(
                 "browser step '{}' is not yet implemented in this version",
@@ -251,7 +297,6 @@ async fn step_snapshot(ctx: &StepContext<'_>) -> Result<Value> {
     let cdp_nodes = response.result.nodes;
 
     // Build a flat id→node map and then reconstruct the tree hierarchy.
-    use chromiumoxide::cdp::browser_protocol::accessibility::AxNodeId;
     use std::collections::HashMap;
 
     // Index nodes by their node_id.
@@ -362,6 +407,426 @@ async fn step_screenshot(
         "path": out_path.to_string_lossy(),
         "data": data,
     }))
+}
+
+// ── Interaction helpers ────────────────────────────────────────────────────────
+
+/// Locate a page element by CSS selector. If a `ref_` is provided but no
+/// selector, a helpful error is returned explaining that ref-based targeting
+/// requires session mode (not yet implemented). If neither is provided, an
+/// `ElementNotFound` error is returned.
+async fn find_element_by_selector(
+    ctx: &StepContext<'_>,
+    selector: Option<&str>,
+    ref_: Option<&str>,
+    action: &str,
+) -> Result<chromiumoxide::element::Element> {
+    let sel = match selector {
+        Some(s) => s,
+        None => {
+            if ref_.is_some() {
+                return Err(anyhow::anyhow!(
+                    "browser step {} ({action}): 'ref' targeting requires session mode \
+                     (not yet available in this version); use 'selector' instead",
+                    ctx.step_index
+                ));
+            }
+            return Err(BrowserError::ElementNotFound {
+                step: ctx.step_index,
+                action: action.to_string(),
+                selector: "(none provided)".to_string(),
+                completed: ctx.step_index,
+                total: ctx.total_steps,
+            }
+            .into());
+        }
+    };
+
+    ctx.page.find_element(sel).await.map_err(|_| {
+        BrowserError::ElementNotFound {
+            step: ctx.step_index,
+            action: action.to_string(),
+            selector: sel.to_string(),
+            completed: ctx.step_index,
+            total: ctx.total_steps,
+        }
+        .into()
+    })
+}
+
+async fn step_click(
+    ctx: &StepContext<'_>,
+    ref_: Option<&str>,
+    selector: Option<&str>,
+    double_click: bool,
+) -> Result<Value> {
+    let el = find_element_by_selector(ctx, selector, ref_, "click").await?;
+    el.click().await.map_err(|e| anyhow::anyhow!("click failed: {e}"))?;
+    if double_click {
+        el.click()
+            .await
+            .map_err(|e| anyhow::anyhow!("double-click second click failed: {e}"))?;
+    }
+    Ok(json!({"ok": true}))
+}
+
+async fn step_hover(
+    ctx: &StepContext<'_>,
+    ref_: Option<&str>,
+    selector: Option<&str>,
+) -> Result<Value> {
+    let el = find_element_by_selector(ctx, selector, ref_, "hover").await?;
+    el.hover().await.map_err(|e| anyhow::anyhow!("hover failed: {e}"))?;
+    Ok(json!({"ok": true}))
+}
+
+async fn step_fill(
+    ctx: &StepContext<'_>,
+    ref_: Option<&str>,
+    selector: Option<&str>,
+    text: &str,
+    submit: Option<bool>,
+) -> Result<Value> {
+    let el = find_element_by_selector(ctx, selector, ref_, "fill").await?;
+    el.click().await.map_err(|e| anyhow::anyhow!("fill click: {e}"))?;
+    // Clear the existing value before typing.
+    el.call_js_fn(
+        "function() { this.value = ''; this.dispatchEvent(new Event('input', {bubbles: true})); }",
+        false,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("fill clear value: {e}"))?;
+    el.type_str(text).await.map_err(|e| anyhow::anyhow!("fill type_str: {e}"))?;
+    if submit.unwrap_or(false) {
+        el.press_key("Return").await.map_err(|e| anyhow::anyhow!("fill submit: {e}"))?;
+    }
+    Ok(json!({"ok": true}))
+}
+
+async fn step_select_option(
+    ctx: &StepContext<'_>,
+    _ref_: Option<&str>,
+    selector: Option<&str>,
+    values: &[String],
+) -> Result<Value> {
+    let sel = selector.unwrap_or("");
+    let values_json = serde_json::to_string(values)?;
+    let sel_json = serde_json::to_string(sel)?;
+    ctx.page
+        .evaluate(format!(
+            r#"(function() {{
+                var el = document.querySelector({sel_json});
+                if (!el) return false;
+                Array.from(el.options).forEach(function(o) {{
+                    o.selected = {values_json}.indexOf(o.value) !== -1;
+                }});
+                el.dispatchEvent(new Event('change', {{bubbles: true}}));
+                return true;
+            }})()"#,
+        ))
+        .await
+        .map_err(|e| anyhow::anyhow!("select_option: {e}"))?;
+    Ok(json!({"ok": true}))
+}
+
+async fn step_press_key(ctx: &StepContext<'_>, key: &str) -> Result<Value> {
+    use chromiumoxide::cdp::browser_protocol::input::{
+        DispatchKeyEventParams, DispatchKeyEventType,
+    };
+    use chromiumoxide::keys;
+
+    let key_def = keys::get_key_definition(key)
+        .ok_or_else(|| anyhow::anyhow!("press_key: unknown key '{key}'"))?;
+
+    let mut cmd = DispatchKeyEventParams::builder();
+
+    let key_down_type = if let Some(txt) = key_def.text {
+        cmd = cmd.text(txt);
+        DispatchKeyEventType::KeyDown
+    } else if key_def.key.len() == 1 {
+        cmd = cmd.text(key_def.key);
+        DispatchKeyEventType::KeyDown
+    } else {
+        DispatchKeyEventType::RawKeyDown
+    };
+
+    cmd = cmd
+        .key(key_def.key)
+        .code(key_def.code)
+        .windows_virtual_key_code(key_def.key_code)
+        .native_virtual_key_code(key_def.key_code);
+
+    ctx.page
+        .execute(cmd.clone().r#type(key_down_type).build().unwrap())
+        .await
+        .map_err(|e| anyhow::anyhow!("press_key key_down: {e}"))?;
+    ctx.page
+        .execute(cmd.r#type(DispatchKeyEventType::KeyUp).build().unwrap())
+        .await
+        .map_err(|e| anyhow::anyhow!("press_key key_up: {e}"))?;
+
+    Ok(json!({"ok": true}))
+}
+
+async fn step_set_checked(
+    ctx: &StepContext<'_>,
+    ref_: Option<&str>,
+    selector: Option<&str>,
+    checked: bool,
+) -> Result<Value> {
+    let action = if checked { "check" } else { "uncheck" };
+    let el = find_element_by_selector(ctx, selector, ref_, action).await?;
+    // Only click if the current state differs from the desired state.
+    let result = el
+        .call_js_fn("function() { return this.checked; }", false)
+        .await
+        .map_err(|e| anyhow::anyhow!("set_checked get state: {e}"))?;
+    let current: Value = result
+        .result
+        .value
+        .unwrap_or(Value::Bool(false));
+    if current.as_bool() != Some(checked) {
+        el.click().await.map_err(|e| anyhow::anyhow!("set_checked click: {e}"))?;
+    }
+    Ok(json!({"ok": true}))
+}
+
+async fn step_drag(
+    ctx: &StepContext<'_>,
+    _start_ref: Option<&str>,
+    start_selector: Option<&str>,
+    _end_ref: Option<&str>,
+    end_selector: Option<&str>,
+) -> Result<Value> {
+    let start_sel = start_selector.unwrap_or("");
+    let end_sel = end_selector.unwrap_or("");
+    let start_json = serde_json::to_string(start_sel)?;
+    let end_json = serde_json::to_string(end_sel)?;
+    ctx.page
+        .evaluate(format!(
+            r#"(function() {{
+                var src = document.querySelector({start_json});
+                var dst = document.querySelector({end_json});
+                if (!src || !dst) return false;
+                src.dispatchEvent(new DragEvent('dragstart', {{bubbles: true, cancelable: true}}));
+                dst.dispatchEvent(new DragEvent('dragenter', {{bubbles: true, cancelable: true}}));
+                dst.dispatchEvent(new DragEvent('dragover',  {{bubbles: true, cancelable: true}}));
+                dst.dispatchEvent(new DragEvent('drop',      {{bubbles: true, cancelable: true}}));
+                src.dispatchEvent(new DragEvent('dragend',   {{bubbles: true, cancelable: true}}));
+                return true;
+            }})()"#,
+        ))
+        .await
+        .map_err(|e| anyhow::anyhow!("drag: {e}"))?;
+    Ok(json!({"ok": true}))
+}
+
+async fn step_fill_form(ctx: &StepContext<'_>, fields: &[Value]) -> Result<Value> {
+    for field in fields {
+        let ref_ = field.get("ref").and_then(|v| v.as_str());
+        let selector = field.get("selector").and_then(|v| v.as_str());
+        let value = field.get("value").and_then(|v| v.as_str()).unwrap_or("");
+        let type_ = field.get("type").and_then(|v| v.as_str()).unwrap_or("textbox");
+        match type_ {
+            "checkbox" => {
+                let checked = value == "true" || value == "1";
+                step_set_checked(ctx, ref_, selector, checked).await?;
+            }
+            _ => {
+                step_fill(ctx, ref_, selector, value, None).await?;
+            }
+        }
+    }
+    Ok(json!({"ok": true}))
+}
+
+// ── Mouse coordinate steps ─────────────────────────────────────────────────────
+
+async fn step_mouse_move(ctx: &StepContext<'_>, x: f64, y: f64) -> Result<Value> {
+    use chromiumoxide::cdp::browser_protocol::input::{
+        DispatchMouseEventParams, DispatchMouseEventType,
+    };
+    ctx.page
+        .execute(
+            DispatchMouseEventParams::builder()
+                .r#type(DispatchMouseEventType::MouseMoved)
+                .x(x)
+                .y(y)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_move: {e}"))?;
+    Ok(json!({"ok": true}))
+}
+
+async fn step_mouse_click(
+    ctx: &StepContext<'_>,
+    x: f64,
+    y: f64,
+    button: Option<&str>,
+) -> Result<Value> {
+    use chromiumoxide::cdp::browser_protocol::input::{
+        DispatchMouseEventParams, DispatchMouseEventType,
+    };
+    let mb = parse_mouse_button(button);
+    ctx.page
+        .execute(
+            DispatchMouseEventParams::builder()
+                .r#type(DispatchMouseEventType::MousePressed)
+                .x(x)
+                .y(y)
+                .button(mb.clone())
+                .click_count(1i64)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_click pressed: {e}"))?;
+    ctx.page
+        .execute(
+            DispatchMouseEventParams::builder()
+                .r#type(DispatchMouseEventType::MouseReleased)
+                .x(x)
+                .y(y)
+                .button(mb)
+                .click_count(1i64)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_click released: {e}"))?;
+    Ok(json!({"ok": true}))
+}
+
+async fn step_mouse_drag(
+    ctx: &StepContext<'_>,
+    start_x: f64,
+    start_y: f64,
+    end_x: f64,
+    end_y: f64,
+) -> Result<Value> {
+    use chromiumoxide::cdp::browser_protocol::input::{
+        DispatchMouseEventParams, DispatchMouseEventType,
+    };
+    ctx.page
+        .execute(
+            DispatchMouseEventParams::builder()
+                .r#type(DispatchMouseEventType::MousePressed)
+                .x(start_x)
+                .y(start_y)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_drag pressed: {e}"))?;
+    ctx.page
+        .execute(
+            DispatchMouseEventParams::builder()
+                .r#type(DispatchMouseEventType::MouseMoved)
+                .x(end_x)
+                .y(end_y)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_drag moved: {e}"))?;
+    ctx.page
+        .execute(
+            DispatchMouseEventParams::builder()
+                .r#type(DispatchMouseEventType::MouseReleased)
+                .x(end_x)
+                .y(end_y)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_drag released: {e}"))?;
+    Ok(json!({"ok": true}))
+}
+
+async fn step_mouse_button(
+    ctx: &StepContext<'_>,
+    button: Option<&str>,
+    pressed: bool,
+) -> Result<Value> {
+    use chromiumoxide::cdp::browser_protocol::input::{
+        DispatchMouseEventParams, DispatchMouseEventType,
+    };
+    // Use the centre of the viewport as the default position.
+    let pos: Value = ctx
+        .page
+        .evaluate("({x: window.innerWidth / 2, y: window.innerHeight / 2})")
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_button get position: {e}"))?
+        .into_value()?;
+    let x = pos["x"].as_f64().unwrap_or(400.0);
+    let y = pos["y"].as_f64().unwrap_or(300.0);
+    let mb = parse_mouse_button(button);
+    let evt_type = if pressed {
+        DispatchMouseEventType::MousePressed
+    } else {
+        DispatchMouseEventType::MouseReleased
+    };
+    ctx.page
+        .execute(
+            DispatchMouseEventParams::builder()
+                .r#type(evt_type)
+                .x(x)
+                .y(y)
+                .button(mb)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_button: {e}"))?;
+    Ok(json!({"ok": true}))
+}
+
+async fn step_mouse_wheel(
+    ctx: &StepContext<'_>,
+    delta_x: f64,
+    delta_y: f64,
+) -> Result<Value> {
+    use chromiumoxide::cdp::browser_protocol::input::{
+        DispatchMouseEventParams, DispatchMouseEventType,
+    };
+    let pos: Value = ctx
+        .page
+        .evaluate("({x: window.innerWidth / 2, y: window.innerHeight / 2})")
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_wheel get position: {e}"))?
+        .into_value()?;
+    let x = pos["x"].as_f64().unwrap_or(400.0);
+    let y = pos["y"].as_f64().unwrap_or(300.0);
+    ctx.page
+        .execute(
+            DispatchMouseEventParams::builder()
+                .r#type(DispatchMouseEventType::MouseWheel)
+                .x(x)
+                .y(y)
+                .delta_x(delta_x)
+                .delta_y(delta_y)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("mouse_wheel: {e}"))?;
+    Ok(json!({"ok": true}))
+}
+
+/// Parse an optional button string into a `MouseButton` enum value.
+fn parse_mouse_button(
+    button: Option<&str>,
+) -> chromiumoxide::cdp::browser_protocol::input::MouseButton {
+    use chromiumoxide::cdp::browser_protocol::input::MouseButton;
+    match button {
+        Some("right") => MouseButton::Right,
+        Some("middle") => MouseButton::Middle,
+        Some("back") => MouseButton::Back,
+        Some("forward") => MouseButton::Forward,
+        _ => MouseButton::Left,
+    }
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
