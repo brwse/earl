@@ -22,7 +22,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tempfile = "3.19"
 thiserror = "2.0"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "io-util"] }
 tracing = "0.1"
 which = "7.0"
 
@@ -30,4 +30,4 @@ which = "7.0"
 libc = "0.2"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full", "test-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "io-util", "test-util"] }
