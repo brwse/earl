@@ -1,0 +1,153 @@
+---
+title: Hardening Guide
+description: A deployment checklist for running Earl in production, in front of a team
+icon: Lock
+---
+
+Running Earl for yourself is straightforward. Deploying it in front of a team requires a bit more thought — about who can modify what, which transport you're using, and what the agent is allowed to do if something goes wrong. This page walks through the setup decisions that matter before Earl handles production traffic.
+
+## 1. Lock down config and template files
+
+Earl's guarantees hold as long as agents cannot modify the config or template files. If an agent can edit `~/.config/earl/config.toml`, it can whitelist arbitrary network destinations. If it can edit templates, it can add operations that exfiltrate secrets.
+
+After initial setup, lock both:
+
+```bash
+chmod 700 ~/.config/earl
+chmod 600 ~/.config/earl/config.toml
+chmod -R go-w ~/.config/earl/templates
+chmod -R 700 ./templates/
+```
+
+For stronger isolation, run the agent as a separate, less-privileged OS user that can execute `earl` but cannot write to the config directory.
+
+## 2. Choose your transport
+
+Stdio is the right choice for single-agent use. Each agent process gets its own Earl instance. No port, no auth overhead.
+
+```bash
+earl mcp stdio --mode full --yes
+```
+
+HTTP makes sense when multiple agents share an Earl server, or when you need to reach Earl from a different machine. HTTP requires either JWT auth (recommended) or an explicit `--allow-unauthenticated` flag — not for production.
+
+```bash
+# With JWT auth (recommended for production)
+earl mcp http --listen 127.0.0.1:8977 --mode full --yes
+
+# Development only — anyone who can reach the port can call your tools
+earl mcp http --listen 127.0.0.1:8977 --allow-unauthenticated
+```
+
+Configure JWT auth in `~/.config/earl/config.toml`:
+
+```toml
+[auth.jwt]
+audience = "https://api.example.com"
+oidc_discovery_url = "https://accounts.example.com/.well-known/openid-configuration"
+```
+
+## 3. Configure network egress rules
+
+By default, Earl allows outbound requests to any public host. Lock it down to only the destinations your templates actually need:
+
+```toml
+[[network.allow]]
+scheme = "https"
+host = "api.github.com"
+port = 443
+path_prefix = "/"
+
+[[network.allow]]
+scheme = "https"
+host = "api.stripe.com"
+port = 443
+path_prefix = "/v1"
+```
+
+When any `[[network.allow]]` rule exists, all other outbound requests are blocked. Without any rules, all public destinations are reachable — which is fine for a single developer but too permissive for a shared deployment.
+
+Earl also blocks requests to private, reserved, and metadata IP addresses regardless of your allowlist. DNS resolution happens before the SSRF check, so a public hostname that resolves to a private IP is still blocked. This is not configurable.
+
+## 4. Set sandbox limits
+
+Bash templates run inside an OS-level sandbox (bubblewrap on Linux, `sandbox-exec` on macOS). The sandbox is always active; you're configuring its limits, not enabling it.
+
+Set resource limits globally in `~/.config/earl/config.toml` to cap what any Bash template can consume:
+
+```toml
+[sandbox]
+bash_max_time_ms = 30000
+bash_max_output_bytes = 1048576
+bash_max_memory_bytes = 536870912  # 512 MB, Linux only
+bash_max_cpu_time_ms = 10000
+```
+
+Templates can also set limits per-command inside the `sandbox` block. The more restrictive value wins.
+
+For SQL templates, enforce read-only mode globally:
+
+```toml
+[sandbox]
+sql_force_read_only = true
+sql_max_rows = 1000
+sql_connection_allowlist = ["myapp.db_url"]
+```
+
+The `sql_connection_allowlist` is worth paying attention to. Without it, any secret that contains a valid connection string can be used as a database connection. List the specific secret keys you intend to allow.
+
+For per-template SQL sandboxing, the template itself can also declare:
+
+```hcl
+sandbox {
+  read_only = true
+  max_rows  = 100
+}
+```
+
+## 5. Configure write-mode behavior
+
+Templates marked `annotations.mode = "write"` require explicit confirmation. On the CLI, users pass `--yes` or type `YES` at the prompt. On the MCP server, write-mode tools are blocked entirely unless you start Earl with `--yes`.
+
+```bash
+# Write-mode tools blocked (default — safe starting point)
+earl mcp stdio --mode full
+
+# Write-mode tools allowed
+earl mcp stdio --mode full --yes
+```
+
+Decide which write-mode tools your agents actually need before passing `--yes`. If only some agents should have write access, put the write-capable templates on a separate server instance, or use the policy engine (step 8) to restrict by subject.
+
+## 6. Verify with `earl doctor`
+
+Run `earl doctor` after setup. It checks that your config file is loadable, templates parse without errors, and required secrets are present.
+
+```bash
+earl doctor
+```
+
+Fix any reported issues before connecting agents. The `doctor` command will not report every misconfiguration — it does not check file permissions or network reachability — but it catches the common ones.
+
+## 7. Configure external secret managers (optional)
+
+If your team already uses 1Password Connect, HashiCorp Vault, AWS Secrets Manager, or similar, Earl can pull secrets directly from those instead of the OS keychain. See [External Secret Managers](/docs/external-secrets).
+
+## 8. Configure access control policies (optional)
+
+If multiple agents or users share an Earl HTTP server, the policy engine lets you control which subjects can call which tools. Policies are evaluated with deny-overrides: if any matching policy denies a call, it is denied regardless of other rules. If no policy matches, the call is denied by default.
+
+```toml
+[[policy]]
+subjects = ["user:alice", "group:admins"]
+tools = ["github.*"]
+effect = "allow"
+
+[[policy]]
+subjects = ["*"]
+tools = ["github.delete_repo"]
+modes = ["write"]
+effect = "deny"
+```
+
+Policies only apply when JWT auth is configured. Requests that reach Earl via `--allow-unauthenticated` bypass the policy engine entirely. See [AI Agent Integration](/docs/mcp#policy-engine) for the full evaluation rules and glob pattern reference.
