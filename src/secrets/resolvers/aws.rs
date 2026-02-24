@@ -1,4 +1,7 @@
+use std::sync::Mutex;
+
 use anyhow::{anyhow, bail, Context, Result};
+use aws_sdk_secretsmanager::error::ProvideErrorMetadata;
 use secrecy::SecretString;
 
 use crate::secrets::resolver::SecretResolver;
@@ -76,11 +79,21 @@ impl AwsReference {
 /// Examples:
 /// * `aws://prod/api-key` — returns the raw secret value
 /// * `aws://prod/db-creds#password` — parses the secret as JSON and returns the `password` field
-pub struct AwsResolver;
+///
+/// **Note on retries:** The AWS SDK has its own internal retry logic (3 attempts by
+/// default). Earl's retry wrapper in `require_secret()` adds an additional layer,
+/// so AWS calls may see up to 9 total attempts on transient failures.
+pub struct AwsResolver {
+    /// Cached AWS SDK client — reused across resolves to avoid re-loading
+    /// credentials and config on every call.
+    client_cache: Mutex<Option<aws_sdk_secretsmanager::Client>>,
+}
 
 impl AwsResolver {
     pub fn new() -> Self {
-        Self
+        Self {
+            client_cache: Mutex::new(None),
+        }
     }
 }
 
@@ -99,29 +112,99 @@ impl SecretResolver for AwsResolver {
     fn resolve(&self, reference: &str) -> Result<SecretString> {
         let aws_ref = AwsReference::parse(reference)?;
 
-        // We are inside a sync trait method but need to perform async AWS SDK calls.
-        // Use tokio's block_in_place + Handle::current().block_on() to bridge.
-        let config = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(aws_config::load_defaults(aws_config::BehaviorVersion::latest()))
-        });
+        // Reuse cached client to avoid re-loading credentials/config per call.
+        let client = {
+            let mut cache = self.client_cache.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(ref client) = *cache {
+                client.clone()
+            } else {
+                let config = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current()
+                        .block_on(aws_config::load_defaults(aws_config::BehaviorVersion::latest()))
+                });
+                let new_client = aws_sdk_secretsmanager::Client::new(&config);
+                *cache = Some(new_client.clone());
+                new_client
+            }
+        };
 
-        let client = aws_sdk_secretsmanager::Client::new(&config);
-
-        let output = tokio::task::block_in_place(|| {
+        let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(
                 client
                     .get_secret_value()
                     .secret_id(&aws_ref.secret_id)
                     .send(),
             )
-        })
-        .with_context(|| {
-            format!(
-                "failed to retrieve AWS secret '{}'",
-                aws_ref.secret_id
-            )
-        })?;
+        });
+
+        let output = match result {
+            Ok(output) => output,
+            Err(err) => {
+                // Use typed service error matching where possible for stability.
+                if let Some(svc_err) = err.as_service_error() {
+                    // ResourceNotFoundException: the secret name does not exist in
+                    // Secrets Manager (or not in the configured region).
+                    if svc_err.is_resource_not_found_exception() {
+                        bail!(
+                            "AWS secret '{}' was not found in Secrets Manager. \
+                             Verify the secret name and that AWS_REGION or \
+                             AWS_DEFAULT_REGION points to the correct region.",
+                            aws_ref.secret_id
+                        );
+                    }
+                    // InvalidRequestException: secret exists but the request is
+                    // invalid — most commonly because the secret is scheduled for
+                    // deletion (pending delete) or is in a state that blocks retrieval.
+                    if svc_err.is_invalid_request_exception() {
+                        bail!(
+                            "AWS secret '{}' cannot be retrieved: the secret may be \
+                             scheduled for deletion or in an invalid state. \
+                             Check the secret status in the AWS console.",
+                            aws_ref.secret_id
+                        );
+                    }
+                    // DecryptionFailure: the KMS key used to encrypt the secret
+                    // could not be used for decryption (distinct from IAM AccessDenied).
+                    if svc_err.is_decryption_failure() {
+                        bail!(
+                            "AWS secret '{}' could not be decrypted: the KMS key used to \
+                             encrypt this secret is unavailable, disabled, or the IAM principal \
+                             lacks kms:Decrypt permission.",
+                            aws_ref.secret_id
+                        );
+                    }
+                    // InvalidParameterException: the request contained an invalid value
+                    // (e.g., a malformed secret name or unsupported parameter combination).
+                    if svc_err.is_invalid_parameter_exception() {
+                        bail!(
+                            "AWS secret '{}': invalid parameter — verify the secret name is \
+                             correct and contains no unsupported characters.",
+                            aws_ref.secret_id
+                        );
+                    }
+                    // AccessDeniedException is not a modeled error for GetSecretValue;
+                    // it surfaces as an unhandled service error with a known error code.
+                    // Note: SdkError's Display ignores f.alternate(), so format!("{err:#}")
+                    // always produces "service error" and cannot be used for string matching.
+                    if svc_err.code() == Some("AccessDeniedException") {
+                        bail!(
+                            "IAM access denied for AWS secret '{}': the IAM principal lacks \
+                             secretsmanager:GetSecretValue permission (or kms:Decrypt if using \
+                             a customer-managed KMS key). Verify the IAM policy grants access \
+                             to this secret.",
+                            aws_ref.secret_id
+                        );
+                    }
+                }
+                return Err(anyhow::anyhow!(err).context(format!(
+                    "failed to retrieve AWS secret '{}': ensure AWS credentials are configured \
+                     (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_SESSION_TOKEN, \
+                     ~/.aws/credentials, or IAM role). \
+                     Set AWS_REGION or AWS_DEFAULT_REGION to your secret's region.",
+                    aws_ref.secret_id
+                )));
+            }
+        };
 
         let secret_string = output
             .secret_string()
@@ -143,15 +226,13 @@ impl SecretResolver for AwsResolver {
                     })?;
 
                 let value = parsed.get(key).ok_or_else(|| {
-                    let available_keys: Vec<&str> = parsed
-                        .as_object()
-                        .map(|obj| obj.keys().map(|k| k.as_str()).collect())
-                        .unwrap_or_default();
                     anyhow!(
-                        "key '{}' not found in AWS secret '{}' (available keys: {})",
+                        "top-level key '{}' not found in AWS secret '{}'. \
+                         Verify the key exists at the top level of the secret's JSON structure. \
+                         Note: nested key paths (e.g., 'a.b') are not supported — \
+                         only top-level keys can be extracted.",
                         key,
                         aws_ref.secret_id,
-                        available_keys.join(", ")
                     )
                 })?;
 
