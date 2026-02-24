@@ -134,11 +134,12 @@ annotations {
 
 Template strings use Jinja2 syntax (`{{ ... }}`) rendered by minijinja with strict undefined behavior. Two context objects are available during operation rendering:
 
-| Variable    | Available In       | Description                                       |
-| ----------- | ------------------ | ------------------------------------------------- |
-| `args.*`    | operation, result  | Bound parameter values.                           |
-| `secrets.*` | operation only     | Plaintext secret values (dotted keys are nested). |
-| `result`    | result.output only | Decoded (and optionally extracted) response.      |
+| Variable    | Available In       | Description                                                             |
+| ----------- | ------------------ | ----------------------------------------------------------------------- |
+| `args.*`    | operation, result  | Bound parameter values.                                                 |
+| `vars.*`    | operation, result  | Active environment variables. Empty map when no environment is active.  |
+| `secrets.*` | operation only     | Plaintext secret values (dotted keys are nested).                       |
+| `result`    | result.output only | Decoded (and optionally extracted) response.                            |
 
 <Callout type="warn">
   `secrets.*` is only available in operation rendering -- never in
@@ -574,3 +575,7 @@ Add `--json` for structured JSON output, or `--yes` to skip write-mode confirmat
 earl call github.create_issue --title "Bug report" --yes
 earl call github.search_issues --query "test" --json
 ```
+
+## What's Next
+
+Once you have a working template, the [Template Schema Reference](/docs/template-schema) has every field documented in detail. If your template targets multiple environments, [Environments](/docs/environments) shows how to define staging and production targets without duplicating the file. For storing and referencing credentials, see [Secrets & Auth](/docs/secrets-and-auth).
