@@ -23,6 +23,8 @@ command "create_chat_completion" {
     type        = "string"
     required    = false
     default     = ""
+    # Kept as "" rather than removing: null content in the messages array is
+    # rejected by the OpenAI API, so we must send "" when omitted.
     description = "System message to set the assistant's behavior"
   }
 
@@ -42,7 +44,8 @@ command "create_chat_completion" {
   param "max_completion_tokens" {
     type        = "integer"
     required    = false
-    description = "Maximum number of tokens to generate"
+    default     = 4096
+    description = "Maximum number of tokens to generate (default 4096 is conservative; newer models support 16k+)"
   }
 
   operation {

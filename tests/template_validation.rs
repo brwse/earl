@@ -1335,6 +1335,87 @@ command "ping" {
     );
 }
 
+// ── Template args typo detection ────────────────────────────────────
+
+#[test]
+#[cfg(feature = "bash")]
+fn rejects_undeclared_args_reference() {
+    use earl::template::parser::parse_template_hcl;
+    use earl::template::validator::validate_template_file;
+
+    let hcl = r#"version = 1
+provider = "test"
+
+command "greet" {
+  title = "Greet"
+  summary = "Greet someone"
+  description = "Say hello"
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+  param "name" {
+    type = "string"
+    required = true
+    description = "Name"
+  }
+  operation {
+    protocol = "bash"
+    bash {
+      script = "echo Hello {{ args.naem }}"
+    }
+  }
+  result {
+    output = "ok"
+  }
+}
+"#;
+    let file = parse_template_hcl(hcl, std::path::Path::new(".")).unwrap();
+    let err = validate_template_file(&file).unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("undeclared param") && msg.contains("args.naem"),
+        "unexpected error: {msg}"
+    );
+}
+
+#[test]
+#[cfg(feature = "bash")]
+fn accepts_valid_args_references() {
+    use earl::template::parser::parse_template_hcl;
+    use earl::template::validator::validate_template_file;
+
+    let hcl = r#"version = 1
+provider = "test"
+
+command "greet" {
+  title = "Greet"
+  summary = "Greet someone"
+  description = "Say hello"
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+  param "name" {
+    type = "string"
+    required = true
+    description = "Name"
+  }
+  operation {
+    protocol = "bash"
+    bash {
+      script = "echo Hello {{ args.name }}"
+    }
+  }
+  result {
+    output = "ok"
+  }
+}
+"#;
+    let file = parse_template_hcl(hcl, std::path::Path::new(".")).unwrap();
+    validate_template_file(&file).expect("valid args reference should be accepted");
+}
+
 // ── External secret reference validation ────────────────────────────
 
 #[test]

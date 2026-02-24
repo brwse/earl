@@ -28,6 +28,18 @@ fn params() -> Vec<ParamSpec> {
     ]
 }
 
+fn params_with_optional() -> Vec<ParamSpec> {
+    let mut p = params();
+    p.push(ParamSpec {
+        name: "filter".to_string(),
+        r#type: ParamType::String,
+        required: false,
+        default: None,
+        description: None,
+    });
+    p
+}
+
 #[test]
 fn binds_positional_and_named_arguments() {
     let expr = CallExpression {
@@ -41,6 +53,21 @@ fn binds_positional_and_named_arguments() {
     assert_eq!(bound.get("query").unwrap(), "hello");
     assert_eq!(bound.get("per_page").unwrap(), 10);
     assert_eq!(bound.get("include").unwrap(), false);
+}
+
+#[test]
+fn optional_param_without_default_is_absent() {
+    let expr = CallExpression {
+        provider: "github".to_string(),
+        command: "search_issues".to_string(),
+        positional_args: vec![serde_json::json!("hello")],
+        named_args: vec![],
+    };
+    let bound = bind_arguments(&expr, &params_with_optional()).unwrap();
+
+    // Optional params with no default are not injected into the map.
+    // Chainable rendering converts the resulting Undefined to null.
+    assert!(!bound.contains_key("filter"));
 }
 
 #[test]

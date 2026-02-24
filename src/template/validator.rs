@@ -187,6 +187,7 @@ fn validate_command(command_name: &str, cmd: &CommandTemplate) -> Result<()> {
     }
 
     validate_params(command_name, &cmd.params)?;
+    validate_template_args(command_name, cmd)?;
 
     Ok(())
 }
@@ -466,6 +467,195 @@ fn validate_bash_operation(command_name: &str, operation: &BashOperationTemplate
     }
 
     validate_transport(command_name, operation.transport.as_ref())
+}
+
+// ── Template args validation ──────────────────────────────────────────────────
+
+/// Check that every `args.IDENT` reference in a command's template strings
+/// corresponds to a declared parameter. Catches typos at load time.
+fn validate_template_args(command_name: &str, cmd: &CommandTemplate) -> Result<()> {
+    let declared: HashSet<&str> = cmd.params.iter().map(|p| p.name.as_str()).collect();
+
+    let mut strings: Vec<String> = Vec::new();
+    collect_operation_strings(&cmd.operation, &mut strings);
+    strings.push(cmd.result.output.clone());
+    for env_override in cmd.environment_overrides.values() {
+        collect_operation_strings(&env_override.operation, &mut strings);
+        if let Some(result) = &env_override.result {
+            strings.push(result.output.clone());
+        }
+    }
+
+    for s in &strings {
+        for arg_ref in extract_args_refs(s) {
+            if !declared.contains(arg_ref) {
+                bail!(
+                    "command {command_name} references undeclared param `args.{arg_ref}` in template"
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Extract all `IDENT` names following `args.` in a template string.
+///
+/// Known limitations (text scan, not a Jinja AST parse):
+/// - False positives: `result.args.foo` or `env.args.key` match `args.foo`/`args.key`
+///   because the scanner uses a plain substring match on `"args."`.
+/// - False negatives: references inside Jinja comments (`{# args.x #}`) are
+///   matched as if live; subscript-style `args["foo"]` access is invisible.
+/// - Map keys in query/header/body objects are not scanned (only values are).
+///
+/// Good enough for catching typos in the common case.
+fn extract_args_refs(s: &str) -> Vec<&str> {
+    let mut refs = Vec::new();
+    let mut remaining = s;
+    while let Some(pos) = remaining.find("args.") {
+        let after = &remaining[pos + 5..];
+        let end = after
+            .find(|c: char| !c.is_alphanumeric() && c != '_')
+            .unwrap_or(after.len());
+        if end > 0 {
+            refs.push(&after[..end]);
+        }
+        // Advance past "args." plus the identifier chars consumed, or past the
+        // non-identifier character that immediately followed "args." Use the
+        // character's actual byte length to stay on valid UTF-8 boundaries.
+        let skip = if end > 0 {
+            end
+        } else {
+            after.chars().next().map(|c| c.len_utf8()).unwrap_or(0)
+        };
+        remaining = &remaining[pos + 5 + skip..];
+    }
+    refs
+}
+
+/// Recursively collect all string leaves from a JSON value.
+fn collect_value_strings(value: &serde_json::Value, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(s) => out.push(s.clone()),
+        serde_json::Value::Array(arr) => arr.iter().for_each(|v| collect_value_strings(v, out)),
+        serde_json::Value::Object(obj) => obj.values().for_each(|v| collect_value_strings(v, out)),
+        _ => {}
+    }
+}
+
+/// Collect all template strings from a command's operation.
+#[allow(unused_variables)]
+fn collect_operation_strings(operation: &OperationTemplate, out: &mut Vec<String>) {
+    match operation {
+        #[cfg(feature = "http")]
+        OperationTemplate::Http(op) => {
+            out.push(op.url.clone());
+            if let Some(p) = &op.path {
+                out.push(p.clone());
+            }
+            if let Some(q) = &op.query {
+                q.values().for_each(|v| collect_value_strings(v, out));
+            }
+            if let Some(h) = &op.headers {
+                h.values().for_each(|v| collect_value_strings(v, out));
+            }
+            if let Some(c) = &op.cookies {
+                c.values().for_each(|v| collect_value_strings(v, out));
+            }
+            if let Some(body) = &op.body {
+                collect_body_strings(body, out);
+            }
+        }
+        #[cfg(feature = "graphql")]
+        OperationTemplate::Graphql(op) => {
+            out.push(op.url.clone());
+            if let Some(p) = &op.path {
+                out.push(p.clone());
+            }
+            if let Some(q) = &op.query {
+                q.values().for_each(|v| collect_value_strings(v, out));
+            }
+            if let Some(h) = &op.headers {
+                h.values().for_each(|v| collect_value_strings(v, out));
+            }
+            if let Some(c) = &op.cookies {
+                c.values().for_each(|v| collect_value_strings(v, out));
+            }
+            out.push(op.graphql.query.clone());
+            if let Some(op_name) = &op.graphql.operation_name {
+                out.push(op_name.clone());
+            }
+            if let Some(vars) = &op.graphql.variables {
+                collect_value_strings(vars, out);
+            }
+        }
+        #[cfg(feature = "grpc")]
+        OperationTemplate::Grpc(op) => {
+            out.push(op.url.clone());
+            if let Some(h) = &op.headers {
+                h.values().for_each(|v| collect_value_strings(v, out));
+            }
+            out.push(op.grpc.service.clone());
+            out.push(op.grpc.method.clone());
+            if let Some(body) = &op.grpc.body {
+                collect_value_strings(body, out);
+            }
+            if let Some(dsf) = &op.grpc.descriptor_set_file {
+                out.push(dsf.clone());
+            }
+        }
+        #[cfg(feature = "bash")]
+        OperationTemplate::Bash(op) => {
+            out.push(op.bash.script.clone());
+            if let Some(env) = &op.bash.env {
+                env.values().for_each(|v| collect_value_strings(v, out));
+            }
+            if let Some(cwd) = &op.bash.cwd {
+                out.push(cwd.clone());
+            }
+        }
+        #[cfg(feature = "sql")]
+        OperationTemplate::Sql(op) => {
+            // sql.query is validated to not contain Jinja — skip it
+            if let Some(params) = &op.sql.params {
+                params.iter().for_each(|v| collect_value_strings(v, out));
+            }
+        }
+        #[allow(unreachable_patterns)]
+        _ => {}
+    }
+}
+
+fn collect_body_strings(body: &BodyTemplate, out: &mut Vec<String>) {
+    match body {
+        BodyTemplate::None => {}
+        BodyTemplate::Json { value } => collect_value_strings(value, out),
+        BodyTemplate::FormUrlencoded { fields } => {
+            fields.values().for_each(|v| collect_value_strings(v, out));
+        }
+        BodyTemplate::Multipart { parts } => {
+            for part in parts {
+                // Note: part.name (non-optional) is not scanned — multipart
+                // part names are static identifiers in practice ("file", etc.)
+                // and unlikely to contain args.* references.
+                if let Some(v) = &part.value {
+                    out.push(v.clone());
+                }
+                if let Some(v) = &part.bytes_base64 {
+                    out.push(v.clone());
+                }
+                if let Some(v) = &part.file_path {
+                    out.push(v.clone());
+                }
+                if let Some(v) = &part.filename {
+                    out.push(v.clone());
+                }
+            }
+        }
+        BodyTemplate::RawText { value, .. } => out.push(value.clone()),
+        BodyTemplate::RawBytesBase64 { value, .. } => out.push(value.clone()),
+        BodyTemplate::FileStream { path, .. } => out.push(path.clone()),
+    }
 }
 
 // ── SQL validation ───────────────────────────────────────

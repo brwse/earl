@@ -80,7 +80,7 @@ command "list_products" {
 
     query = {
       limit  = "{{ args.limit }}"
-      status = "{{ args.status | default('') }}"
+      status = "{{ args.status }}"
     }
 
     headers = {
@@ -430,8 +430,8 @@ command "list_orders" {
     query = {
       limit              = "{{ args.limit }}"
       status             = "{{ args.status }}"
-      financial_status   = "{{ args.financial_status | default('') }}"
-      fulfillment_status = "{{ args.fulfillment_status | default('') }}"
+      financial_status   = "{{ args.financial_status }}"
+      fulfillment_status = "{{ args.fulfillment_status }}"
     }
 
     headers = {

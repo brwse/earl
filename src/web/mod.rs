@@ -653,37 +653,44 @@ command "write_echo" {
 "#;
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // intentional: env_lock serialises HOME mutations across the async test
     async fn api_tools_returns_expected_schema() {
+        let _guard = env_lock();
         let cwd = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
         write_template(cwd.path(), "demo.hcl", READ_TEMPLATE);
+        write_config(home.path(), "");
 
-        let app = build_router(WebState {
-            cwd: cwd.path().to_path_buf(),
-            bearer_token: TEST_TOKEN.to_string(),
-        });
+        with_home(home.path(), || async {
+            let app = build_router(WebState {
+                cwd: cwd.path().to_path_buf(),
+                bearer_token: TEST_TOKEN.to_string(),
+            });
 
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/tools")
-                    .header("authorization", format!("Bearer {TEST_TOKEN}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), 200);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/tools")
+                        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), 200);
 
-        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let parsed: Value = serde_json::from_slice(&body).unwrap();
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: Value = serde_json::from_slice(&body).unwrap();
 
-        let tools = parsed.as_array().unwrap();
-        assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0]["key"], "demo.echo");
-        assert_eq!(tools[0]["protocol"], "bash");
-        let example = tools[0]["example_cli"].as_str().unwrap();
-        assert!(example.contains("earl call demo.echo"));
-        assert!(example.contains("--value"));
+            let tools = parsed.as_array().unwrap();
+            assert_eq!(tools.len(), 1);
+            assert_eq!(tools[0]["key"], "demo.echo");
+            assert_eq!(tools[0]["protocol"], "bash");
+            let example = tools[0]["example_cli"].as_str().unwrap();
+            assert!(example.contains("earl call demo.echo"));
+            assert!(example.contains("--value"));
+        })
+        .await;
     }
 
     #[tokio::test]

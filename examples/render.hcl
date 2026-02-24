@@ -61,12 +61,12 @@ command "list_services" {
     }
 
     query = {
-      name     = "{{ args.name }}"
-      type     = "{{ args.type }}"
-      region   = "{{ args.region }}"
+      name      = "{{ args.name }}"
+      type      = "{{ args.type }}"
+      region    = "{{ args.region }}"
       suspended = "{{ args.suspended }}"
-      limit    = "{{ args.limit }}"
-      cursor   = "{{ args.cursor }}"
+      limit     = "{{ args.limit }}"
+      cursor    = "{{ args.cursor }}"
     }
 
     headers = {

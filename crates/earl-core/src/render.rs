@@ -31,12 +31,24 @@ pub fn render_key_value_map(
         let rendered_value = renderer.render_value(value, context)?;
 
         match rendered_value {
+            Value::Null => {} // Absent optional params render to null; skip them so they are omitted from the request.
             Value::Array(values) => {
                 for value in values {
-                    out.push((rendered_key.clone(), value_to_string(value)?));
+                    let s = value_to_string(value)?;
+                    if !s.is_empty() {
+                        out.push((rendered_key.clone(), s));
+                    }
                 }
             }
-            other => out.push((rendered_key, value_to_string(other)?)),
+            other => {
+                let s = value_to_string(other)?;
+                // Empty strings are treated as absent in query/header maps — same
+                // policy as null, since `default = ""` was the old workaround for
+                // optional params that are now handled via null-skipping.
+                if !s.is_empty() {
+                    out.push((rendered_key, s));
+                }
+            }
         }
     }
 
