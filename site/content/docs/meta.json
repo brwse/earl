@@ -10,6 +10,7 @@
     "template-schema",
     "secrets",
     "auth",
+    "environments",
     "---Integration---",
     "web",
     "mcp",
