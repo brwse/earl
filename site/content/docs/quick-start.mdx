@@ -229,3 +229,13 @@ Generate completion scripts for your shell:
 </Tabs>
 
 Elvish is also supported via `earl completion elvish`.
+
+## Web Playground
+
+If you prefer a browser interface, Earl ships one built into the binary. Run:
+
+```bash
+earl web
+```
+
+Earl starts a local server, prints the URL and a session token, and opens your browser. The URL uses a random port — something like `http://127.0.0.1:52413` — printed in the terminal when it starts. From there you can browse your loaded templates, search commands by name, fill in parameters through a form, and execute them without touching the CLI. Good for getting oriented when you first add a new template catalog.
