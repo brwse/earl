@@ -501,11 +501,13 @@ fn validate_template_args(command_name: &str, cmd: &CommandTemplate) -> Result<(
 
 /// Extract all `IDENT` names following `args.` in a template string.
 ///
-/// Note: this is a text scan, not a Jinja AST parse. It will pick up `args.`
-/// references inside Jinja comments (`{# args.x #}`) and ignore subscript-style
-/// access (`args["foo"]`). Map keys in query/header/body objects are also not
-/// scanned (only values are). Known limitation — good enough for catching typos
-/// in the common case.
+/// Known limitations (text scan, not a Jinja AST parse):
+/// - False positives: `result.args.foo` or `env.args.key` match `args.foo`/`args.key`
+///   because the scanner uses a plain substring match on `"args."`.
+/// - False negatives: references inside Jinja comments (`{# args.x #}`) are
+///   matched as if live; subscript-style `args["foo"]` access is invisible.
+/// - Map keys in query/header/body objects are not scanned (only values are).
+/// Good enough for catching typos in the common case.
 fn extract_args_refs(s: &str) -> Vec<&str> {
     let mut refs = Vec::new();
     let mut remaining = s;
