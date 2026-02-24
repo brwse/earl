@@ -68,7 +68,7 @@ earl call --yes --json recall_ai.start_recording --bot_id <bot_id>
 # 4. (Meeting runs — poll every 30s if you need to monitor)
 earl call --yes --json recall_ai.get_bot --bot_id <bot_id>
 
-# 5. When the meeting ends, leave the call (or let automatic_leave trigger)
+# 5. When the meeting ends, leave the call
 earl call --yes --json recall_ai.leave_call --bot_id <bot_id>
 
 # 6. Poll until transcript is ready (repeat every 15s)
@@ -90,10 +90,10 @@ earl call --yes --json recall_ai.download_transcript --url "<data.download_url>"
 ## Recipe B: Retrieve a video or audio recording
 
 ```bash
-# 1. Get bot to find media IDs
+# 1. Get bot to find media IDs and confirm artifacts are ready
 earl call --yes --json recall_ai.get_bot --bot_id <bot_id>
 # → Read media_shortcuts.video_mixed.id and media_shortcuts.audio_mixed.id
-# → Check that status.code == "done" before proceeding
+# → If media_shortcuts.video_mixed.status.code != "done", poll every 15s until it is
 
 # 2. Get video download URL
 earl call --yes --json recall_ai.get_video --video_id <video_mixed_id>
@@ -112,6 +112,10 @@ Present the download URL to the user as a clickable link.
 ## Recipe C: Control a live meeting
 
 ```bash
+# Stop recording early (bot stays in meeting; triggers transcript processing)
+earl call --yes --json recall_ai.stop_recording --bot_id <bot_id>
+# → After stopping, poll get_bot until media_shortcuts.transcript.status.code == "done"
+
 # Pause recording during a sensitive segment
 earl call --yes --json recall_ai.pause_recording --bot_id <bot_id>
 
@@ -123,6 +127,8 @@ earl call --yes --json recall_ai.send_chat_message \
   --bot_id <bot_id> \
   --message "Action items so far: 1) Alice to send report 2) Bob to schedule follow-up"
 ```
+
+**`stop_recording` vs `leave_call`:** `stop_recording` stops capturing but keeps the bot present. `leave_call` removes the bot from the meeting entirely. Both trigger transcript processing.
 
 ---
 

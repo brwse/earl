@@ -147,7 +147,7 @@ command "get_bot" {
 
   result {
     decode = "json"
-    output = "Bot {{ result.id }} [{{ result.status | default('unknown') }}]\nMeeting: {{ result.meeting_url }}\nName: {{ result.bot_name }}{% if result.join_at %}\nScheduled: {{ result.join_at }}{% endif %}\n\nArtifacts:\n  Transcript: {{ result.media_shortcuts.transcript.status.code | default('n/a') }} (id: {{ result.media_shortcuts.transcript.id | default('none') }})\n  Video:      {{ result.media_shortcuts.video_mixed.status.code | default('n/a') }} (id: {{ result.media_shortcuts.video_mixed.id | default('none') }})\n  Audio:      {{ result.media_shortcuts.audio_mixed.status.code | default('n/a') }} (id: {{ result.media_shortcuts.audio_mixed.id | default('none') }})"
+    output = "Bot {{ result.id }} [{{ result.status | default('unknown') }}]\nMeeting: {{ result.meeting_url }}\nName: {{ result.bot_name }}{% if result.join_at %}\nScheduled: {{ result.join_at }}{% endif %}\n\nArtifacts:\n{% if result.media_shortcuts %}  Transcript: {{ result.media_shortcuts.transcript.status.code | default('n/a') }} (id: {{ result.media_shortcuts.transcript.id | default('none') }})\n  Video:      {{ result.media_shortcuts.video_mixed.status.code | default('n/a') }} (id: {{ result.media_shortcuts.video_mixed.id | default('none') }})\n  Audio:      {{ result.media_shortcuts.audio_mixed.status.code | default('n/a') }} (id: {{ result.media_shortcuts.audio_mixed.id | default('none') }}){% else %}  (not yet available — bot is still joining){% endif %}"
   }
 }
 
@@ -300,7 +300,6 @@ command "start_recording" {
   }
 
   result {
-    decode = "json"
     output = "Recording started for bot {{ args.bot_id }}."
   }
 }
@@ -346,7 +345,6 @@ command "stop_recording" {
   }
 
   result {
-    decode = "json"
     output = "Recording stopped for bot {{ args.bot_id }}. Transcript processing will begin shortly — poll get_bot until media_shortcuts.transcript.status.code == \"done\"."
   }
 }
@@ -390,7 +388,6 @@ command "pause_recording" {
   }
 
   result {
-    decode = "json"
     output = "Recording paused for bot {{ args.bot_id }}."
   }
 }
@@ -432,7 +429,6 @@ command "resume_recording" {
   }
 
   result {
-    decode = "json"
     output = "Recording resumed for bot {{ args.bot_id }}."
   }
 }
@@ -477,8 +473,7 @@ command "leave_call" {
   }
 
   result {
-    decode = "json"
-    output = "Bot {{ args.bot_id }} is leaving the call. Poll get_bot until status == \"done\" before retrieving transcript."
+    output = "Bot {{ args.bot_id }} is leaving the call. Poll get_bot until media_shortcuts.transcript.status.code == \"done\" before retrieving transcript."
   }
 }
 
@@ -539,7 +534,6 @@ command "send_chat_message" {
   }
 
   result {
-    decode = "json"
     output = "Chat message sent to meeting."
   }
 }
@@ -592,7 +586,7 @@ command "get_transcript" {
 
   result {
     decode = "json"
-    output = "Transcript {{ result.id }}\nStatus: {{ result.status.code }}\nCreated: {{ result.created_at }}\n\nDownload URL (pass to download_transcript):\n{{ result.data.download_url | default('not ready yet') }}"
+    output = "Transcript {{ result.id }}\nStatus: {{ result.status.code }}\nCreated: {{ result.created_at }}\n\nDownload URL (pass to download_transcript):\n{{ result.data.download_url if result.data else 'not ready yet — wait for status == done' }}"
   }
 }
 
@@ -693,7 +687,7 @@ command "get_video" {
 
   result {
     decode = "json"
-    output = "Video recording ({{ result.format | default('mp4') }}) — status: {{ result.status.code }}\n\nDownload link (expires ~5 hours, share with user):\n{{ result.data.download_url | default('not ready yet') }}"
+    output = "Video recording ({{ result.format | default('mp4') }}) — status: {{ result.status.code }}\n\nDownload link (expires ~5 hours, share with user):\n{{ result.data.download_url if result.data else 'not ready yet — wait for status == done' }}"
   }
 }
 
@@ -744,6 +738,6 @@ command "get_audio" {
 
   result {
     decode = "json"
-    output = "Audio recording ({{ result.format | default('mp3') }}) — status: {{ result.status.code }}\n\nDownload link (expires ~5 hours, share with user):\n{{ result.data.download_url | default('not ready yet') }}"
+    output = "Audio recording ({{ result.format | default('mp3') }}) — status: {{ result.status.code }}\n\nDownload link (expires ~5 hours, share with user):\n{{ result.data.download_url if result.data else 'not ready yet — wait for status == done' }}"
   }
 }
