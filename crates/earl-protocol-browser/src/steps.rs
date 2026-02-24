@@ -327,7 +327,7 @@ async fn step_snapshot(ctx: &StepContext<'_>) -> Result<Value> {
     let (markdown, refs) = render_ax_tree(&roots, max_nodes);
 
     Ok(json!({
-        "snapshot": markdown,
+        "text": markdown,
         "refs": refs,
     }))
 }
