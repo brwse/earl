@@ -30,7 +30,7 @@ If the request doesn't name a provider, command, and protocol, ask one question:
 
 ### Check for pre-built templates first
 
-Earl ships with 25 ready-made provider templates. If the user names a known service, check
+Earl ships with 26 ready-made provider templates. If the user names a known service, check
 whether it is already imported before offering to import it:
 
 ```bash
@@ -47,7 +47,7 @@ Check the list carefully:
 - If the provider is **not imported at all**, offer to import the pre-built template:
 
 ```bash
-# Available: github, stripe, slack, notion, openai, anthropic, discord, gitlab, jira, linear,
+# Available: github, stripe, slack, notion, openai, anthropic, recall_ai, discord, gitlab, jira, linear,
 #            pagerduty, twilio, sendgrid, cloudflare, vercel, render, shopify, hubspot,
 #            mailchimp, datadog, sentry, airtable, auth0, supabase, resend
 earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/<provider>.hcl
