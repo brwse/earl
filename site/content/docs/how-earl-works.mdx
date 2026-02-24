@@ -10,7 +10,9 @@ Earl sits between an AI agent and the external services it calls. Its job is to 
 
 Most AI tooling works roughly like this: the agent reads a description of what the tool does, then calls it. That works fine when the description is controlled. It breaks badly when it isn't.
 
-OpenClaw is a widely-used agent platform with around 400,000 users. In February 2026, security researchers found 341 malicious "skills" published to ClawHub, OpenClaw's community library. Two CVEs followed: CVE-2026-25253 (1-click RCE) and CVE-2026-25157 (command injection). Both worked through the same mechanism: OpenClaw's skills are Markdown files that the LLM reads and executes. An attacker can embed instructions in skill content, in API responses the agent processes, or in tool descriptions themselves. The LLM can be told to "ignore previous instructions" and it sometimes listens — not because the model is broken, but because that's what text-in-context means.
+OpenClaw is a rapidly growing open-source agent platform with hundreds of thousands of users. In February 2026, security firm Koi Security found 341 malicious skills published to ClawHub, OpenClaw's community library. Those skills embedded supply-chain malware — the Atomic Stealer infostealer on macOS — inside their install dependencies. Separately, the instruction model itself creates a structural vulnerability: ClawHub skills are Markdown files that the LLM reads as instructions. An attacker-published skill can embed arbitrary instructions in that content, and the model will follow them — not because the model is broken, but because that's what text-in-context means.
+
+The same attack surface exists wherever untrusted content enters LLM context. Security researchers at Invariant Labs demonstrated in 2025 that MCP tool descriptions — visible to the LLM but not surfaced in most agent UIs — can contain hidden instructions directing the model to read SSH keys or configuration files before performing any ostensibly benign operation.
 
 This is a structural problem. If the LLM reads the tool instructions, anyone who can influence those instructions can influence the agent.
 
@@ -18,7 +20,7 @@ This is a structural problem. If the LLM reads the tool instructions, anyone who
 
 Earl's answer is simple: the LLM never reads the template body.
 
-When an agent calls Earl, it sees a tool name, a summary, and parameter names. That's it. The actual operation — the URL, method, headers, auth setup, request body — lives in an HCL file on disk. The agent cannot access it. It is not in the tool description, not in the MCP metadata, not passed back in any response.
+When an agent calls Earl, it sees a tool name, a summary, a description, and parameter names. The actual operation — the URL, method, headers, auth setup, request body — lives in an HCL file on disk. The agent cannot access it. It is not in the tool description, not in the MCP metadata, not passed back in any response.
 
 The template is committed to a repository by a human engineer. When the agent invokes a command, Earl reads the template, renders it with the supplied parameters, and executes the request. The agent's only influence is the parameter values you declared in `param` blocks. It cannot change the endpoint, add headers, modify the auth, or extend the request in any way the template author didn't anticipate.
 
@@ -38,7 +40,7 @@ Secrets live in the OS credential store: the System Keychain on macOS, Secret Se
 
 At call time, Earl pulls the secret from the keychain right before the request goes out. The token is not in the MCP tool arguments, not in the template file, not in the command output. Templates hold key names like `"github.token"` — references, not values.
 
-The `result.output` block in a template has no access to `secrets.*`. You cannot accidentally or intentionally write `{{ secrets.api_key }}` and have it expand.
+The `result.output` block in a template has no access to `secrets.*`. Writing `{{ secrets.api_key }}` in an output block causes a render error — the secrets namespace is not available in that context.
 
 The last line of defense here is the redactor. Before returning any output to the caller, Earl scans the response body for any secret values it used during the call. If a secret appears in the response — say, an API accidentally echoes back the token in an error message — Earl replaces it with `[REDACTED]`. The check covers the raw value plus base64, hex, and URL-encoded representations of it.
 
@@ -69,7 +71,7 @@ OAuth endpoint URLs go through the same SSRF validation. You can't point an auth
 
 ### 4. Write-mode confirmation
 
-Templates annotated with `mode = "write"` pause and ask for confirmation before the request goes out:
+Write mode is the default. Templates without an explicit `mode = "read"` annotation pause and ask for confirmation before the request goes out:
 
 ```
 github.create_issue is a write command. Proceed? [y/N]
@@ -119,8 +121,11 @@ sql {
 Beyond SSRF blocking, you can restrict which external hosts Earl can contact at all. Configure an allowlist in `~/.config/earl/config.toml`:
 
 ```toml
-[network]
-egress_allowlist = ["api.github.com", "*.stripe.com"]
+[[network.allow]]
+scheme      = "https"
+host        = "api.github.com"
+port        = 443
+path_prefix = "/"
 ```
 
 If an allowlist is set, Earl rejects any request to a host not on it. This limits blast radius if a template is compromised or a parameter is manipulated to point at an unexpected endpoint.

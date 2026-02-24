@@ -8,11 +8,9 @@ Earl is a CLI and MCP server that connects AI agents to external services — HT
 
 ## The problem it solves
 
-In early 2026, OpenClaw — the dominant open-source AI agent — had a rough stretch: 341 malicious skills on its ClawHub marketplace, a 1-click RCE CVE, command injection in SSH, credential exfiltration through prompt injection. Different vectors, same root cause.
+In February 2026, security firm Koi Security found 341 malicious skills on ClawHub, the community library for OpenClaw — a rapidly growing open-source AI agent with hundreds of thousands of users. Those skills embedded supply-chain malware in their install dependencies. But the structural problem runs deeper: ClawHub skills are Markdown files the LLM reads as instructions. Any attacker-controlled content in that pipeline can redirect the model. No amount of review process changes that.
 
-ClawHub skills are Markdown documents that the LLM reads and executes. Prompt injection isn't an edge case in that model — it's baked in. No amount of review process changes that.
-
-Earl takes a different approach. Operations are HCL files committed to your repository. The LLM calls a template by name; it never reads the template content. Credentials stay in the OS keychain, never in LLM context. Write operations require explicit authorization. The network layer blocks private and loopback addresses with no config bypass.
+Earl takes a different approach. Operations are HCL files committed to your repository. The LLM calls a template by name; it never reads the operation body — the URL, method, headers, auth, or request structure. Credentials stay in the OS keychain, never in LLM context. Write operations require explicit authorization. The network layer blocks private and loopback addresses with no config bypass.
 
 More detail on each of these: [How Earl Works](/docs/how-earl-works).
 

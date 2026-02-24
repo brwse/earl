@@ -341,7 +341,7 @@ SQL operation-level fields:
 | Field               | Type   | Required | Description                                                                                                                                                                                           |
 | ------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `connection_secret` | string | yes      | Key name in the OS keychain whose value is the database connection URL.                                                                                                                               |
-| `query`             | string | yes      | SQL query with positional placeholders (`$1`, `$2`, ...).                                                                                                                                             |
+| `query`             | string | yes      | SQL query with positional placeholders. Syntax varies by database: `$1`, `$2`... for PostgreSQL; `?` for MySQL and SQLite.                                                                            |
 | `params`            | list   | no       | Values for the positional placeholders. Each element supports Jinja expressions and must be quoted as an HCL string: `["{{ args.limit }}"]`. Earl coerces the rendered value to the correct SQL type. |
 | `sandbox`           | block  | no       | Query limits.                                                                                                                                                                                         |
 

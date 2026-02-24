@@ -40,36 +40,29 @@ The SSRF layer blocks inward — private ranges that shouldn't be reachable. The
 
 Without an allowlist, Earl can reach any public IP. With one, any request to a host not on the list is rejected.
 
-Configure it in `~/.config/earl/config.toml`:
-
-```toml
-[network]
-egress_allowlist = ["api.github.com", "*.stripe.com"]
-```
-
-Wildcards match a single DNS label. `*.stripe.com` matches `api.stripe.com` and `dashboard.stripe.com` but not `api.sub.stripe.com`.
-
-For more granular control, use `[[network.allow]]` entries. These let you specify a host, an optional port, and an optional IP CIDR range:
+Configure it in `~/.config/earl/config.toml` using `[[network.allow]]` entries. Each entry requires all four fields:
 
 ```toml
 [[network.allow]]
-host = "api.github.com"
-port = 443
+scheme      = "https"
+host        = "api.github.com"
+port        = 443
+path_prefix = "/"
 
 [[network.allow]]
-host = "*.stripe.com"
-
-[[network.allow]]
-cidr = "203.0.113.0/24"
+scheme      = "https"
+host        = "api.stripe.com"
+port        = 443
+path_prefix = "/"
 ```
 
-If both `egress_allowlist` and `[[network.allow]]` entries are present, a request must match at least one entry from either list.
+`host` is matched exactly. There is no wildcard support — `api.github.com` and `api.stripe.com` must be listed as separate entries. `path_prefix = "/"` allows all paths on the host; a more restrictive prefix like `"/v1/"` limits the allowlist to that path subtree.
 
 Setting an allowlist is the most effective way to limit what a compromised template or unexpected parameter value can reach.
 
 ## Write-mode confirmation
 
-Any command annotated with `mode = "write"` prompts before executing:
+Write mode is the default. Any command without `mode = "read"` in its annotations prompts before executing:
 
 ```
 github.create_issue is a write command. Proceed? [y/N]
@@ -134,7 +127,7 @@ sql {
 
 `max_rows` caps how many rows are returned. Without it, an agent querying a large table with a broad predicate can return enough data to cause problems downstream. Set this to the largest result set that makes sense for the command's purpose.
 
-SQL parameters use positional binding (`$1`, `$2`). They go through the driver's parameter interface, not string interpolation, so they're protected against injection. Quote each Jinja expression as a string in the `params` array — Earl coerces types before sending the query.
+SQL parameters go through the driver's parameter interface, not string interpolation, so they're protected against injection. Quote each Jinja expression as a string in the `params` array — Earl coerces types before sending the query. Placeholder syntax varies by database: `$1`, `$2`... for PostgreSQL; `?` for MySQL and SQLite.
 
 ## JWT auth and policy engine for HTTP deployments
 

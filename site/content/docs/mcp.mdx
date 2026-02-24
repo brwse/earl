@@ -50,8 +50,8 @@ This works well when you have a small-to-medium number of templates. The agent's
 One MCP tool is exposed: `earl.search`. The agent calls it with a description of what it wants to do, gets back matching tools, and calls the result.
 
 ```bash
-earl mcp stdio --discovery
-earl mcp http --listen 0.0.0.0:8977 --discovery
+earl mcp stdio --mode discovery
+earl mcp http --listen 0.0.0.0:8977 --mode discovery
 ```
 
 Use discovery mode when you have a large template collection and don't want tool descriptions competing for context. The tradeoff: the agent has to know to search before it can call, which adds a round trip. For most workloads with under ~50 commands, full mode is fine.
@@ -80,23 +80,12 @@ earl mcp stdio --yes
 
 That pre-approves all write calls for the session. Use it carefully — you're saying "approve everything" rather than reviewing each write. For multi-user HTTP deployments, use the policy engine to set per-caller write access instead of relying on `--yes`. See [Policy Engine](/docs/policy-engine).
 
-## Filtering by provider
-
-If you only want to expose certain providers to an agent, pass `--providers`:
-
-```bash
-earl mcp stdio --providers github,stripe
-```
-
-Only commands from those providers appear as MCP tools. Everything else is hidden. Useful for giving a scoped agent access to exactly what it needs.
-
 ## Checking what's available
 
-Before connecting an agent, you can see what tools Earl would expose:
+Use `earl templates list` to see what commands are loaded before connecting an agent:
 
 ```bash
-earl mcp list-tools               # full mode
-earl mcp list-tools --discovery   # discovery mode
+earl templates list
 ```
 
-This prints the tool names and descriptions without starting a server — handy for checking what an agent will see before you commit to a config.
+This shows all available commands with their modes and summaries — the same set that would appear as MCP tools in full mode.
