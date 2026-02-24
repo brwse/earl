@@ -62,7 +62,7 @@ data: {"id":"2","delta":" world"}
 data: [DONE]
 ```
 
-Earl strips the `data: ` prefix from each line before decoding. With `decode = "json"`, each event that parses as JSON produces a `result` — non-JSON lines like `[DONE]` are skipped automatically.
+Earl buffers each SSE event block (up to the blank-line boundary) and strips the `data: ` prefix before decoding. If an event has multiple `data:` lines, they are joined with `\n` into a single chunk. With `decode = "json"`, each event that parses as JSON produces a `result` — non-JSON events like `[DONE]` are skipped automatically.
 
 A practical SSE streaming command:
 
@@ -95,7 +95,7 @@ command "stream_completion" {
       kind = "json"
       value = {
         model    = "gpt-4o"
-        stream   = "true"
+        stream   = true
         messages = [{ role = "user"; content = "{{ args.prompt }}" }]
       }
     }
