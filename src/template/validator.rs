@@ -507,6 +507,7 @@ fn validate_template_args(command_name: &str, cmd: &CommandTemplate) -> Result<(
 /// - False negatives: references inside Jinja comments (`{# args.x #}`) are
 ///   matched as if live; subscript-style `args["foo"]` access is invisible.
 /// - Map keys in query/header/body objects are not scanned (only values are).
+///
 /// Good enough for catching typos in the common case.
 fn extract_args_refs(s: &str) -> Vec<&str> {
     let mut refs = Vec::new();
