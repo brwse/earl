@@ -630,6 +630,9 @@ fn collect_body_strings(body: &BodyTemplate, out: &mut Vec<String>) {
         }
         BodyTemplate::Multipart { parts } => {
             for part in parts {
+                // Note: part.name (non-optional) is not scanned — multipart
+                // part names are static identifiers in practice ("file", etc.)
+                // and unlikely to contain args.* references.
                 if let Some(v) = &part.value {
                     out.push(v.clone());
                 }
