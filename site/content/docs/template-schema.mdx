@@ -659,6 +659,6 @@ environments {
 | -------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `default`      | string          | Environment name that is active when none is specified.                                                                                                                          |
 | `secrets`      | list of strings | Secrets resolved before environment variable values are rendered.                                                                                                                |
-| `environments` | map             | Named environments. Each environment is a map of string variable names to Jinja template strings. Those variables are available in operation fields as `{{ env.base_url }}` etc. |
+| `environments` | map             | Named environments. Each environment is a map of string variable names to Jinja template strings. Those variables are available in operation fields as `{{ vars.base_url }}` etc. |
 
 See [Environments](/docs/environments) for the complete guide.

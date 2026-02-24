@@ -13,7 +13,7 @@ There are two pieces:
 1. **The `environments` block** at the top of the template defines the available environments and their values (usually base URLs). This is where you set the default.
 2. **`environment_overrides` blocks** inside individual commands replace the entire operation when a specific environment is active.
 
-The two pieces are independent. You can use `environments` without any `environment_overrides`, and just interpolate `{{ env.base_url }}` into your operation URL. Or you can skip the top-level block and use `environment_overrides` to swap operations entirely.
+The two pieces are independent. You can use `environments` without any `environment_overrides`, and just interpolate `{{ vars.base_url }}` into your operation URL. Or you can skip the top-level block and use `environment_overrides` to swap operations entirely.
 
 ## The `environments` block
 
@@ -30,7 +30,7 @@ environments {
 }
 ```
 
-When a command runs, the active environment's fields are available as `{{ env.<key> }}`. In the example above, `{{ env.base_url }}` resolves to `https://api.github.com` in production and `https://staging.github.internal` in staging.
+When a command runs, the active environment's fields are available as `{{ vars.<key> }}`. In the example above, `{{ vars.base_url }}` resolves to `https://api.github.com` in production and `https://staging.github.internal` in staging.
 
 `secrets` lists secrets that apply to all environments. Individual environments can add their own fields — if staging uses a different token, you can put that key name in the staging entry:
 
@@ -45,17 +45,17 @@ environments {
 }
 ```
 
-The top-level `secrets` list is for secrets shared across all environments. Per-environment values in the `environments { }` inner block are data fields that end up in `env.*`, not automatic secret references.
+The top-level `secrets` list is for secrets shared across all environments. Per-environment values in the `environments { }` inner block are data fields that end up in `vars.*`, not automatic secret references.
 
-## Using `{{ env.* }}` in operations
+## Using `{{ vars.* }}` in operations
 
-Once you have an `environments` block, use `env.<key>` anywhere in the operation:
+Once you have an `environments` block, use `vars.<key>` anywhere in the operation:
 
 ```hcl
 operation {
   protocol = "http"
   method   = "GET"
-  url      = "{{ env.base_url }}/search/repositories"
+  url      = "{{ vars.base_url }}/search/repositories"
 
   auth {
     kind   = "bearer"
@@ -90,7 +90,7 @@ command "search_repos" {
   operation {
     protocol = "http"
     method   = "GET"
-    url      = "{{ env.base_url }}/search/repositories"
+    url      = "{{ vars.base_url }}/search/repositories"
 
     auth {
       kind   = "bearer"
@@ -196,7 +196,7 @@ command "search_repos" {
   operation {
     protocol = "http"
     method   = "GET"
-    url      = "{{ env.base_url }}/search/repositories"
+    url      = "{{ vars.base_url }}/search/repositories"
 
     auth {
       kind   = "bearer"
