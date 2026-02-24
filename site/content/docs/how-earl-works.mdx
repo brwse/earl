@@ -10,7 +10,7 @@ Earl sits between an AI agent and the external services it calls. Its job is to 
 
 Most AI tooling works roughly like this: the agent reads a description of what the tool does, then calls it. That works fine when the description is controlled. It breaks badly when it isn't.
 
-OpenClaw is a rapidly growing open-source agent platform with hundreds of thousands of users. In February 2026, security firm Koi Security found 341 malicious skills published to ClawHub, OpenClaw's community library. Those skills embedded supply-chain malware — the Atomic Stealer infostealer on macOS — inside their install dependencies. Separately, the instruction model itself creates a structural vulnerability: ClawHub skills are Markdown files that the LLM reads as instructions. An attacker-published skill can embed arbitrary instructions in that content, and the model will follow them — not because the model is broken, but because that's what text-in-context means.
+Imagine a popular open-source agent platform with hundreds of thousands of users. Someone audits the community plugin library and finds hundreds of malicious plugins embedding supply-chain malware inside their install dependencies. This kind of attack is already realistic and would be hard to detect at scale. Separately, the instruction model itself creates a structural vulnerability: community plugins are Markdown files that the LLM reads as instructions. An attacker-published plugin can embed arbitrary instructions in that content, and the model will follow them — not because the model is broken, but because that's what text-in-context means.
 
 The same attack surface exists wherever untrusted content enters LLM context. Security researchers at Invariant Labs demonstrated in 2025 that MCP tool descriptions — visible to the LLM but not surfaced in most agent UIs — can contain hidden instructions directing the model to read SSH keys or configuration files before performing any ostensibly benign operation.
 
@@ -74,7 +74,8 @@ OAuth endpoint URLs go through the same SSRF validation. You can't point an auth
 Write mode is the default. Templates without an explicit `mode = "read"` annotation pause and ask for confirmation before the request goes out:
 
 ```
-github.create_issue is a write command. Proceed? [y/N]
+Command `github.create_issue` is write-enabled.
+Type YES to continue:
 ```
 
 The prompt appears in the terminal. An agent running unattended can't answer it unless the caller passes `--yes`. This gives a human a checkpoint for any command that creates, modifies, or deletes data.

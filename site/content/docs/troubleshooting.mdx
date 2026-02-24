@@ -216,8 +216,8 @@ Then reference it in the template:
 ```hcl
 operation {
   protocol = "grpc"
+  url      = "https://api.example.com"
   grpc {
-    url                 = "https://api.example.com"
     service             = "example.v1.ExampleService"
     method              = "GetItem"
     descriptor_set_file = "./service.pb"

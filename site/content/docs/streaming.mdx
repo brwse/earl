@@ -1,6 +1,6 @@
 ---
 title: Streaming
-description: How to use streaming responses in Earl — HTTP SSE, newline-delimited JSON, and gRPC server-streaming.
+description: How to use streaming responses in Earl — HTTP SSE, newline-delimited JSON, gRPC server-streaming, and Bash.
 ---
 
 Most Earl commands complete in a single round-trip: send a request, receive a response, format it. Streaming is for cases where the server sends data progressively — a language model token stream, a log tail, a long-running export. Instead of waiting for the full response, Earl prints output as chunks arrive.
@@ -13,12 +13,21 @@ Streaming makes sense when:
 - The response is newline-delimited JSON (NDJSON) — each line is a separate JSON object.
 - The server takes long enough that you want to see partial results rather than waiting.
 - You're calling a gRPC server-streaming RPC.
+- You're running a Bash script that produces output continuously.
 
 For normal JSON APIs that respond in under a second, streaming adds complexity without benefit.
 
-## HTTP streaming
+## How streaming decode works
 
-Two changes are needed to enable HTTP streaming: set `stream = true` in the operation block, and set `decode = "lines"` in the result block.
+Set `stream = true` in the operation block to enable streaming. Earl then reads the response in chunks and runs the `output` template once per chunk, printing each result immediately.
+
+The `decode` field in the result block controls how each chunk is parsed. It applies **per chunk**, not to the full response:
+
+- `decode = "json"` — parse each chunk as JSON; `result` is the decoded object. Chunks that fail to parse (like a `[DONE]` terminator) are skipped with a warning.
+- `decode = "text"` — each chunk is a string. Use this when you need the template to handle non-JSON lines.
+- `decode = "auto"` — infer from Content-Type; SSE responses (`text/event-stream`) decode as text.
+
+## HTTP streaming
 
 ```hcl
 operation {
@@ -36,18 +45,12 @@ operation {
 }
 
 result {
-  decode = "lines"
+  decode = "json"
   output = "{{ result }}"
 }
 ```
 
-With `stream = true`, Earl does not buffer the full response. It reads the body line by line, running the `output` template once per line. Each iteration prints immediately to stdout.
-
-## How `decode = "lines"` works
-
-With `decode = "lines"`, the variable `result` in your output template is the current line — a single string from the response body. The template runs once per line, and output appears as each line arrives.
-
-This is different from every other decode mode, where `result` holds the full decoded response and the template runs exactly once.
+With `stream = true`, Earl reads the response body line by line instead of buffering it. The output template runs once per chunk and prints immediately.
 
 ## Server-Sent Events (SSE)
 
@@ -59,7 +62,7 @@ data: {"id":"2","delta":" world"}
 data: [DONE]
 ```
 
-Earl strips the `data: ` prefix from each line before passing it to the output template. `[DONE]` lines and blank lines still arrive as `result` — handle them in the template if needed.
+Earl strips the `data: ` prefix from each line before decoding. With `decode = "json"`, each event that parses as JSON produces a `result` — non-JSON lines like `[DONE]` are skipped automatically.
 
 A practical SSE streaming command:
 
@@ -99,13 +102,22 @@ command "stream_completion" {
   }
 
   result {
-    decode = "lines"
-    output = "{% if result != '[DONE]' %}{% set chunk = result | from_json %}{{ chunk.choices[0].delta.content | default('') }}{% endif %}"
+    decode = "json"
+    output = "{{ result.choices[0].delta.content | default('') }}"
   }
 }
 ```
 
-The `data: ` prefix is already stripped, so `result` in the template is the raw JSON payload for each event. `[DONE]` signals the end of the stream — the template handles it with an `if` check.
+The `data: ` prefix is stripped before decoding, so `result` is the parsed JSON payload. The `[DONE]` terminator fails JSON parsing and is skipped — no template handling needed.
+
+If you need to handle all lines in the template (including terminators), use `decode = "text"` instead:
+
+```hcl
+result {
+  decode = "text"
+  output = "{% if result != '[DONE]' %}{% set chunk = result | from_json %}{{ chunk.choices[0].delta.content | default('') }}{% endif %}"
+}
+```
 
 ## Newline-delimited JSON (NDJSON)
 
@@ -116,7 +128,7 @@ NDJSON responses send one JSON object per line, with no SSE envelope:
 {"id":2,"event":"order.updated","amount":9900}
 ```
 
-No prefix stripping applies here — `result` is the raw line. Parse it with `from_json`:
+Use `decode = "json"` — each line is a complete JSON object:
 
 ```hcl
 command "tail_events" {
@@ -139,19 +151,19 @@ command "tail_events" {
   }
 
   result {
-    decode = "lines"
-    output = "{% set ev = result | from_json %}[{{ ev.event }}] order {{ ev.id }} — ${{ (ev.amount / 100) | round(2) }}"
+    decode = "json"
+    output = "[{{ result.event }}] order {{ result.id }} — ${{ (result.amount / 100) | round(2) }}"
   }
 }
 ```
 
-If the server sends blank lines or comments (common in SSE but not NDJSON), guard with `{% if result %}` before calling `from_json`.
+If the server sends blank lines, they fail JSON parsing and are skipped. If you need to handle them explicitly, switch to `decode = "text"` and guard with `{% if result %}` before calling `from_json`.
 
 ## gRPC server-streaming
 
 Earl supports server-streaming RPCs — one request, multiple response messages. Client-streaming and bidirectional streaming are not supported.
 
-Set `stream = true` in the operation block. The `result` block uses `decode = "json"` (gRPC response messages are already structured), and the output template runs once per response message.
+Set `stream = true` in the operation block. Each gRPC response message is a JSON object, so use `decode = "json"`. The output template runs once per message.
 
 ```hcl
 command "watch_logs" {
@@ -217,9 +229,47 @@ grpc {
 }
 ```
 
+## Bash streaming
+
+Bash operations support streaming stdout line by line. Set `stream = true` and use `decode = "text"` — each line becomes `result`.
+
+```hcl
+command "tail_file" {
+  title       = "Tail file"
+  summary     = "Stream lines from a file"
+  description = "Print lines from the given file as they are written."
+
+  annotations {
+    mode = "read"
+  }
+
+  param "path" {
+    type        = "string"
+    required    = true
+    description = "Path to the file to tail"
+  }
+
+  operation {
+    protocol = "bash"
+    stream   = true
+
+    bash {
+      script = "tail -f {{ args.path }}"
+    }
+  }
+
+  result {
+    decode = "text"
+    output = "{{ result }}"
+  }
+}
+```
+
+Each line written to stdout becomes a separate chunk. The template runs once per line and prints immediately.
+
 ## Streaming limitations
 
-- Client-streaming and bidirectional streaming are not supported. Earl sends one request message and receives zero or more response messages. This covers LLM APIs, event feeds, and log tails, but not cases where the client sends a stream of messages to the server.
+- Client-streaming and bidirectional streaming are not supported for gRPC. Earl sends one request and receives zero or more response messages.
 - SQL does not support streaming. The `stream` flag has no effect on SQL operations.
-- `decode = "lines"` runs the output template once per line, not once total. If you need to accumulate results across lines, that's not possible in the template — you'd need to post-process the output.
-- The output template for streaming runs per chunk. Any state you try to carry between chunks (counting, accumulation) won't work. Design templates to be stateless per line.
+- GraphQL does not support streaming.
+- The output template runs per chunk. Carrying state between chunks (counting, accumulation) is not possible in the template — post-process the output if needed.

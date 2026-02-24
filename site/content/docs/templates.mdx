@@ -307,17 +307,21 @@ See [Secrets and Auth](/docs/secrets-and-auth) for configuration details.
 
 ```hcl
 result {
-  decode = "json"   # json, text, lines, none
+  decode = "json"   # auto, json, text, html, xml, binary
   output = "Found {{ result.total_count }} items:\n{% for item in result.items[:10] %}  - {{ item.name }}\n{% endfor %}"
 }
 ```
 
 `decode` controls how response bytes are parsed before the output template runs:
 
+- `auto` — infer from `Content-Type`, then fall back to JSON detection (default)
 - `json` — parse as JSON; `result` is the decoded object
 - `text` — `result` is the raw string
-- `lines` — for streaming; see [Streaming](/docs/streaming)
-- `none` — discard the body
+- `html` — treat as HTML; `result` is a string
+- `xml` — treat as XML; `result` is a string
+- `binary` — return raw bytes base64-encoded as a string
+
+For streaming, the decode mode applies per chunk. See [Streaming](/docs/streaming).
 
 ## Environment overrides
 

@@ -65,7 +65,8 @@ Setting an allowlist is the most effective way to limit what a compromised templ
 Write mode is the default. Any command without `mode = "read"` in its annotations prompts before executing:
 
 ```
-github.create_issue is a write command. Proceed? [y/N]
+Command `github.create_issue` is write-enabled.
+Type YES to continue:
 ```
 
 The call blocks until the user responds. In a terminal session this works as expected. In an automated pipeline — CI, a cron job, or an MCP server running unattended — the call either times out or hangs.

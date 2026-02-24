@@ -86,16 +86,18 @@ operation {
 | Kind              | Fields                        | Use case                                 |
 | ----------------- | ----------------------------- | ---------------------------------------- |
 | `bearer`          | `secret`                      | API tokens (most REST/GraphQL APIs)      |
+| `api_key`         | `secret`, `location`, `name`  | API key in header or query param         |
 | `basic`           | `username`, `password_secret` | Basic HTTP auth                          |
 | `o_auth2_profile` | `profile`                     | OAuth2 flows (configured in config.toml) |
 
 ## Body Block Kinds (HTTP only)
 
-| Kind   | `value` type | Use case              |
-| ------ | ------------ | --------------------- |
-| `json` | Object/map   | JSON request body     |
-| `form` | Object/map   | URL-encoded form data |
-| `raw`  | String       | Raw text body         |
+| Kind                | `value` type | Use case              |
+| ------------------- | ------------ | --------------------- |
+| `json`              | Object/map   | JSON request body     |
+| `form_urlencoded`   | Object/map   | URL-encoded form data |
+| `raw_text`          | String       | Raw text body         |
+| `raw_bytes_base64`  | String       | Raw bytes (base64)    |
 
 ## Parameter Types
 
@@ -103,7 +105,7 @@ operation {
 
 ## Result Decode Options
 
-`json`, `html`, `xml`, `text`, `raw`
+`auto`, `json`, `text`, `html`, `xml`, `binary`
 
 ## Result Extract Options
 

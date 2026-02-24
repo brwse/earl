@@ -87,8 +87,8 @@ body {
 
 # Form body
 body {
-  kind  = "form"
-  value = {
+  kind   = "form_urlencoded"
+  fields = {
     username = "{{ args.username }}"
     password = "{{ args.password }}"
   }
@@ -96,7 +96,7 @@ body {
 
 # Raw text body
 body {
-  kind  = "raw"
+  kind  = "raw_text"
   value = "{{ args.content }}"
 }
 ```
