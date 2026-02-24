@@ -547,6 +547,10 @@ fn resolve_item_id(
 mod tests {
     use super::*;
 
+    // Serializes tests that mutate `OP_CONNECT_TOKEN` / `OP_CONNECT_HOST` env vars
+    // to prevent races when the test suite runs in parallel.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn parse_valid_reference() {
         let r = OpReference::parse("op://my-vault/my-item/password").unwrap();
@@ -643,6 +647,7 @@ mod tests {
         // Ensure OpAuth::from_env() fails when env vars are absent.
         // (This tests the branching that triggers CLI fallback.)
         // SAFETY: test-only, single-threaded access to env vars.
+        let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::remove_var("OP_CONNECT_TOKEN") };
         unsafe { std::env::remove_var("OP_CONNECT_HOST") };
         assert!(OpAuth::from_env().is_err());
@@ -651,6 +656,7 @@ mod tests {
     #[test]
     fn connect_auth_rejects_host_with_userinfo() {
         // SAFETY: test-only, single-threaded access to env vars.
+        let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::set_var("OP_CONNECT_TOKEN", "tok") };
         unsafe { std::env::set_var("OP_CONNECT_HOST", "https://user:pass@op.example.com") };
         let err = OpAuth::from_env()
@@ -667,6 +673,7 @@ mod tests {
     #[test]
     fn connect_auth_rejects_host_with_query() {
         // SAFETY: test-only, single-threaded access to env vars.
+        let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::set_var("OP_CONNECT_TOKEN", "tok") };
         unsafe { std::env::set_var("OP_CONNECT_HOST", "https://op.example.com?foo=bar") };
         let err = OpAuth::from_env()
@@ -683,6 +690,7 @@ mod tests {
     #[test]
     fn connect_auth_rejects_host_with_fragment() {
         // SAFETY: test-only, single-threaded access to env vars.
+        let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::set_var("OP_CONNECT_TOKEN", "tok") };
         unsafe { std::env::set_var("OP_CONNECT_HOST", "https://op.example.com#section") };
         let err = OpAuth::from_env()
