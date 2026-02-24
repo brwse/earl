@@ -14,16 +14,36 @@ pub mod gcp;
 pub mod azure;
 
 #[cfg(any(
-    feature = "secrets-1password",
     feature = "secrets-vault",
     feature = "secrets-gcp",
     feature = "secrets-azure",
 ))]
 use anyhow::{bail, Result};
 
+/// Cached bearer token with expiry tracking.
+///
+/// Used by providers that perform token exchange (GCP, Azure) to avoid
+/// redundant token requests within a single CLI invocation.
+#[cfg(any(feature = "secrets-gcp", feature = "secrets-azure"))]
+pub(crate) struct CachedToken {
+    pub token: String,
+    pub expires_at: std::time::Instant,
+}
+
+#[cfg(any(feature = "secrets-gcp", feature = "secrets-azure"))]
+impl CachedToken {
+    /// Returns the token if it's still valid (with 30-second safety margin).
+    pub fn get_if_valid(&self) -> Option<&str> {
+        if self.expires_at > std::time::Instant::now() + std::time::Duration::from_secs(30) {
+            Some(&self.token)
+        } else {
+            None
+        }
+    }
+}
+
 /// Characters that are unsafe in URL path segments.
 #[cfg(any(
-    feature = "secrets-1password",
     feature = "secrets-vault",
     feature = "secrets-gcp",
     feature = "secrets-azure",
@@ -35,7 +55,6 @@ const UNSAFE_PATH_CHARS: &[char] = &['/', '?', '#'];
 /// Rejects values containing `/`, `?`, `#`, whitespace, and control characters
 /// which could break or manipulate URL construction.
 #[cfg(any(
-    feature = "secrets-1password",
     feature = "secrets-vault",
     feature = "secrets-gcp",
     feature = "secrets-azure",
@@ -57,6 +76,35 @@ pub(crate) fn validate_path_segment(value: &str, field_name: &str) -> Result<()>
 
     Ok(())
 }
+
+/// Truncate a response body for error messages to avoid emitting multi-kilobyte
+/// HTML error pages (common for 5xx responses from API gateways) to the terminal.
+#[cfg(any(
+    feature = "secrets-1password",
+    feature = "secrets-azure",
+    feature = "secrets-gcp",
+))]
+pub(crate) fn truncate_body(body: &str, max_len: usize) -> &str {
+    if body.len() <= max_len {
+        body
+    } else {
+        let mut end = max_len;
+        // Walk back to a valid UTF-8 character boundary to avoid panicking
+        // on multi-byte character sequences (e.g., 3-byte UTF-8 emoji).
+        while end > 0 && !body.is_char_boundary(end) {
+            end -= 1;
+        }
+        &body[..end]
+    }
+}
+
+/// Truncation limit for HTTP error response bodies in error messages.
+#[cfg(any(
+    feature = "secrets-1password",
+    feature = "secrets-azure",
+    feature = "secrets-gcp",
+))]
+pub(crate) const ERROR_BODY_MAX_LEN: usize = 256;
 
 /// Validate an Azure Key Vault name.
 ///
@@ -96,7 +144,6 @@ pub(crate) fn validate_azure_vault_name(name: &str) -> Result<()> {
 mod tests {
     #[test]
     #[cfg(any(
-        feature = "secrets-1password",
         feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
@@ -109,7 +156,6 @@ mod tests {
 
     #[test]
     #[cfg(any(
-        feature = "secrets-1password",
         feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
@@ -121,7 +167,6 @@ mod tests {
 
     #[test]
     #[cfg(any(
-        feature = "secrets-1password",
         feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
@@ -133,7 +178,6 @@ mod tests {
 
     #[test]
     #[cfg(any(
-        feature = "secrets-1password",
         feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
@@ -145,7 +189,6 @@ mod tests {
 
     #[test]
     #[cfg(any(
-        feature = "secrets-1password",
         feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
@@ -157,7 +200,6 @@ mod tests {
 
     #[test]
     #[cfg(any(
-        feature = "secrets-1password",
         feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",
@@ -169,7 +211,6 @@ mod tests {
 
     #[test]
     #[cfg(any(
-        feature = "secrets-1password",
         feature = "secrets-vault",
         feature = "secrets-gcp",
         feature = "secrets-azure",

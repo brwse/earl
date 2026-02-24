@@ -6,7 +6,10 @@ use secrecy::SecretString;
 use serde::Deserialize;
 
 use crate::secrets::resolver::SecretResolver;
-use crate::secrets::resolvers::{validate_azure_vault_name, validate_path_segment, CachedToken};
+use crate::secrets::resolvers::{
+    truncate_body, validate_azure_vault_name, validate_path_segment, CachedToken,
+    ERROR_BODY_MAX_LEN,
+};
 
 /// A parsed `az://vault-name/secret-name` reference.
 #[derive(Debug)]
@@ -99,22 +102,6 @@ impl Default for AzureResolver {
         Self::new()
     }
 }
-
-/// Truncate a response body for error messages to avoid leaking internal details.
-fn truncate_body(body: &str, max_len: usize) -> &str {
-    if body.len() <= max_len {
-        body
-    } else {
-        let mut end = max_len;
-        while end > 0 && !body.is_char_boundary(end) {
-            end -= 1;
-        }
-        &body[..end]
-    }
-}
-
-/// Truncation limit for HTTP error response bodies in error messages.
-const ERROR_BODY_MAX_LEN: usize = 256;
 
 /// Read an env var with a fallback default.
 fn env_or(key: &str, default: &str) -> String {

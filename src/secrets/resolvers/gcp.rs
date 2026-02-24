@@ -7,7 +7,9 @@ use secrecy::SecretString;
 use serde::Deserialize;
 
 use crate::secrets::resolver::SecretResolver;
-use crate::secrets::resolvers::{validate_path_segment, CachedToken};
+use crate::secrets::resolvers::{
+    truncate_body, validate_path_segment, CachedToken, ERROR_BODY_MAX_LEN,
+};
 
 /// A parsed `gcp://project/secret-name` or `gcp://project/secret-name/version` reference.
 ///
@@ -255,22 +257,6 @@ struct UserCredentials {
 struct CredentialsFile {
     r#type: String,
 }
-
-/// Truncate a response body for error messages to avoid leaking internal details.
-fn truncate_body(body: &str, max_len: usize) -> &str {
-    if body.len() <= max_len {
-        body
-    } else {
-        let mut end = max_len;
-        while end > 0 && !body.is_char_boundary(end) {
-            end -= 1;
-        }
-        &body[..end]
-    }
-}
-
-/// Truncation limit for HTTP error response bodies in error messages.
-const ERROR_BODY_MAX_LEN: usize = 256;
 
 // ---------------------------------------------------------------------------
 // Application Default Credentials (ADC)

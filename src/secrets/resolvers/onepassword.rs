@@ -2,6 +2,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::secrets::resolver::SecretResolver;
+use crate::secrets::resolvers::{truncate_body, ERROR_BODY_MAX_LEN};
 
 /// Validate a 1Password reference segment (vault, item, section, or field name).
 ///
@@ -185,24 +186,6 @@ impl OpAuth {
         }
     }
 }
-
-/// Truncate a response body for error messages to avoid leaking internal details.
-fn truncate_body(body: &str, max_len: usize) -> &str {
-    if body.len() <= max_len {
-        body
-    } else {
-        let mut end = max_len;
-        // Walk back to a valid UTF-8 character boundary to avoid panicking
-        // on multi-byte character sequences (e.g., 3-byte UTF-8 emoji).
-        while end > 0 && !body.is_char_boundary(end) {
-            end -= 1;
-        }
-        &body[..end]
-    }
-}
-
-/// Truncation limit for HTTP error response bodies in error messages.
-const ERROR_BODY_MAX_LEN: usize = 256;
 
 /// Returns true if `s` looks like a 1Password UUID (exactly 26 characters,
 /// Crockford base32 alphabet: uppercase A–Z and digits 2–7).
