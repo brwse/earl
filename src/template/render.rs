@@ -31,8 +31,12 @@ pub fn render_json_value(value: &Value, context: &Value) -> Result<Value> {
             for (k, v) in obj {
                 let rendered_key = render_string_raw(k, context)?;
                 let rendered_val = render_json_value(v, context)?;
-                // Skip null values — absent optional params are omitted from the
-                // object, matching the policy in render_key_value_map.
+                // Skip null values — absent optional params (and literal `null`
+                // in the template) are omitted from the object, matching the
+                // policy in render_key_value_map. This means there is no way to
+                // send an explicit JSON null to an API; use a sentinel string
+                // value if needed. Note: array items are never dropped — an
+                // array element whose every field renders to null produces `{}`.
                 if !rendered_val.is_null() {
                     out.insert(rendered_key, rendered_val);
                 }
