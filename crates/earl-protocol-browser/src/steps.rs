@@ -943,7 +943,6 @@ async fn step_wait_for(
 
     let deadline = tokio::time::Instant::now()
         + std::time::Duration::from_millis(timeout_ms.max(200));
-    let poll_interval = std::time::Duration::from_millis(200);
 
     loop {
         let body_text: Value = ctx
@@ -971,7 +970,9 @@ async fn step_wait_for(
             }
         }
 
-        if tokio::time::Instant::now() >= deadline {
+        // Check deadline before sleeping so we never overshoot by a full poll interval.
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
             return Err(BrowserError::Timeout {
                 step: ctx.step_index,
                 action: "wait_for".into(),
@@ -980,7 +981,9 @@ async fn step_wait_for(
             .into());
         }
 
-        tokio::time::sleep(poll_interval).await;
+        // Sleep for at most the remaining time to avoid overshooting the deadline.
+        let remaining = deadline - now;
+        tokio::time::sleep(remaining.min(std::time::Duration::from_millis(200))).await;
     }
 }
 
@@ -1489,6 +1492,12 @@ async fn step_pdf_save(ctx: &StepContext<'_>, path: Option<&str>) -> Result<Valu
 // ── GenerateLocator ─────────────────────────────────────────────────────────
 
 async fn step_generate_locator(_ctx: &StepContext<'_>, ref_: &str) -> Result<Value> {
+    // Validate ref_ contains only safe characters for a CSS attribute value
+    if !ref_.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Err(anyhow::anyhow!(
+            "generate_locator: ref '{ref_}' contains characters unsafe for CSS attribute selector"
+        ));
+    }
     // Without a live ref→selector mapping, we return a CSS attribute selector
     // based on the ref ID. In session mode this would resolve to a precise selector.
     let locator = format!("[data-ref=\"{ref_}\"]");
@@ -1561,6 +1570,36 @@ mod tests {
         let ref_id = "e42";
         let expected = format!("[data-ref=\"{ref_id}\"]");
         assert_eq!(expected, "[data-ref=\"e42\"]");
+    }
+
+    #[test]
+    fn generate_locator_rejects_unsafe_ref() {
+        // Characters that would break a CSS attribute selector must be rejected.
+        let unsafe_refs = [
+            "e\"42",     // double-quote breaks the attribute value
+            "e]42",      // bracket closes the selector early
+            "e[42",      // bracket opens a nested selector
+            "e 42",      // space is not a valid identifier character
+            "e<42>",     // angle brackets
+            "e;42",      // semicolons
+        ];
+        for bad in &unsafe_refs {
+            let is_safe = bad.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_');
+            assert!(
+                !is_safe,
+                "expected '{bad}' to be rejected as unsafe for CSS attribute selector"
+            );
+        }
+
+        // Safe refs must pass the same check.
+        let safe_refs = ["e42", "my-ref", "some_id", "Abc123", "a-b_c"];
+        for good in &safe_refs {
+            let is_safe = good.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_');
+            assert!(
+                is_safe,
+                "expected '{good}' to be accepted as safe for CSS attribute selector"
+            );
+        }
     }
 
     #[test]
