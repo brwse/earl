@@ -277,7 +277,14 @@ jobs:
 
           for crate in "${CRATES[@]}"; do
             echo "Publishing $crate..."
-            cargo publish --locked -p "$crate"
+            output=$(cargo publish --locked -p "$crate" 2>&1) && echo "$output" || {
+              if echo "$output" | grep -q "already exists on crates.io index"; then
+                echo "$crate already published, skipping."
+              else
+                echo "$output" >&2
+                exit 1
+              fi
+            }
 
             # Wait for crates.io index to update before publishing
             # dependents (skip delay after the last crate).
