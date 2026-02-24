@@ -161,11 +161,73 @@ jobs:
           name: release-assets
           path: dist/*
 
+  create-release:
+    name: Publish GitHub Release
+    needs:
+      - meta
+      - release-assets
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: ${{ needs.meta.outputs.tag }}
+          generate_release_notes: true
+          prerelease: ${{ needs.meta.outputs.is_prerelease == 'true' }}
+          files: dist/*
+          fail_on_unmatched_files: true
+          make_latest: ${{ needs.meta.outputs.is_prerelease == 'false' }}
+
+      - name: Trigger release notes workflow
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          gh workflow run release-notes.yml \
+            --field tag="${{ needs.meta.outputs.tag }}"
+
+  attest-provenance:
+    name: Attest Build Provenance
+    needs:
+      - create-release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*
+
   publish-crate:
     name: Publish to crates.io
     needs:
       - meta
-      - release-assets
+      - create-release
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -223,67 +285,3 @@ jobs:
               sleep 30
             fi
           done
-
-  create-release:
-    name: Publish GitHub Release
-    needs:
-      - meta
-      - release-assets
-      - publish-crate
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-      id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download release assets
-        uses: actions/download-artifact@v4
-        with:
-          name: release-assets
-          path: dist
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.meta.outputs.tag }}
-          name: ${{ needs.meta.outputs.tag }}
-          generate_release_notes: true
-          prerelease: ${{ needs.meta.outputs.is_prerelease == 'true' }}
-          files: dist/*
-          fail_on_unmatched_files: true
-          make_latest: ${{ needs.meta.outputs.is_prerelease == 'false' }}
-
-      - name: Trigger release notes workflow
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          gh workflow run release-notes.yml \
-            --field tag="${{ needs.meta.outputs.tag }}"
-
-
-  attest-provenance:
-    name: Attest Build Provenance
-    needs:
-      - create-release
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      attestations: write
-      contents: read
-    steps:
-      - name: Download release assets
-        uses: actions/download-artifact@v4
-        with:
-          name: release-assets
-          path: dist
-
-      - name: Attest release assets
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: |
-            dist/*
