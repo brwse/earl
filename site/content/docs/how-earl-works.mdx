@@ -1,0 +1,215 @@
+---
+title: How Earl Works
+description: The security model that keeps agents from reading secrets, making unconstrained requests, or running arbitrary code
+icon: Shield
+---
+
+When an AI agent has unconstrained access to your environment, the failure modes are specific: it can read credentials from environment variables or config files, make HTTP requests to any URL including internal services, use DNS to reach infrastructure that was never meant to be reachable from the internet, and execute shell commands without limits on what they read, write, or consume. Earl removes each of those attack surfaces with five independent layers that compose for defense in depth.
+
+## Template-Driven Access Control
+
+The first attack surface is the ability to call arbitrary URLs with arbitrary HTTP methods. An agent with unrestricted HTTP access can probe internal endpoints, exfiltrate data to unintended destinations, and invoke write operations without any confirmation.
+
+Earl has no "raw request" command. Every API call must match a pre-authored HCL template that declares the URL pattern, HTTP method, required and optional parameters with types, which secrets the template can access, and whether the operation is read-only or write. If no matching template exists, the call is rejected.
+
+```bash
+# This works -- matches the github.search_issues template
+earl call github.search_issues --query "is:issue" --per_page 5
+
+# There is no "raw request" command -- arbitrary URLs are impossible
+```
+
+Write-mode operations add another check: they require explicit confirmation. At the CLI, you must pass `--yes` or type `YES` at the interactive prompt. The MCP server has a matching `--yes` flag for automated environments.
+
+## Keychain-Backed Secrets
+
+Credentials in environment variables or config files can be read by any process with the right access — which, in an agentic environment, includes the agent itself. Storing secrets in plaintext is particularly dangerous because the failure is silent: the agent reads the value and you have no indication it happened.
+
+Earl stores secret values in the OS keychain — macOS Keychain, Linux Secret Service, Windows Credential Manager — and never writes them to disk in plaintext. Templates reference secrets by key name during request rendering (for example, `secrets.github.token`), but the value is resolved at runtime by Earl's own process, not passed to the agent.
+
+The `earl secrets get` command returns metadata only: key name, created timestamp, updated timestamp. It never returns the plaintext value. Output templates, which shape what the agent sees in the result, have no access to the `secrets.*` namespace at all.
+
+An AI agent with full shell access to the `earl` binary still cannot read your secret values. See [Secrets](/docs/secrets) for the complete safety model.
+
+## Network Egress Rules
+
+A compromised or misbehaving template could send data to an unintended destination. Without egress controls, there is no way to audit or restrict where outbound requests actually go.
+
+You can restrict outbound traffic using `[[network.allow]]` rules in `config.toml`:
+
+```toml
+[[network.allow]]
+scheme = "https"
+host = "api.github.com"
+port = 443
+path_prefix = "/"
+
+[[network.allow]]
+scheme = "https"
+host = "api.stripe.com"
+port = 443
+path_prefix = "/v1"
+```
+
+When any `[[network.allow]]` entry is present, every outbound request must match at least one rule. A rule matches when all four fields match: scheme (case-insensitive), host (case-insensitive), port (including default ports like 443 for HTTPS), and path prefix. Requests to unlisted destinations are blocked.
+
+## SSRF Protection
+
+DNS rebinding is a specific and underappreciated attack. A public hostname like `api.evil.com` can be configured to resolve to `169.254.169.254`, the AWS instance metadata endpoint. If Earl validated destinations before DNS resolution, that check would see a public hostname and pass it. Earl validates destinations after DNS resolution, so a hostname that resolves to a private IP is blocked regardless of what the hostname looks like.
+
+OAuth endpoint URLs — `token_url`, `authorization_url`, `device_authorization_url`, and OIDC issuer URLs — go through the same SSRF checks. Only `https` URLs are permitted, with one exception: `http` to loopback addresses (`127.0.0.1`, `::1`, `localhost`) is allowed for local development.
+
+The full list of blocked ranges is below. IPv6-mapped IPv4 addresses (e.g., `::ffff:127.0.0.1`) are recursively checked against the IPv4 blocklist.
+
+<Accordions>
+<Accordion title="Blocked IPv4 ranges">
+
+| Range                                               | Description                      |
+| --------------------------------------------------- | -------------------------------- |
+| `10.0.0.0/8`                                        | RFC 1918 private                 |
+| `172.16.0.0/12`                                     | RFC 1918 private                 |
+| `192.168.0.0/16`                                    | RFC 1918 private                 |
+| `127.0.0.0/8`                                       | Loopback                         |
+| `169.254.0.0/16`                                    | Link-local                       |
+| `224.0.0.0/4`                                       | Multicast                        |
+| `255.255.255.255`                                   | Broadcast                        |
+| `0.0.0.0`                                           | Unspecified                      |
+| `240.0.0.0/4`                                       | Reserved (former Class E)        |
+| `198.51.100.0/24`, `203.0.113.0/24`, `192.0.2.0/24` | Documentation (RFC 5737)         |
+| `100.64.0.0/10`                                     | Shared address space (RFC 6598)  |
+| `198.18.0.0/15`                                     | Benchmarking (RFC 2544)          |
+| `192.0.0.0/24`                                      | IETF protocol assignments        |
+| `169.254.169.254`                                   | Cloud instance metadata endpoint |
+| `100.100.100.200`                                   | Cloud metadata (Alibaba)         |
+
+</Accordion>
+<Accordion title="Blocked IPv6 ranges">
+
+| Range                    | Description             |
+| ------------------------ | ----------------------- |
+| `::1`                    | Loopback                |
+| `::`                     | Unspecified             |
+| `ff00::/8`               | Multicast               |
+| `fe80::/10`              | Link-local              |
+| `fc00::/7`               | Unique local            |
+| `fec0::/10`              | Site-local (deprecated) |
+| `2001:db8::/32`          | Documentation           |
+| `fd00:ec2::254`          | AWS EC2 IPv6 metadata   |
+| `::ffff:169.254.169.254` | IPv4-mapped metadata    |
+
+</Accordion>
+</Accordions>
+
+## Execution Sandboxing
+
+Shell commands or SQL queries executed without constraints can read arbitrary files, consume unbounded resources, or modify state that has nothing to do with the intended operation.
+
+### Bash
+
+Every Bash script runs inside an OS-level sandbox. Earl requires a sandbox tool to be present:
+
+<Tabs>
+  <Tab value="linux" label="Linux (bubblewrap)">
+    On Linux, Earl uses [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`) with:
+
+    - Targeted read-only mounts of `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/etc` — not the entire root filesystem
+    - `/tmp` as tmpfs, giving the script an isolated temporary directory
+    - `/dev` and `/proc` mounted for basic process operation
+    - PID, IPC, and UTS namespace isolation (`--unshare-pid`, `--unshare-ipc`, `--unshare-uts`)
+    - Network isolation (`--unshare-net`) by default — templates must explicitly set `sandbox.network = true` to allow network access
+    - `--die-with-parent` ensures child processes are killed if Earl exits
+    - The working directory is mounted read-only; only paths listed in `sandbox.writable_paths` get read-write mounts
+
+  </Tab>
+  <Tab value="macos" label="macOS (sandbox-exec)">
+    On macOS, Earl uses `sandbox-exec` with a dynamically generated Seatbelt profile:
+
+    - Deny-default policy — everything is denied unless explicitly allowed
+    - Network denied by default — templates must set `sandbox.network = true` to allow `network*` operations
+    - Process execution allowed (`process-exec`, `process-fork`)
+    - File reads allowed system-wide (required for system libraries and dyld shared cache)
+    - File writes denied except for `/dev/null`, `/dev/tty`, and paths listed in `sandbox.writable_paths`
+    - Mach IPC scoped to a curated list of system services (`com.apple.system.logger`, `com.apple.SecurityServer`, etc.)
+    - `sysctl-read` allowed for basic system queries
+
+  </Tab>
+</Tabs>
+
+Templates can configure sandbox behavior per-command:
+
+```hcl
+operation {
+  protocol = "bash"
+  bash {
+    script = "curl -s https://api.example.com/data"
+    sandbox {
+      network          = true           # Allow network access (default: false)
+      writable_paths   = ["output"]     # Paths relative to cwd that can be written
+      max_time_ms      = 30000          # Kill script after 30 seconds
+      max_output_bytes = 1048576        # Limit stdout/stderr to 1 MB
+      max_memory_bytes = 536870912      # Limit to 512 MB (Linux only)
+      max_cpu_time_ms  = 10000          # Kill after 10 seconds of CPU time
+    }
+  }
+}
+```
+
+If neither `sandbox.max_time_ms` nor `sandbox.max_output_bytes` is set, the transport-level `timeout_ms` and `max_response_bytes` apply as fallbacks. `max_memory_bytes` is only enforced on Linux via `RLIMIT_AS` and has no effect on macOS. `max_cpu_time_ms` works on both platforms. On timeout, Earl kills the entire process group via `killpg()` with `SIGKILL`, so child processes cannot outlive their parent.
+
+### SQL
+
+SQL queries run through parameterized queries, which prevents injection by construction. Additional controls are available per-template:
+
+- Read-only mode (`sandbox.read_only = true`) enforces read-only at the database level: PostgreSQL wraps the query in `BEGIN READ ONLY` / `ROLLBACK`, MySQL uses `START TRANSACTION READ ONLY` / `ROLLBACK`, SQLite appends `mode=ro` to the connection URL.
+- Row limits (`sandbox.max_rows`) cap the number of returned rows.
+- Timeouts (`sandbox.max_time_ms` or transport-level `timeout_ms`) abort long-running queries.
+- Connection credentials are stored in the OS keychain and referenced by secret key (`connection_secret`) — never embedded in templates.
+
+```hcl
+operation {
+  sql {
+    connection_secret = "mydb.connection_url"
+    query = "SELECT id, name FROM users WHERE active = ?"
+    params = [true]
+    sandbox {
+      read_only = true
+      max_rows  = 100
+    }
+  }
+}
+```
+
+SQL error messages pass through the redactor before being shown, so a malformed query that causes the database to echo back connection details does not expose them.
+
+## Secret Redaction
+
+APIs sometimes echo tokens back in their response body — in error messages, in audit fields, or simply because the API is poorly designed. If that happens without redaction, an agent can read the value directly from output, bypassing the keychain entirely.
+
+Earl's redactor scans every response before it reaches the agent and replaces any occurrence of a known secret value with `[REDACTED]`. It searches in multiple encodings simultaneously:
+
+- Raw — the literal secret string
+- Base64 (standard and URL-safe)
+- Hex (lowercase and uppercase)
+- URL-encoded (`%`-encoded form)
+
+For each secret with six or more characters, all encoding variants are generated and searched. Longer matches are replaced first to avoid partial replacements. Redaction applies to both human-readable output and `--json` structured output — the redactor walks the entire JSON value tree and redacts every string field.
+
+## File Permissions
+
+Earl's guarantees hold as long as agents cannot write to config or template files. If they can, the security model breaks. An agent that can edit `config.toml` can whitelist any destination; one that can edit templates can route secrets to an external endpoint through a response. The controls above only matter if the files they depend on are protected.
+
+Lock down file permissions after setup:
+
+```bash
+# Protect config directory
+chmod 700 ~/.config/earl
+chmod 600 ~/.config/earl/config.toml
+chmod -R go-w ~/.config/earl/templates
+
+# Protect workspace templates
+chmod -R 700 ./templates/
+```
+
+The secrets metadata index at `~/.local/state/earl/secrets-index.json` is written with `0600` permissions on Unix systems — owner read-write only. It stores key names and timestamps, never secret values.
+
+For stronger isolation, run the AI agent as a separate, less-privileged user that can execute `earl` but cannot modify its configuration files.
