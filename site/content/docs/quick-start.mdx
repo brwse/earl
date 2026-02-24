@@ -1,241 +1,111 @@
 ---
 title: Quick Start
-description: Get started with Earl in minutes
 icon: Rocket
+description: Install Earl, run your first command, and connect it to your agent in under five minutes.
 ---
 
-The fastest way to get started is to prompt your AI agent:
+This gets you from zero to a working Earl setup: installed, first call returning results, and MCP config ready for your next agent session.
 
-```
-Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/setup-earl/SKILL.md
-and any files it references under
-https://raw.githubusercontent.com/brwse/earl/main/skills/references/
-then follow the skill to help me get started with Earl.
-```
+## 1. Install
 
-Your agent will install Earl, walk you through setup, and build your first template — all from a single prompt.
-
-To do it manually instead, follow the steps below.
-
----
-
-## Install
-
-Earl is a single binary with no runtime dependencies.
-
-<Tabs items={["macOS / Linux", "Windows (PowerShell)", "Cargo"]}>
-  <Tab value="macOS / Linux">
-    ```bash
-    curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
-    ```
-
-    Options:
-
-    | Flag | Description |
-    | --- | --- |
-    | `--version <version>` | Install a specific version (e.g., `0.2.0` or `v0.2.0`). Default: `latest` |
-    | `--install-dir <path>` | Prefix directory. Binary goes into `<path>/bin` |
-    | `--bin-dir <path>` | Install the binary directly into this directory |
-
-    Default install location: `~/.local/bin` (or `/usr/local/bin` when run as root). Ensure the install directory is on your `PATH`.
-
-  </Tab>
-  <Tab value="Windows (PowerShell)">
-    ```powershell
-    irm https://raw.githubusercontent.com/brwse/earl/main/scripts/install.ps1 | iex
-    ```
-
-    Parameters: `-Version`, `-InstallDir`, `-BinDir`.
-
-    Default install location: `%LOCALAPPDATA%\Programs\earl\bin`.
-
-  </Tab>
-  <Tab value="Cargo">
-    Requires a Rust toolchain and **Node.js + pnpm** (`earl` embeds web playground assets at compile time).
-
-    ```bash
-    cargo install earl
-    ```
-
-    Installs from [crates.io](https://crates.io/crates/earl).
-
-    All protocols are enabled by default. To install with only the protocols you need:
-
-    ```bash
-    cargo install earl --no-default-features --features http,graphql
-    ```
-
-    | Flag      | Description                         | Default |
-    | --------- | ----------------------------------- | ------- |
-    | `http`    | HTTP protocol support               | Yes     |
-    | `graphql` | GraphQL protocol (requires `http`)  | Yes     |
-    | `grpc`    | gRPC protocol support               | Yes     |
-    | `bash`    | Sandboxed Bash script execution     | Yes     |
-    | `sql`     | SQL query execution with sandboxing | Yes     |
-
-    <Callout type="info">
-      The `graphql` feature automatically enables `http` since GraphQL requests are
-      sent over HTTP.
-    </Callout>
-
-  </Tab>
-</Tabs>
-
-Verify the installation:
+**macOS / Linux — install script (no Rust required):**
 
 ```bash
-earl --version
+curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
 ```
+
+**macOS / Linux — cargo:**
+
+```bash
+cargo install earl
+```
+
+Requires Rust toolchain plus Node.js and pnpm (Earl embeds web playground assets at compile time).
+
+**Windows:**
+
+```powershell
+irm https://raw.githubusercontent.com/brwse/earl/main/scripts/install.ps1 | iex
+```
+
+After installing, verify:
 
 ```bash
 earl doctor
 ```
 
-Doctor validates your config and template files. If it reports errors, check [Troubleshooting](/docs/troubleshooting) before going further.
+If `earl doctor` reports errors, see [Troubleshooting](/docs/troubleshooting).
 
-## Your First Call
+## 2. Import a template
 
-<Callout type="info">
-  On Linux, the Bash protocol requires bubblewrap. Install it first: `sudo apt install bubblewrap` (Fedora: `dnf install bubblewrap`, Arch: `pacman -S bubblewrap`). See [Troubleshooting](/docs/troubleshooting) if your distro isn't listed.
-</Callout>
-
-<Steps>
-<Step>
-
-### Import the example template
-
-```bash
-earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/bash/system.hcl
-```
-
-Earl copies the template into your local `./templates/` directory. Since `system.hcl` declares no secrets, there is nothing else to configure.
-
-</Step>
-<Step>
-
-### List available commands
-
-```bash
-earl templates list
-```
-
-You should see `system.disk_usage` and `system.list_files` in the output.
-
-</Step>
-<Step>
-
-### Make a call
-
-```bash
-earl call system.list_files --path /tmp
-```
-
-Earl executes `ls -la /tmp` inside a sandboxed Bash environment and prints the result.
-
-</Step>
-</Steps>
-
-## Adding Secrets (GitHub Example)
-
-<Steps>
-<Step>
-
-### Import the GitHub template
+Earl ships with 26 pre-built provider templates. Import GitHub to follow along:
 
 ```bash
 earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/github.hcl
 ```
 
-Earl prints the required secrets for this template. The GitHub template uses `github.token` for authentication.
+To see all available templates:
 
-</Step>
-<Step>
+```bash
+earl templates list
+```
 
-### Store your token
+You can also import any pre-built template by replacing `github.hcl` with the provider name — `stripe.hcl`, `slack.hcl`, `openai.hcl`, and so on.
+
+## 3. Store a secret
+
+Secrets go into the OS keychain — the same credential store your password manager uses. The value is never written to disk in plaintext and never enters LLM context.
 
 ```bash
 earl secrets set github.token
 ```
 
-You will be prompted to enter the value. The token is stored in your OS keychain and never appears in CLI output.
+Earl prompts for the value. On macOS, the first run may show a system dialog asking for keychain access — click **Always Allow**.
 
-To pipe from an environment variable instead:
-
-```bash
-printf '%s' "$GITHUB_TOKEN" | earl secrets set github.token --stdin
-```
-
-</Step>
-<Step>
-
-### Validate setup
+To confirm the key is stored (this shows metadata only, not the value):
 
 ```bash
-earl doctor
+earl secrets list
 ```
 
-Doctor checks that your config file is loadable, templates parse correctly, and required secrets are present.
-
-</Step>
-<Step>
-
-### Search repositories
+## 4. Run a command
 
 ```bash
-earl call github.search_repos --q "language:rust stars:>1000"
+earl call --yes --json github.search_repos --query "language:rust stars:>100"
 ```
 
-Earl resolves the `github.token` secret from your keychain, builds the HTTP request from the template, and returns the result.
+The `--yes` flag pre-approves the call. The `--json` flag returns structured output instead of the rendered text template. Both flags must come before the command name.
 
-</Step>
-</Steps>
+This is what just happened: Earl loaded the `github` template, resolved your token from the keychain, sent the request to `api.github.com`, and returned the result. The token never appeared in the command output.
 
-## What's Next
+## 5. Connect to your agent
 
-- **Pre-built templates** — Import ready-made templates for Stripe, Slack, Notion, OpenAI, and 21 more providers. See [Templates → Pre-built Templates](/docs/templates#pre-built-templates).
-- **Browse commands** — Run `earl templates search "what you want to do"` for semantic search across all loaded templates.
-- **Web playground** — Run `earl web` to launch a local web UI for browsing and testing commands.
-- **MCP integration** — Run `earl mcp` to expose your templates as MCP tools for AI agents. See [MCP Integration](/docs/mcp). After adding Earl to your MCP config, restart the agent app — tools aren't available until the next session. In the current session, `earl call` via the Bash tool works right away.
-- **Lock it down** — Restrict write access to `~/.config/earl/config.toml` and your template files. See [Hardening Guide](/docs/hardening).
-- **Write your own templates** — See [Templates](/docs/templates) for the HCL template format.
+Add Earl as an MCP server so your agent can call templates as native tools.
 
-## Shell Completions
+**Claude Code** — add to `.claude/settings.json`:
 
-Generate completion scripts for your shell:
-
-<Tabs items={["Bash", "Zsh", "Fish", "PowerShell"]}>
-  <Tab value="Bash">
-    ```bash
-    earl completion bash > ~/.local/share/bash-completion/completions/earl
-    ```
-  </Tab>
-  <Tab value="Zsh">
-    ```bash
-    earl completion zsh > ~/.zfunc/_earl
-    ```
-
-    Then add `fpath=(~/.zfunc $fpath)` to your `.zshrc` before the `compinit` call, if it isn't already there.
-  </Tab>
-  <Tab value="Fish">
-    ```bash
-    earl completion fish > ~/.config/fish/completions/earl.fish
-    ```
-  </Tab>
-  <Tab value="PowerShell">
-    ```powershell
-    earl completion powershell >> $PROFILE
-    ```
-  </Tab>
-</Tabs>
-
-Elvish is also supported via `earl completion elvish`.
-
-## Web Playground
-
-If you prefer a browser interface, Earl ships one built into the binary. Run:
-
-```bash
-earl web
+```json
+{
+  "mcpServers": {
+    "earl": {
+      "command": "earl",
+      "args": ["mcp", "stdio"]
+    }
+  }
+}
 ```
 
-Earl starts a local server, prints the URL and a session token, and opens your browser. The URL uses a random port — something like `http://127.0.0.1:52413` — printed in the terminal when it starts. From there you can browse your loaded templates, search commands by name, fill in parameters through a form, and execute them without touching the CLI. Good for getting oriented when you first add a new template catalog.
+**Cursor** — add to `.cursor/mcp.json` (same format).
+
+**Windsurf** — add to `.windsurf/mcp.json` (same format).
+
+**Claude Desktop (macOS)** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`.
+
+After adding the config, **restart your agent**. Earl templates appear as native MCP tools in the next session. In the current session, use `earl call --yes --json` through the Bash tool — MCP tools only activate after restart.
+
+## What's next
+
+- Write your own templates for any API or service: [Writing Templates](/docs/templates)
+- Understand how Earl's security model works: [How Earl Works](/docs/how-earl-works)
+- Store OAuth tokens for browser-based auth flows: [Secrets & Auth](/docs/secrets-and-auth)
+- Let an agent handle the full setup: [Agent-Assisted Setup](/docs/agent-assisted-setup)

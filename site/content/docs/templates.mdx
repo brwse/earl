@@ -1,40 +1,373 @@
 ---
-title: Templates
-description: Author, import, and manage HCL template files that define constrained API operations
+title: Writing Templates
 icon: FileCode2
+description: How Earl templates work — the mental model, file layout, five protocols, and the HCL/Jinja authoring rule you need to know.
 ---
 
-Templates are HCL files that define constrained operations for AI agents and CLI users. Each template declares a provider, one or more commands, typed parameters, a protocol-specific operation, and a result mapping. Earl loads templates from two directories:
+Templates are HCL files that define what an AI agent is allowed to do with a provider. Every command an agent can invoke maps to exactly one `command` block. The LLM sees the command's title, summary, description, and parameter names. It never reads the template body — the URL, method, headers, auth setup, and request structure. That separation means the agent cannot alter the operation itself, only supply the parameter values the template author declared.
 
-- **Local (workspace):** `./templates/` relative to the current working directory
-- **Global:** `~/.config/earl/templates/`
+## Mental model
 
-Local templates override global ones when both define the same `provider.command` key.
+A template is a typed interface between an AI agent and an external service. You, the template author, write the full operation: URL, method, headers, auth. The agent supplies only the parameter values you declare. Nothing else reaches the wire.
 
-## Authoring a Template
+At call time, Earl runs two steps in order:
 
-Every template file follows this structure:
+1. Parse HCL into a structured document
+2. Render Jinja expressions against `args` (the resolved parameters) and any environment variables
+
+The order is what trips people up. HCL is parsed first, before Jinja runs. That means **every `{{ }}` expression must live inside a valid HCL string value**:
 
 ```hcl
-version = 1
-provider = "github"
-categories = ["scm"]
+# WRONG — HCL fails to parse this before Jinja ever sees it
+params = [{{ args.limit }}]
 
-command "search_issues" {
-  title       = "Search Issues"
-  summary     = "Search GitHub issues using a query string"
-  description = <<-EOF
-Search for GitHub issues and pull requests using GitHub's search syntax.
-
-## Guidance for AI agents
-Use this command to find issues matching a natural-language query.
-
+# CORRECT — Jinja expression inside an HCL string
+params = ["{{ args.limit }}"]
 ```
 
-earl call github.search_issues --query "is:open label:bug"
+When a string is nothing but a Jinja expression — `"{{ args.limit }}"` with no surrounding text — Earl coerces the rendered result to the correct JSON type. An integer stays an integer. No quotes leak through.
 
+## File locations
+
+| Scope           | Path                                      |
+| --------------- | ----------------------------------------- |
+| Local (project) | `./templates/<provider>.hcl`              |
+| Global          | `~/.config/earl/templates/<provider>.hcl` |
+
+A local template with the same provider name shadows the global one.
+
+## File structure
+
+A minimal template:
+
+```hcl
+version    = 1
+provider   = "github"
+categories = ["scm", "issues"]
+
+command "list_repos" {
+  title       = "List repositories"
+  summary     = "List repos for the authenticated user"
+  description = "Fetch repositories for the authenticated user."
+
+  annotations {
+    mode    = "read"
+    secrets = ["github.token"]
+  }
+
+  param "per_page" {
+    type        = "integer"
+    required    = false
+    default     = 30
+    description = "Results per page (max 100)"
+  }
+
+  operation {
+    protocol = "http"
+    method   = "GET"
+    url      = "https://api.github.com/user/repos"
+
+    auth {
+      kind   = "bearer"
+      secret = "github.token"
+    }
+
+    query = {
+      per_page = "{{ args.per_page }}"
+    }
+
+    headers = {
+      Accept               = "application/vnd.github+json"
+      X-GitHub-Api-Version = "2022-11-28"
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "Found {{ result | length }} repos:\n{% for r in result %}  - {{ r.full_name }}\n{% endfor %}"
+  }
+}
 ```
-EOF
+
+### Top-level fields
+
+| Field              | Required | Description                                                                   |
+| ------------------ | -------- | ----------------------------------------------------------------------------- |
+| `version`          | yes      | Schema version. Currently `1`.                                                |
+| `provider`         | yes      | Identifier for calling commands: `earl call github.list_repos`.               |
+| `categories`       | no       | Labels for discovery and filtering.                                           |
+| `environments`     | no       | Provider-level environment switching. See [Environments](/docs/environments). |
+| `command "<name>"` | yes      | One or more command blocks.                                                   |
+
+### Command fields
+
+| Field                   | Required | Description                                                                   |
+| ----------------------- | -------- | ----------------------------------------------------------------------------- |
+| `title`                 | yes      | Short display name shown in listings.                                         |
+| `summary`               | yes      | One-line description shown to the agent.                                      |
+| `description`           | yes      | Full description. The agent reads this to decide whether to call the command. |
+| `categories`            | no       | Labels for this specific command.                                             |
+| `annotations`           | no       | Mode, secrets, and environment switching flags.                               |
+| `param "<name>"`        | no       | Repeatable. Defines a parameter the agent can supply.                         |
+| `operation`             | yes      | The request to execute.                                                       |
+| `result`                | no       | How to decode and format the response.                                        |
+| `environment_overrides` | no       | Per-environment operation replacements.                                       |
+
+## Annotations
+
+```hcl
+annotations {
+  mode    = "read"   # or "write"
+  secrets = ["github.token"]
+  allow_environment_protocol_switching = false
+}
+```
+
+`mode = "write"` is the default. Earl prompts for confirmation unless the caller passes `--yes`. Set `mode = "read"` explicitly for commands that only retrieve data — omitting the annotations block means the command will prompt.
+
+`secrets` lists which secrets the command needs. Earl checks that these exist before running.
+
+## Parameters
+
+```hcl
+param "query" {
+  type        = "string"
+  required    = true
+  description = "Search query (e.g. 'language:rust stars:>100')"
+}
+
+param "per_page" {
+  type        = "integer"
+  required    = false
+  default     = 20
+  description = "Results per page (max 100)"
+}
+```
+
+Supported types: `string`, `integer`, `number`, `boolean`, `null`, `array`, `object`.
+
+Inside the `operation` block, parameters are available as `args.<name>`:
+
+```hcl
+url = "https://api.github.com/repos/{{ args.owner }}/{{ args.repo }}"
+```
+
+## The five protocols
+
+### HTTP
+
+```hcl
+operation {
+  protocol = "http"
+  method   = "GET"   # GET, POST, PUT, PATCH, DELETE
+  url      = "https://api.example.com/items/{{ args.id }}"
+  stream   = false
+
+  auth {
+    kind   = "bearer"
+    secret = "provider.token"
+  }
+
+  headers = { Accept = "application/json" }
+
+  query = { filter = "{{ args.filter }}" }
+
+  body {
+    kind  = "json"   # json, form, multipart
+    value = {
+      name  = "{{ args.name }}"
+      count = "{{ args.count }}"
+    }
+  }
+}
+```
+
+HTTP fields sit at the top level of `operation`. There is no nested `http { }` wrapper.
+
+### GraphQL
+
+```hcl
+operation {
+  protocol = "graphql"
+  url      = "https://api.github.com/graphql"
+
+  auth { kind = "bearer"; secret = "github.token" }
+
+  graphql {
+    query = <<-GQL
+      query($owner: String!, $repo: String!) {
+        repository(owner: $owner, name: $repo) {
+          stargazerCount
+          description
+        }
+      }
+    GQL
+    variables = {
+      owner = "{{ args.owner }}"
+      repo  = "{{ args.repo }}"
+    }
+  }
+}
+```
+
+The query goes in a heredoc. Variables go in `graphql { variables = { ... } }`.
+
+### gRPC
+
+```hcl
+operation {
+  protocol = "grpc"
+  url      = "https://grpc.example.com"
+
+  grpc {
+    service             = "example.v1.ExampleService"
+    method              = "GetItem"
+    descriptor_set_file = "example.pb"   # optional; omit to use server reflection
+    body = {
+      id = "{{ args.id }}"
+    }
+  }
+}
+```
+
+Earl uses gRPC reflection v1. If the server only supports v1alpha or doesn't expose reflection at all, provide a compiled descriptor set via `descriptor_set_file`. See [Streaming](/docs/streaming) for server-streaming RPCs.
+
+### Bash
+
+```hcl
+operation {
+  protocol = "bash"
+
+  bash {
+    script = <<-SH
+      jq -r '.[] | .name' {{ args.input_file }}
+    SH
+    sandbox {
+      network          = false
+      max_time_ms      = 30000
+      max_output_bytes = 1048576
+    }
+  }
+}
+```
+
+Bash commands run in a sandbox with network off by default. Earl also blocks all private and loopback IP ranges at the SSRF layer — sandbox settings don't change that.
+
+### SQL
+
+```hcl
+operation {
+  protocol = "sql"
+
+  sql {
+    connection_secret = "myapp.db_url"
+    query             = "SELECT id, name FROM users WHERE status = $1 LIMIT $2"
+    params            = ["{{ args.status }}", "{{ args.limit }}"]
+    sandbox {
+      read_only = true
+      max_rows  = 100
+    }
+  }
+}
+```
+
+SQL parameters go through the driver's parameter interface, not string interpolation. Quote every Jinja expression in the array — HCL needs them as strings, but Earl coerces them to the right types before sending the query. Placeholder syntax is database-specific: `$1`, `$2`... for PostgreSQL; `?` for MySQL and SQLite.
+
+## Auth
+
+```hcl
+# Bearer token
+auth { kind = "bearer"; secret = "provider.token" }
+
+# API key in a header
+auth {
+  kind     = "api_key"
+  secret   = "provider.api_key"
+  location = "header"    # header, query, cookie
+  name     = "X-Api-Key"
+}
+
+# HTTP Basic
+auth {
+  kind            = "basic"
+  username        = "provider.username"
+  password_secret = "provider.password"
+}
+
+# OAuth2 (references a profile in config.toml)
+auth {
+  kind    = "o_auth2_profile"
+  profile = "myprofile"
+}
+```
+
+See [Secrets and Auth](/docs/secrets-and-auth) for configuration details.
+
+## Result block
+
+```hcl
+result {
+  decode = "json"   # json, text, lines, none
+  output = "Found {{ result.total_count }} items:\n{% for item in result.items[:10] %}  - {{ item.name }}\n{% endfor %}"
+}
+```
+
+`decode` controls how response bytes are parsed before the output template runs:
+
+- `json` — parse as JSON; `result` is the decoded object
+- `text` — `result` is the raw string
+- `lines` — for streaming; see [Streaming](/docs/streaming)
+- `none` — discard the body
+
+## Environment overrides
+
+When the active environment matches, the override replaces the command's default operation entirely:
+
+```hcl
+environment_overrides {
+  staging {
+    operation {
+      protocol = "http"
+      method   = "GET"
+      url      = "https://staging.github.internal/search/repositories"
+      auth {
+        kind   = "bearer"
+        secret = "github.token"
+      }
+    }
+  }
+}
+```
+
+See [Environments](/docs/environments) for how environments are configured and activated.
+
+## Complete example
+
+```hcl
+version    = 1
+provider   = "github"
+categories = ["scm", "issues"]
+
+environments {
+  default = "production"
+  secrets = ["github.token"]
+  environments {
+    production = { base_url = "https://api.github.com" }
+    staging    = { base_url = "https://staging.github.internal" }
+  }
+}
+
+command "search_repos" {
+  title       = "Search repositories"
+  summary     = "Search GitHub repos by query"
+  description = <<-EOT
+    Search GitHub repositories using GitHub's search API.
+    Supports qualifiers like language:rust, stars:>100, topic:cli.
+
+    ## Guidance for AI agents
+    Use this command to find repositories by topic, language, or popularity.
+  EOT
+  categories  = ["search", "repos"]
 
   annotations {
     mode    = "read"
@@ -44,538 +377,86 @@ EOF
   param "query" {
     type        = "string"
     required    = true
-    description = "GitHub search query"
+    description = "Search query (e.g. 'language:rust stars:>100 topic:cli')"
   }
 
   param "per_page" {
     type        = "integer"
     required    = false
-    default     = 10
-    description = "Results per page"
+    default     = 20
+    description = "Results per page (max 100)"
   }
 
   operation {
     protocol = "http"
     method   = "GET"
-    url      = "https://api.github.com/search/issues"
+    url      = "https://api.github.com/search/repositories"
+
+    auth {
+      kind   = "bearer"
+      secret = "github.token"
+    }
 
     headers = {
-      Accept              = "application/vnd.github+json"
+      Accept               = "application/vnd.github+json"
       X-GitHub-Api-Version = "2022-11-28"
     }
 
     query = {
       q        = "{{ args.query }}"
       per_page = "{{ args.per_page }}"
-    }
-
-    auth {
-      kind   = "bearer"
-      secret = "github.token"
+      order    = "desc"
     }
   }
 
   result {
     decode = "json"
-    output = "{{ result }}"
+    output = "Found {{ result.total_count }} repos:\n{% for r in result.items[:5] %}  - {{ r.full_name }} (★{{ r.stargazers_count }}) — {{ r.description | default('') }}\n{% endfor %}"
   }
 }
-```
 
-For a complete field-by-field reference, see the [Template Schema Reference](/docs/template-schema).
-
-### Root Fields
-
-| Field        | Type       | Required | Description                                        |
-| ------------ | ---------- | -------- | -------------------------------------------------- |
-| `version`    | `integer`  | Yes      | Must be `1`.                                       |
-| `provider`   | `string`   | Yes      | Namespace for commands (e.g., `github`).           |
-| `categories` | `string[]` | No       | Provider-level categories applied to all commands. |
-| `command`    | block(s)   | Yes      | One or more named command blocks.                  |
-
-### Command Blocks
-
-Use the HCL block syntax `command "<name>" { ... }` to define commands. Each command must include `title`, `summary`, `description`, `annotations`, `operation`, and `result`. Parameters are optional.
-
-### Parameters
-
-Parameters define the typed inputs that users pass via `--name value` on the CLI or as MCP tool arguments.
-
-```hcl
-param "query" {
-  type        = "string"
-  required    = true
-  description = "Search query"
-}
-
-param "limit" {
-  type    = "integer"
-  default = 10
-}
-```
-
-Supported types: `string`, `integer`, `number`, `boolean`, `null`, `array`, `object`.
-
-### Annotations
-
-Every command declares a `mode` and lists the secret keys it needs:
-
-```hcl
-annotations {
-  mode    = "read"
-  secrets = ["github.token"]
-}
-```
-
-- **`mode`** -- `"read"` or `"write"`. Write-mode commands require user confirmation before execution (unless `--yes` is passed).
-- **`secrets`** -- Array of secret key names the command is allowed to access. Auth blocks that reference a secret must list it here.
-
-### Template Expressions
-
-Template strings use Jinja2 syntax (`{{ ... }}`) rendered by minijinja with strict undefined behavior. Two context objects are available during operation rendering:
-
-| Variable    | Available In       | Description                                                             |
-| ----------- | ------------------ | ----------------------------------------------------------------------- |
-| `args.*`    | operation, result  | Bound parameter values.                                                 |
-| `vars.*`    | operation, result  | Active environment variables. Empty map when no environment is active.  |
-| `secrets.*` | operation only     | Plaintext secret values (dotted keys are nested).                       |
-| `result`    | result.output only | Decoded (and optionally extracted) response.                            |
-
-<Callout type="warn">
-  `secrets.*` is only available in operation rendering -- never in
-  `result.output`. This prevents secrets from leaking through command output.
-</Callout>
-
-<Callout type="info">
-HCL is parsed **before** template expressions are rendered. This means `{{ }}` expressions must appear inside valid HCL tokens. For example, in array literals use string-wrapped expressions: `params = ["{{ args.limit }}"]` instead of `params = [{{ args.limit }}]`. Pure expressions like `"{{ args.limit }}"` are automatically parsed as JSON after rendering, so numeric and boolean types are preserved.
-</Callout>
-
-### HCL Functions
-
-Template HCL files support built-in functions for loading external content:
-
-| Function                | Description                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `file("path")`          | Read a file relative to the template directory. Path must be relative and must not contain `..`. |
-| `base64encode("value")` | Base64-encode a string.                                                                          |
-| `trimspace("value")`    | Trim leading and trailing whitespace.                                                            |
-
-Functions can be composed: `trimspace(file("query.sql"))`.
-
-## Protocol Examples
-
-Earl supports five operation protocols. Each protocol has its own operation shape.
-
-<Tabs items={["HTTP", "GraphQL", "gRPC", "Bash", "SQL"]}>
-<Tab value="HTTP">
-
-Standard HTTP requests with full control over method, URL, path, query, headers, cookies, auth, body, and transport.
-
-```hcl
-version = 1
-provider = "github"
-categories = ["scm"]
-
-command "search_issues" {
-  title       = "Search Issues"
-  summary     = "Search GitHub issues using a query string"
-  description = "Search for GitHub issues and pull requests."
+command "create_issue" {
+  title       = "Create issue"
+  summary     = "Create a new issue in a repository"
+  description = "Create a GitHub issue with a title and optional body."
+  categories  = ["issues"]
 
   annotations {
-    mode    = "read"
+    mode    = "write"
     secrets = ["github.token"]
   }
 
-  param "query" {
-    type     = "string"
-    required = true
-  }
-
-  param "per_page" {
-    type    = "integer"
-    default = 10
-  }
+  param "owner" { type = "string"; required = true;  description = "Repository owner" }
+  param "repo"  { type = "string"; required = true;  description = "Repository name" }
+  param "title" { type = "string"; required = true;  description = "Issue title" }
+  param "body"  { type = "string"; required = false; default = ""; description = "Issue body (Markdown)" }
 
   operation {
     protocol = "http"
-    method   = "GET"
-    url      = "https://api.github.com/search/issues"
+    method   = "POST"
+    url      = "https://api.github.com/repos/{{ args.owner }}/{{ args.repo }}/issues"
+
+    auth { kind = "bearer"; secret = "github.token" }
 
     headers = {
-      Accept = "application/vnd.github+json"
+      Accept               = "application/vnd.github+json"
+      X-GitHub-Api-Version = "2022-11-28"
     }
 
-    query = {
-      q        = "{{ args.query }}"
-      per_page = "{{ args.per_page }}"
-    }
-
-    auth {
-      kind   = "bearer"
-      secret = "github.token"
-    }
-  }
-
-  result {
-    decode = "json"
-    extract {
-      json_pointer = "/items"
-    }
-    output = "Found {{ result | length }} issues"
-  }
-}
-```
-
-</Tab>
-<Tab value="GraphQL">
-
-GraphQL operations send a query, optional variables, and optional operation name over HTTP POST.
-
-```hcl
-version = 1
-provider = "myapi"
-categories = ["api"]
-
-command "get_user" {
-  title       = "Get User"
-  summary     = "Fetch a user by ID via GraphQL"
-  description = "Queries the GraphQL API for a user by their ID."
-
-  annotations {
-    mode    = "read"
-    secrets = ["myapi.token"]
-  }
-
-  param "user_id" {
-    type     = "string"
-    required = true
-  }
-
-  operation {
-    protocol = "graphql"
-    url      = "https://api.example.com/graphql"
-
-    auth {
-      kind   = "bearer"
-      secret = "myapi.token"
-    }
-
-    graphql {
-      query          = "query User($id: ID!) { user(id: $id) { login email } }"
-      operation_name = "User"
-      variables = {
-        id = "{{ args.user_id }}"
+    body {
+      kind  = "json"
+      value = {
+        title = "{{ args.title }}"
+        body  = "{{ args.body }}"
       }
     }
   }
 
   result {
     decode = "json"
-    output = "{{ result }}"
+    output = "Created issue #{{ result.number }}: {{ result.title }}\nURL: {{ result.html_url }}"
   }
 }
 ```
 
-</Tab>
-<Tab value="gRPC">
-
-gRPC operations call a service method over HTTP/2. Earl uses server reflection by default; provide `descriptor_set_file` when reflection is unavailable.
-
-```hcl
-version = 1
-provider = "health"
-categories = ["infrastructure"]
-
-command "check" {
-  title       = "Health Check"
-  summary     = "Check gRPC service health"
-  description = "Calls the gRPC health check endpoint."
-
-  annotations {
-    mode    = "read"
-    secrets = ["service.token"]
-  }
-
-  operation {
-    protocol = "grpc"
-    url      = "http://127.0.0.1:50051"
-
-    headers = {
-      x-trace-id = "{{ args.trace_id }}"
-    }
-
-    auth {
-      kind   = "bearer"
-      secret = "service.token"
-    }
-
-    grpc {
-      service = "grpc.health.v1.Health"
-      method  = "Check"
-      body    = { service = "" }
-    }
-  }
-
-  param "trace_id" {
-    type    = "string"
-    default = ""
-  }
-
-  result {
-    decode = "json"
-    output = "{{ result }}"
-  }
-}
-```
-
-<Callout type="info">
-  For gRPC, `auth.api_key.location` must be `header`. The
-  `transport.proxy_profile` and `transport.tls.min_version` options are not
-  supported for gRPC.
-</Callout>
-
-</Tab>
-<Tab value="Bash">
-
-Bash operations execute shell scripts in a sandboxed environment. The `bash` feature flag must be enabled.
-
-```hcl
-version = 1
-provider = "system"
-categories = ["system", "bash"]
-
-command "disk_usage" {
-  title       = "Check disk usage"
-  summary     = "Reports disk usage for a given path"
-  description = "Runs du -sh in a sandboxed bash environment."
-
-  annotations {
-    mode    = "read"
-    secrets = []
-  }
-
-  param "path" {
-    type        = "string"
-    required    = true
-    description = "Filesystem path to check"
-  }
-
-  operation {
-    protocol = "bash"
-
-    bash {
-      script = "du -sh {{ args.path }}"
-      sandbox {
-        network = false
-      }
-    }
-  }
-
-  result {
-    decode = "text"
-    output = "{{ result }}"
-  }
-}
-```
-
-</Tab>
-<Tab value="SQL">
-
-SQL operations execute parameterized queries against a database. The connection URL is stored as a secret. Jinja2 template expressions are **not allowed** in `sql.query` -- use `?` placeholders and `sql.params` instead.
-
-```hcl
-version = 1
-provider = "analytics"
-categories = ["analytics", "sql"]
-
-command "recent_orders" {
-  title       = "Recent orders"
-  summary     = "Fetches recent orders from the database"
-  description = "Runs a read-only SQL query to fetch recent orders."
-
-  annotations {
-    mode    = "read"
-    secrets = ["analytics.database_url"]
-  }
-
-  param "limit" {
-    type    = "integer"
-    default = 10
-  }
-
-  operation {
-    protocol = "sql"
-
-    sql {
-      connection_secret = "analytics.database_url"
-      query             = "SELECT id, customer, total FROM orders ORDER BY created_at DESC LIMIT ?"
-      params            = ["{{ args.limit }}"]
-      sandbox {
-        read_only = true
-        max_rows  = 100
-      }
-    }
-  }
-
-  result {
-    decode = "json"
-    output = "Found {{ result | length }} orders"
-  }
-}
-```
-
-<Callout type="warn">
-  The `sql.connection_secret` must be declared in `annotations.secrets`. Earl
-  validates this at load time.
-</Callout>
-
-</Tab>
-</Tabs>
-
-## Pre-built Templates
-
-Earl ships with a library of ready-made templates for 26 popular APIs. Import any of them with a single command:
-
-```bash
-earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/stripe.hcl
-earl secrets set stripe.api_key
-earl call stripe.list_customers
-```
-
-| Category        | Providers                                         |
-| --------------- | ------------------------------------------------- |
-| Developer Tools | `github`, `gitlab`, `jira`, `linear`, `pagerduty` |
-| Communication   | `slack`, `discord`, `twilio`, `sendgrid`          |
-| Cloud           | `cloudflare`, `vercel`, `render`                  |
-| Payments        | `stripe`, `shopify`                               |
-| CRM             | `hubspot`, `mailchimp`                            |
-| Analytics       | `datadog`, `sentry`                               |
-| AI / ML         | `openai`, `anthropic`, `recall_ai`                |
-| Productivity    | `notion`, `airtable`                              |
-| Auth            | `auth0`                                           |
-| Storage & Email | `supabase`, `resend`                              |
-
-All templates live under [`examples/`](https://github.com/brwse/earl/tree/main/examples) in the repository. Each provider file declares the required secrets — Earl prints them after import.
-
-## Importing Templates
-
-Import templates from a local file path or a direct HTTP(S) URL.
-
-<Steps>
-<Step>
-
-### Import from a local file
-
-```bash
-earl templates import ./my-template.hcl
-earl templates import /opt/templates/github.hcl
-```
-
-</Step>
-<Step>
-
-### Import from a remote URL
-
-```bash
-earl templates import https://example.com/templates/github.hcl
-```
-
-</Step>
-<Step>
-
-### Choose the import scope
-
-By default, templates import to the local `./templates/` directory. Use `--scope global` to import to `~/.config/earl/templates/`:
-
-```bash
-earl templates import ./github.hcl --scope global
-```
-
-</Step>
-<Step>
-
-### Set up required secrets
-
-After importing, earl reports any secrets declared by the template:
-
-```
-Imported template from `./github.hcl` to `./templates/github.hcl`.
-Required secrets:
-- github.token
-Set up with:
-earl secrets set github.token
-```
-
-</Step>
-</Steps>
-
-**Requirements:**
-
-- The source must be a `.hcl` file.
-- Remote sources must use `http://` or `https://`.
-- Import fails if the destination file already exists.
-- Remote templates have a maximum size of 1 MiB.
-
-## Managing Templates
-
-### List commands
-
-```bash
-earl templates list                        # List all commands
-earl templates list --mode read            # Filter by mode
-earl templates list --category scm         # Filter by category
-earl templates list --json                 # JSON output
-```
-
-### Semantic search
-
-```bash
-earl templates search "find open PRs"      # Search with natural language
-earl templates search "database query" --limit 5
-```
-
-### Validate templates
-
-```bash
-earl templates validate                    # Validate all template files
-```
-
-Validation checks:
-
-- HCL syntax is correct
-- Schema fields match expected types
-- Required fields are present (title, summary, description, output)
-- Secret references in auth blocks are declared in `annotations.secrets`
-- Parameter names are unique within a command
-- Protocol-specific constraints are met
-
-### Generating templates
-
-Delegate template authoring to a coding CLI:
-
-```bash
-earl templates generate -- claude --dangerously-skip-permissions
-```
-
-Earl prompts for a description of the template you want, then sends a structured prompt to the coding CLI with schema constraints. The coding CLI generates a valid `.hcl` file and runs `earl templates validate` to verify it.
-
-## Calling Commands
-
-Execute a template command using `earl call`:
-
-```bash
-earl call github.search_issues --query "is:open label:bug" --per_page 5
-```
-
-The command key is `provider.command`. Parameters are passed as `--name value` pairs. Boolean parameters can be passed as bare flags (`--verbose`) or with explicit values (`--verbose true`).
-
-Add `--json` for structured JSON output, or `--yes` to skip write-mode confirmation:
-
-```bash
-earl call github.create_issue --title "Bug report" --yes
-earl call github.search_issues --query "test" --json
-```
-
-## What's Next
-
-Once you have a working template, the [Template Schema Reference](/docs/template-schema) has every field documented in detail. If your template targets multiple environments, [Environments](/docs/environments) shows how to define staging and production targets without duplicating the file. For storing and referencing credentials, see [Secrets & Auth](/docs/secrets-and-auth).
+For the complete field-by-field reference, see [Template Schema](/docs/template-schema).

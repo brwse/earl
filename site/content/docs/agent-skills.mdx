@@ -1,62 +1,96 @@
 ---
 title: Agent Skills
-description: Machine-readable instructions that AI agents follow to install, configure, and use Earl
-icon: Wand2
+icon: Wrench
+description: Markdown skills for Claude Code and other agent platforms — setup, template creation, migration, and troubleshooting.
 ---
 
-Setting up Earl involves several distinct workflows: first install, MCP configuration, template authoring, migration from existing scripts, diagnostics. Rather than walking through each step manually, you can give your agent a skill file and let it drive. The [Quick Start](/docs/quick-start) shows this in action.
+Skills are Markdown files that give an agent platform-specific instructions. For Claude Code, they live at `~/.claude/skills/<skill-name>/SKILL.md`. You install a skill once; from then on, you reference it in a prompt and the agent follows it.
 
-## How to invoke a skill
+Earl ships five skills. Each one handles a distinct task — setup, template authoring, codebase migration, security hardening, and diagnosis.
 
-Paste a prompt like this into your agent:
+## Installing a skill
 
-```
-Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/setup-earl/SKILL.md
-and any files it references under
-https://raw.githubusercontent.com/brwse/earl/main/skills/references/
-then follow the skill to help me get started with Earl.
-```
-
-The agent fetches the skill file from GitHub, reads any referenced files it needs (protocol references, mapping tables, etc.), and executes the workflow described inside. There is no magic: a skill is a markdown file with structured instructions in it. The agent reads it the same way it reads any document you paste into context, but the content is written for an agent to act on rather than for a human to read step-by-step.
-
-## Built-in skills
-
-| Skill | What it does | When to use it | URL |
-|-------|-------------|----------------|-----|
-| `setup-earl` | Installs Earl, runs a quick demo with the `system` template, configures MCP for Claude Code / Cursor / Windsurf, and writes CLAUDE.md instructions. Routes to template creation or migration at the end | First time setup, onboarding a new developer, or reconnecting Earl to an agent platform | `https://raw.githubusercontent.com/brwse/earl/main/skills/setup-earl/SKILL.md` |
-| `create-template` | Authors a new HCL template for a specific API, database, or shell command. Checks for pre-built templates first, infers the protocol from your description, loads the right reference file, and drafts the template for your review before validating it, setting up secrets, and running a test call | Adding a new service, or adding a command to an existing template | `https://raw.githubusercontent.com/brwse/earl/main/skills/create-template/SKILL.md` |
-| `migrate-to-earl` | Scans a codebase for raw CLI/API calls (curl, gh, stripe-cli, psql, grpcurl, etc.), groups them by provider, imports or creates the matching Earl template, verifies secrets, asks for confirmation, then rewrites call sites one provider at a time | Replacing existing CLI tool usage with reviewed Earl templates | `https://raw.githubusercontent.com/brwse/earl/main/skills/migrate-to-earl/SKILL.md` |
-| `troubleshoot-earl` | Runs `earl doctor`, validates templates, checks the template list, verifies secrets, and inspects MCP config. Then runs the failing command and maps errors to fixes. Tells you which problems it can fix automatically and which ones need you | Earl isn't working, `earl call` returns errors, MCP tools aren't visible, or `earl doctor` reports failures | `https://raw.githubusercontent.com/brwse/earl/main/skills/troubleshoot-earl/SKILL.md` |
-| `secure-agent` | Adds `deniedTools` entries to `.claude/settings.json` to block raw CLI tools (curl, gh, stripe-cli, etc.) at the platform level, then configures `[[network.allow]]` egress rules in Earl's config to restrict which hosts templates can reach | After Earl is working and templates cover your services, to make the security guarantee enforceable rather than advisory | `https://raw.githubusercontent.com/brwse/earl/main/skills/secure-agent/SKILL.md` |
-
-## Third-party skills
-
-The `skills/3p/` directory holds skills for specific services that work on top of Earl. A third-party skill is the same format as a built-in skill: fetch it, follow it.
-
-The recall.ai skill is the existing example. It covers recording video meetings (Zoom, Google Meet, Teams, Webex), retrieving speaker-attributed transcripts, and downloading audio/video. It includes the full async lifecycle: bot creation, status polling intervals, transcript retrieval, and download URL expiry. Invoke it the same way as a built-in skill:
-
-```
-Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/3p/recall_ai/SKILL.md
-then follow the skill to help me record a meeting and get the transcript.
+```bash
+mkdir -p ~/.claude/skills/<skill-name>
+curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/skills/<skill-name>/SKILL.md \
+  -o ~/.claude/skills/<skill-name>/SKILL.md
 ```
 
-Anyone can write a third-party skill for their service. The format is plain markdown with a YAML front matter block naming the skill and describing when to use it.
+Replace `<skill-name>` with the skill you want. Then in a new agent session:
 
-## Reference files
+```
+Use the <skill-name> skill to <goal>.
+```
 
-The `skills/references/` directory contains files that agents load while executing skills, mostly during template authoring. They are not written for humans to read directly. They give the agent the HCL shapes, required fields, auth patterns, and known edge cases for each protocol.
+If you'd rather not install the file, paste this into your agent:
 
-| File | Contents |
-|------|----------|
-| `http-templates.md` | Full template skeleton for REST APIs, all auth kinds (bearer, basic, OAuth), body shapes (JSON, form), query parameters, and common patterns like pagination |
-| `graphql-templates.md` | Template skeleton for GraphQL endpoints, variable passing, and how the nested `graphql { }` block maps to the HCL structure |
-| `grpc-templates.md` | Template skeleton for gRPC services using server reflection or a descriptor set file, with TOCTOU and TLS notes |
-| `bash-templates.md` | Template skeleton for sandboxed shell scripts, environment variable passing, and sandbox network and filesystem options |
-| `sql-templates.md` | Template skeleton for PostgreSQL, MySQL, and SQLite, including the `params = ["{{ args.x }}"]` quoting rule for HCL/Jinja interaction |
-| `mcp-integration.md` | MCP server configuration for full mode and discovery mode, including when to use each and how agent restart fits in |
-| `secrets-and-auth.md` | Secret management commands, all auth block kinds (bearer, basic, API key, OAuth client credentials, device code, PKCE), and which OAuth flows require human action |
-| `template-quick-ref.md` | Compact reference of all five protocol operation shapes, every field name and type, and a checklist of fields required for every template |
+```
+Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/<skill-name>/SKILL.md
+and follow the skill to <goal>.
+```
 
-## A note on trust
+The agent fetches and runs it inline. Nothing is written to disk.
 
-Skills are instructions you are asking an agent to execute. Loading a skill from an untrusted source is the same as pasting an untrusted prompt into your agent's context. Only load skills from sources you trust.
+## Available skills
+
+### setup-earl
+
+Installs Earl, writes MCP config for every detected agent platform, and sets up context breadcrumbs. The full walkthrough is at [Agent-Assisted Setup](/docs/agent-assisted-setup).
+
+```
+Use the setup-earl skill to install and configure Earl for this project.
+```
+
+### create-template
+
+Guides the agent through writing a new Earl template for an API you specify. The agent works through five steps:
+
+1. Identify which API endpoints to wrap
+2. Determine the auth method (bearer, api_key, basic, or oauth)
+3. Write the HCL template with correct parameter types
+4. Test with `earl call --yes --json`
+5. Store any required secrets in the keychain
+
+The result is a committed `.hcl` file ready to use. The agent does not guess at auth — it asks you for the token or walks you through `earl secrets set`.
+
+```
+Use the create-template skill to build an Earl template for the Linear API.
+```
+
+### migrate-to-earl
+
+Points the agent at a codebase and converts existing API calls to Earl templates. The agent:
+
+1. Scans for `curl`, `gh`, `wget`, and raw HTTP calls
+2. Groups them by provider
+3. Generates Earl templates for each provider
+4. Rewrites the call sites to use `earl call --yes --json` equivalents
+5. Writes a migration summary listing what changed and what was skipped
+
+Useful when you have a repo full of inline `curl` commands and want them all going through Earl's security layer. The agent leaves the original calls commented out rather than deleted, so you can review the diff before committing.
+
+```
+Use the migrate-to-earl skill to convert all curl and gh calls in this repo to Earl templates.
+```
+
+### secure-agent
+
+Prevents the agent platform from bypassing Earl with raw CLI tools. It writes rules to `CLAUDE.md`, `.cursorrules`, or `.windsurfrules` (whichever applies) instructing the agent not to use `curl`, `gh`, `wget`, or raw HTTP directly — everything should go through `earl call`. If the platform supports allow/deny lists, the skill configures those too.
+
+Run this after `setup-earl` when you want to actually enforce Earl as the only network path:
+
+```
+Use the secure-agent skill to lock down this project so the agent only uses Earl for API calls.
+```
+
+### troubleshoot-earl
+
+Diagnoses Earl problems step by step. The agent runs `earl doctor`, checks keychain access, validates template files, inspects MCP config, and suggests fixes for whatever it finds. Start here when something isn't working and you don't know where to look.
+
+```
+Use the troubleshoot-earl skill to figure out why earl call is failing.
+```
+
+## The skill repository
+
+All skills are at [`github.com/brwse/earl/tree/main/skills/`](https://github.com/brwse/earl/tree/main/skills/). Third-party skills for specific integrations — memory systems, recall tools, specialized workflows — are under `skills/3p/`. The third-party skills aren't maintained by Earl but follow the same format and can be installed the same way.

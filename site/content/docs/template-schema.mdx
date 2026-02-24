@@ -1,530 +1,399 @@
 ---
-title: Template Schema Reference
-description: Complete field-by-field reference for earl template HCL files
+title: Template Schema
 icon: Code
+description: Complete field reference for Earl template files — every block, field, and type.
 ---
 
-Templates are `version = 1` HCL files. Each file declares a provider namespace and one or more command blocks. This page documents every field, type, and default value.
+This page is a field-by-field reference. For a conceptual introduction and worked examples, see [Writing Templates](/docs/templates).
 
-## Root Fields
+## File structure
 
-| Field              | Type       | Required | Default | Description                                                                  |
-| ------------------ | ---------- | -------- | ------- | ---------------------------------------------------------------------------- |
-| `version`          | `integer`  | Yes      | --      | Must be `1`.                                                                 |
-| `provider`         | `string`   | Yes      | --      | Namespace for commands (e.g., `github`). Must not be empty.                  |
-| `categories`       | `string[]` | No       | `[]`    | Provider-level categories applied to all commands in the file.               |
-| `environments`     | block      | No       | --      | Named environments with shared variables. See [environments](#environments). |
-| `command "<name>"` | block      | Yes      | --      | One or more named command blocks. At least one is required.                  |
-
-Commands are identified by `provider.command` (e.g., `github.search_issues`).
-
-## `environments`
-
-The optional `environments` block at the provider level declares named environments and their shared variables. When an environment is active, its key-value pairs are available as `vars.*` in all template expressions. For a how-to guide see [Environments](/docs/environments).
+A template file is an HCL file with a fixed top-level shape:
 
 ```hcl
-environments {
-  default = "production"
-  secrets = ["myservice.staging_token"]
+version    = 1
+provider   = "github"
+categories = ["scm", "issues"]
 
-  production {
-    base_url = "https://api.example.com"
-  }
+environments { ... }   # optional
 
-  staging {
-    base_url  = "https://staging-api.example.com"
-    api_token = "{{ secrets.myservice.staging_token }}"
-  }
-}
+command "name" { ... } # one or more
 ```
 
-| Field            | Type       | Required | Default | Description                                                                   |
-| ---------------- | ---------- | -------- | ------- | ----------------------------------------------------------------------------- |
-| `default`        | `string`   | No       | --      | Environment name used when no `--env` flag or config default is set.          |
-| `secrets`        | `string[]` | No       | `[]`    | Secret keys that vars values are allowed to reference via `{{ secrets.* }}`.  |
-| `<name> { ... }` | block      | No       | --      | Named environment. Each key inside the block becomes a `vars.<key>` variable. |
+## Top-level fields
 
-Environment names must match `[a-zA-Z0-9_-]` and be 1–64 characters. The same rule applies to `default` and to per-command `environment "<name>"` labels.
+| Field              | Type            | Required | Description                                                                                        |
+| ------------------ | --------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `version`          | integer         | yes      | Schema version. Must be `1`.                                                                       |
+| `provider`         | string          | yes      | Provider identifier. Used in `earl call <provider>.<command>`.                                     |
+| `categories`       | list of strings | no       | Labels applied to every command in the file. Used for discovery and filtering.                     |
+| `environments`     | block           | no       | Provider-level environment definitions. See [Environments](/docs/environments).                    |
+| `command "<name>"` | block           | yes      | Command definition. Repeatable. The name becomes the second part of `earl call <provider>.<name>`. |
 
-### `vars` in template expressions
-
-Within `operation`, `result.output`, and other Jinja2 fields, active environment variables are accessible as `vars.<key>`:
-
-```hcl
-operation {
-  protocol = "http"
-  method   = "GET"
-  url      = "{{ vars.base_url }}/items"
-}
-```
-
-If no environment is active, `vars` is an empty map and any `vars.*` reference resolves to an empty string.
-
-### Active environment resolution
-
-The environment is resolved in this priority order:
-
-1. `--env <name>` flag on the command line (highest)
-2. `environments.default` in `~/.config/earl/config.toml`
-3. `environments.default` in this `environments` block
-4. No active environment (lowest)
-
-## `command`
+## `command` block
 
 ```hcl
-command "search_issues" {
-  title       = "Search Issues"
-  summary     = "Search GitHub issues using a query string"
-  description = "Detailed markdown description..."
-  categories  = ["search"]
+command "search_repos" {
+  title       = "Search repositories"
+  summary     = "Search GitHub repos by query"
+  description = "..."
+
+  categories = ["search"]
 
   annotations { ... }
+
   param "query" { ... }
+
   operation { ... }
+
   result { ... }
-  environment "staging" { ... }
+
+  environment_overrides { ... }
 }
 ```
 
-| Field                  | Type       | Required | Default | Description                                                                                |
-| ---------------------- | ---------- | -------- | ------- | ------------------------------------------------------------------------------------------ |
-| `title`                | `string`   | Yes      | --      | Human-readable title. Must not be empty.                                                   |
-| `summary`              | `string`   | Yes      | --      | One-line summary. Must not be empty.                                                       |
-| `description`          | `string`   | Yes      | --      | Detailed markdown description. Must not be empty.                                          |
-| `categories`           | `string[]` | No       | `[]`    | Command-level categories (merged with provider categories).                                |
-| `annotations`          | block      | Yes      | --      | Mode and secret declarations.                                                              |
-| `param`                | block(s)   | No       | `[]`    | Repeatable typed input parameters.                                                         |
-| `operation`            | block      | Yes      | --      | Protocol-specific execution definition.                                                    |
-| `result`               | block      | Yes      | --      | Output decoding, extraction, and rendering.                                                |
-| `environment "<name>"` | block(s)   | No       | --      | Per-environment operation/result override. See [environment overrides](#environment-name). |
+| Field                   | Type            | Required | Description                                                                                         |
+| ----------------------- | --------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `title`                 | string          | yes      | Short display name shown in `earl list`.                                                            |
+| `summary`               | string          | yes      | One-line description exposed to the agent in the MCP tool listing.                                  |
+| `description`           | string          | yes      | Full description the agent reads to decide whether to call the command. Supports Markdown.          |
+| `categories`            | list of strings | no       | Labels for this specific command. Merged with provider-level categories for filtering.              |
+| `annotations`           | block           | no       | Mode, secrets list, and environment switching flags.                                                |
+| `param "<name>"`        | block           | no       | Parameter declaration. Repeatable.                                                                  |
+| `operation`             | block           | yes      | The request to execute. Shape varies by protocol.                                                   |
+| `result`                | block           | no       | How to decode and format the response. Defaults to `decode = "auto"` and `output = "{{ result }}"`. |
+| `environment_overrides` | block           | no       | Per-environment operation replacements.                                                             |
 
-## `annotations`
+## `annotations` block
 
 ```hcl
 annotations {
   mode    = "read"
   secrets = ["github.token"]
+  allow_environment_protocol_switching = false
 }
 ```
 
-| Field                                  | Type                  | Required | Default | Description                                                                                              |
-| -------------------------------------- | --------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| `mode`                                 | `"read"` \| `"write"` | Yes      | --      | Safety mode. Write-mode commands require user confirmation.                                              |
-| `secrets`                              | `string[]`            | No       | `[]`    | Secret keys this command is allowed to access. Auth blocks that reference a secret must declare it here. |
-| `allow_environment_protocol_switching` | `boolean`             | No       | `false` | Allow an `environment "<name>"` override to use a different protocol than the default `operation`.       |
+| Field                                  | Type            | Default   | Description                                                                                                                                     |
+| -------------------------------------- | --------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`                                 | string          | `"write"` | `"read"` or `"write"`. Write mode prompts for confirmation unless the caller passes `--yes`. Use `"read"` for commands that only retrieve data. |
+| `secrets`                              | list of strings | `[]`      | Keys the command needs. Earl checks that these exist before executing. Every key referenced in an `auth` block must appear here.                |
+| `allow_environment_protocol_switching` | boolean         | `false`   | When `true`, the active environment can switch the operation protocol (e.g. from `http` to `grpc`). Disabled by default as a safety measure.    |
 
-## `param`
+Note: the `mode` field defaults to `"write"`, not `"read"`. Omitting the `annotations` block means the command requires confirmation. Always set `mode = "read"` explicitly for read-only commands.
 
-Parameters define typed inputs. Use the block syntax `param "<name>" { ... }` for each parameter.
+## `param` block
 
 ```hcl
-param "query" {
-  type        = "string"
-  required    = true
-  description = "GitHub search query"
-}
-
-param "limit" {
-  type    = "integer"
-  default = 10
+param "per_page" {
+  type        = "integer"
+  required    = false
+  default     = 30
+  description = "Results per page (max 100)"
 }
 ```
 
-| Field         | Type      | Required | Default | Description                                                                      |
-| ------------- | --------- | -------- | ------- | -------------------------------------------------------------------------------- |
-| `name`        | `string`  | Yes      | --      | Parameter name (inferred from the block label). Must be unique within a command. |
-| `type`        | `string`  | Yes      | --      | One of: `string`, `integer`, `number`, `boolean`, `null`, `array`, `object`.     |
-| `required`    | `boolean` | No       | `false` | Whether the argument must be provided.                                           |
-| `default`     | `any`     | No       | --      | Default value used when the argument is not provided.                            |
-| `description` | `string`  | No       | --      | Human-readable description shown in help and MCP tool schemas.                   |
+| Field         | Type    | Required | Description                                                                                |
+| ------------- | ------- | -------- | ------------------------------------------------------------------------------------------ |
+| `type`        | string  | yes      | Parameter type. See types table below.                                                     |
+| `required`    | boolean | no       | Whether the caller must supply this parameter. Defaults to `false`.                        |
+| `default`     | any     | no       | Default value used when the parameter is not supplied. Only valid when `required = false`. |
+| `description` | string  | no       | Shown to the agent so it knows what to pass.                                               |
 
-### Parameter Type Details
+### Parameter types
 
-| Type      | CLI Input                 | Description                          |
-| --------- | ------------------------- | ------------------------------------ |
-| `string`  | `--name value`            | Passed as-is.                        |
-| `integer` | `--name 42`               | Parsed as a signed 64-bit integer.   |
-| `number`  | `--name 3.14`             | Parsed as a 64-bit float.            |
-| `boolean` | `--name` or `--name true` | Bare `--flag` is treated as `true`.  |
-| `null`    | `--name null`             | Only the literal `null` is accepted. |
-| `array`   | `--name '[1,2,3]'`        | Parsed as a JSON array.              |
-| `object`  | `--name '{"k":"v"}'`      | Parsed as a JSON object.             |
+| Type        | Description                |
+| ----------- | -------------------------- |
+| `"string"`  | UTF-8 text.                |
+| `"integer"` | Whole number.              |
+| `"number"`  | Floating-point number.     |
+| `"boolean"` | `true` or `false`.         |
+| `"array"`   | JSON array.                |
+| `"object"`  | JSON object.               |
+| `"null"`    | Null value. Rarely needed. |
 
-## `operation`
+Inside the `operation` block, parameters are available as `args.<name>`:
 
-The `operation` block defines what earl executes. The `protocol` field selects the operation shape.
+```hcl
+url = "https://api.github.com/repos/{{ args.owner }}/{{ args.repo }}"
+```
 
-| Protocol  | Description                       | Feature Flag        |
-| --------- | --------------------------------- | ------------------- |
-| `http`    | Standard HTTP request             | `http` (default)    |
-| `graphql` | GraphQL over HTTP POST            | `graphql` (default) |
-| `grpc`    | gRPC over HTTP/2                  | `grpc` (default)    |
-| `bash`    | Sandboxed Bash script execution   | `bash` (default)    |
-| `sql`     | Parameterized SQL query execution | `sql` (default)     |
+## `operation` block
 
-### HTTP Operation
+The `operation` block shape depends on the `protocol` field. HTTP fields are flat at the operation level. Every other protocol wraps its fields in a nested block.
+
+### HTTP
 
 ```hcl
 operation {
   protocol = "http"
-  method   = "GET"
-  url      = "https://api.example.com/items"
-  path     = "/{{ args.item_id }}"
-  query    = { q = "{{ args.query }}" }
-  headers  = { Accept = "application/json" }
-  cookies  = { session = "{{ args.sid }}" }
+  method   = "GET"          # GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
+  url      = "https://api.example.com/items/{{ args.id }}"
+  path     = "/v2/items"    # optional; appended to url
+  stream   = false
+
+  headers = { Accept = "application/json" }
+  query   = { filter = "{{ args.filter }}" }
+  cookies = { session = "{{ args.session }}" }
 
   auth { ... }
+
   body { ... }
+
   transport { ... }
 }
 ```
 
-| Field       | Type               | Required | Default | Description                                                                  |
-| ----------- | ------------------ | -------- | ------- | ---------------------------------------------------------------------------- |
-| `protocol`  | `string`           | Yes      | --      | Must be `"http"`.                                                            |
-| `method`    | `string`           | Yes      | --      | HTTP method (`GET`, `POST`, `PUT`, `DELETE`, etc.). Must not be empty.       |
-| `url`       | `string`           | Yes      | --      | Base URL for the request. Must not be empty. Supports template expressions.  |
-| `path`      | `string`           | No       | --      | Path appended to `url`. Supports template expressions.                       |
-| `query`     | `map<string, any>` | No       | --      | Query string parameters. Keys and values support template expressions.       |
-| `headers`   | `map<string, any>` | No       | --      | HTTP headers. Keys and values support template expressions.                  |
-| `cookies`   | `map<string, any>` | No       | --      | Cookies sent with the request. Keys and values support template expressions. |
-| `auth`      | block              | No       | --      | Authentication configuration. See [auth](#auth).                             |
-| `body`      | block              | No       | --      | Request body configuration. See [body](#body).                               |
-| `transport` | block              | No       | --      | Transport options (timeouts, retries, TLS). See [transport](#transport).     |
+| Field       | Type    | Required | Description                                                                                  |
+| ----------- | ------- | -------- | -------------------------------------------------------------------------------------------- |
+| `protocol`  | string  | yes      | Must be `"http"`.                                                                            |
+| `method`    | string  | yes      | HTTP method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`.                     |
+| `url`       | string  | yes      | Full URL. Supports Jinja expressions.                                                        |
+| `path`      | string  | no       | Path segment appended to `url`. Useful when the base URL comes from an environment variable. |
+| `query`     | map     | no       | Query string parameters. Values support Jinja expressions.                                   |
+| `headers`   | map     | no       | Request headers. Values support Jinja expressions.                                           |
+| `cookies`   | map     | no       | Cookies sent with the request. Values support Jinja expressions.                             |
+| `auth`      | block   | no       | Authentication. See [auth block](#auth-block).                                               |
+| `body`      | block   | no       | Request body. See [body block](#body-block-http-only).                                       |
+| `stream`    | boolean | no       | Set `true` to enable streaming. Defaults to `false`. See [Streaming](/docs/streaming).       |
+| `transport` | block   | no       | Timeout, retries, redirects, TLS, proxy. See [transport block](#transport-block).            |
 
-### GraphQL Operation
+### GraphQL
 
 ```hcl
 operation {
   protocol = "graphql"
-  url      = "https://api.example.com/graphql"
-  headers  = { Authorization = "Bearer {{ secrets.myapi.token }}" }
+  url      = "https://api.github.com/graphql"
+
+  auth { kind = "bearer"; secret = "github.token" }
 
   graphql {
-    query          = "query User($id: ID!) { user(id: $id) { login email } }"
-    operation_name = "User"
+    query = <<-GQL
+      query($owner: String!, $repo: String!) {
+        repository(owner: $owner, name: $repo) {
+          stargazerCount
+        }
+      }
+    GQL
+    operation_name = "MyQuery"  # optional
     variables = {
-      id = "{{ args.user_id }}"
+      owner = "{{ args.owner }}"
+      repo  = "{{ args.repo }}"
     }
   }
 
-  auth { ... }
   transport { ... }
 }
 ```
 
-| Field       | Type               | Required | Default  | Description                                     |
-| ----------- | ------------------ | -------- | -------- | ----------------------------------------------- |
-| `protocol`  | `string`           | Yes      | --       | Must be `"graphql"`.                            |
-| `method`    | `string`           | No       | `"POST"` | Must be `POST` when provided.                   |
-| `url`       | `string`           | Yes      | --       | GraphQL endpoint URL. Must not be empty.        |
-| `path`      | `string`           | No       | --       | Path appended to `url`.                         |
-| `query`     | `map<string, any>` | No       | --       | URL query parameters (not the GraphQL query).   |
-| `headers`   | `map<string, any>` | No       | --       | HTTP headers.                                   |
-| `cookies`   | `map<string, any>` | No       | --       | Cookies.                                        |
-| `auth`      | block              | No       | --       | Authentication. See [auth](#auth).              |
-| `graphql`   | block              | Yes      | --       | GraphQL query definition.                       |
-| `transport` | block              | No       | --       | Transport options. See [transport](#transport). |
+GraphQL operation-level fields:
 
-#### `graphql` block
+| Field       | Type    | Required | Description                                                                 |
+| ----------- | ------- | -------- | --------------------------------------------------------------------------- |
+| `protocol`  | string  | yes      | Must be `"graphql"`.                                                        |
+| `url`       | string  | yes      | GraphQL endpoint URL.                                                       |
+| `method`    | string  | no       | Defaults to `POST`. Override only if the server requires `GET`.             |
+| `query`     | map     | no       | URL query parameters (distinct from the GraphQL query).                     |
+| `headers`   | map     | no       | Request headers. `Accept` and `Content-Type` default to `application/json`. |
+| `cookies`   | map     | no       | Cookies sent with the request.                                              |
+| `auth`      | block   | no       | Authentication.                                                             |
+| `graphql`   | block   | yes      | The GraphQL payload.                                                        |
+| `stream`    | boolean | no       | Enable streaming. Defaults to `false`.                                      |
+| `transport` | block   | no       | Transport settings.                                                         |
 
-| Field            | Type     | Required | Default | Description                                                               |
-| ---------------- | -------- | -------- | ------- | ------------------------------------------------------------------------- |
-| `query`          | `string` | Yes      | --      | GraphQL query or mutation string. Must not be empty.                      |
-| `operation_name` | `string` | No       | --      | GraphQL operation name (for documents with multiple operations).          |
-| `variables`      | `any`    | No       | --      | Variables passed to the GraphQL operation. Supports template expressions. |
+`graphql` inner block fields:
 
-### gRPC Operation
+| Field            | Type   | Required | Description                                                                                        |
+| ---------------- | ------ | -------- | -------------------------------------------------------------------------------------------------- |
+| `query`          | string | yes      | The GraphQL query or mutation. Heredoc syntax recommended for multi-line queries.                  |
+| `operation_name` | string | no       | `operationName` sent in the request body. Required when the document contains multiple operations. |
+| `variables`      | map    | no       | Variables map. Values support Jinja expressions.                                                   |
+
+### gRPC
 
 ```hcl
 operation {
   protocol = "grpc"
-  url      = "http://127.0.0.1:50051"
-  headers  = { x-request-id = "{{ args.request_id }}" }
+  url      = "https://grpc.example.com"
 
-  auth { ... }
+  auth { kind = "bearer"; secret = "provider.token" }
 
   grpc {
-    service             = "grpc.health.v1.Health"
-    method              = "Check"
-    body                = { service = "" }
-    descriptor_set_file = "./descriptors/health.fds.bin"
+    service             = "example.v1.ExampleService"
+    method              = "GetItem"
+    descriptor_set_file = "example.pb"  # optional
+    body = {
+      id = "{{ args.id }}"
+    }
   }
 
   transport { ... }
 }
 ```
 
-| Field       | Type               | Required | Default | Description                                                                          |
-| ----------- | ------------------ | -------- | ------- | ------------------------------------------------------------------------------------ |
-| `protocol`  | `string`           | Yes      | --      | Must be `"grpc"`.                                                                    |
-| `url`       | `string`           | Yes      | --      | gRPC server URL. Must not be empty.                                                  |
-| `headers`   | `map<string, any>` | No       | --      | gRPC metadata headers.                                                               |
-| `auth`      | block              | No       | --      | Authentication. For gRPC, `api_key.location` must be `header`. See [auth](#auth).    |
-| `grpc`      | block              | Yes      | --      | gRPC call definition.                                                                |
-| `transport` | block              | No       | --      | Transport options. `proxy_profile` and `tls.min_version` are not supported for gRPC. |
+gRPC operation-level fields:
 
-#### `grpc` block
+| Field       | Type    | Required | Description                                   |
+| ----------- | ------- | -------- | --------------------------------------------- |
+| `protocol`  | string  | yes      | Must be `"grpc"`.                             |
+| `url`       | string  | yes      | gRPC server URL.                              |
+| `headers`   | map     | no       | gRPC metadata headers.                        |
+| `auth`      | block   | no       | Authentication.                               |
+| `grpc`      | block   | yes      | gRPC call configuration.                      |
+| `stream`    | boolean | no       | Enable server-streaming. Defaults to `false`. |
+| `transport` | block   | no       | Transport settings.                           |
 
-| Field                 | Type                | Required | Default | Description                                                                                                                    |
-| --------------------- | ------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `service`             | `string`            | Yes      | --      | Fully qualified gRPC service name (e.g., `grpc.health.v1.Health`). Must not be empty.                                          |
-| `method`              | `string`            | Yes      | --      | RPC method name (e.g., `Check`). Must not be empty.                                                                            |
-| `body`                | `object` or `array` | No       | --      | Request message. An object for unary/server-streaming calls, or an array of objects for client-streaming.                      |
-| `descriptor_set_file` | `string`            | No       | --      | Path to a protobuf file descriptor set (`.fds.bin`). If omitted, earl uses server reflection. Must not be empty when provided. |
+`grpc` inner block fields:
 
-### Bash Operation
+| Field                 | Type   | Required | Description                                                                                       |
+| --------------------- | ------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `service`             | string | yes      | Fully qualified service name, e.g. `example.v1.ExampleService`.                                   |
+| `method`              | string | yes      | RPC method name, e.g. `GetItem`.                                                                  |
+| `body`                | map    | no       | Request message fields. Values support Jinja expressions.                                         |
+| `descriptor_set_file` | string | no       | Path to a compiled `.pb` descriptor set file. Omit to use server reflection (gRPC reflection v1). |
 
-Requires the `bash` feature flag. Bash scripts run in a sandboxed environment. The global sandbox configuration in `config.toml` can further restrict execution.
+Earl uses gRPC reflection v1. If the server only exposes v1alpha or no reflection at all, provide a compiled descriptor set.
+
+### Bash
 
 ```hcl
 operation {
   protocol = "bash"
 
   bash {
-    script = "du -sh {{ args.path }}"
+    script = <<-SH
+      jq -r '.[] | .name' {{ args.input_file }}
+    SH
     env = {
       MY_VAR = "{{ args.value }}"
     }
     cwd = "/tmp"
     sandbox {
-      network        = false
-      writable_paths = ["output/"]
-      max_time_ms    = 5000
+      network          = false
+      max_time_ms      = 30000
       max_output_bytes = 1048576
     }
   }
 
-  transport { ... }
+  stream = false
 }
 ```
 
-| Field       | Type     | Required | Default | Description                                                  |
-| ----------- | -------- | -------- | ------- | ------------------------------------------------------------ |
-| `protocol`  | `string` | Yes      | --      | Must be `"bash"`.                                            |
-| `bash`      | block    | Yes      | --      | Bash execution definition.                                   |
-| `transport` | block    | No       | --      | Transport options (only `timeout_ms` is typically relevant). |
+Bash operation-level fields:
 
-#### `bash` block
+| Field      | Type    | Required | Description                                  |
+| ---------- | ------- | -------- | -------------------------------------------- |
+| `protocol` | string  | yes      | Must be `"bash"`.                            |
+| `bash`     | block   | yes      | Script configuration.                        |
+| `stream`   | boolean | no       | Stream stdout as lines. Defaults to `false`. |
 
-| Field     | Type               | Required | Default | Description                                                                      |
-| --------- | ------------------ | -------- | ------- | -------------------------------------------------------------------------------- |
-| `script`  | `string`           | Yes      | --      | Bash script to execute. Supports template expressions. Must not be empty.        |
-| `env`     | `map<string, any>` | No       | --      | Environment variables passed to the script. Values support template expressions. |
-| `cwd`     | `string`           | No       | --      | Working directory for the script.                                                |
-| `sandbox` | block              | No       | --      | Sandbox restrictions.                                                            |
+`bash` inner block fields:
 
-#### `bash.sandbox` block
+| Field     | Type   | Required | Description                                                                         |
+| --------- | ------ | -------- | ----------------------------------------------------------------------------------- |
+| `script`  | string | yes      | Shell script to execute. Supports Jinja expressions.                                |
+| `env`     | map    | no       | Environment variables set before the script runs. Values support Jinja expressions. |
+| `cwd`     | string | no       | Working directory for the script.                                                   |
+| `sandbox` | block  | no       | Resource and network limits.                                                        |
 
-| Field              | Type       | Required | Default | Description                                                                               |
-| ------------------ | ---------- | -------- | ------- | ----------------------------------------------------------------------------------------- |
-| `network`          | `boolean`  | No       | --      | Allow network access from the script.                                                     |
-| `writable_paths`   | `string[]` | No       | --      | Relative paths the script may write to. Must not contain absolute paths or `..` segments. |
-| `max_time_ms`      | `u64`      | No       | --      | Maximum execution time in milliseconds.                                                   |
-| `max_output_bytes` | `u64`      | No       | --      | Maximum combined stdout+stderr size in bytes.                                             |
-| `max_memory_bytes` | `integer`  | No       | --      | Maximum virtual memory in bytes. Enforced via RLIMIT_AS on Linux; not applicable on macOS. |
-| `max_cpu_time_ms`  | `integer`  | No       | --      | Maximum CPU time in milliseconds. Enforced via RLIMIT_CPU on Linux and macOS.             |
+`bash.sandbox` fields:
 
-### SQL Operation
+| Field              | Type            | Default | Description                                   |
+| ------------------ | --------------- | ------- | --------------------------------------------- |
+| `network`          | boolean         | `false` | Whether the script can make network requests. |
+| `writable_paths`   | list of strings | `[]`    | Filesystem paths the script may write to.     |
+| `max_time_ms`      | integer         | —       | Wall-clock timeout in milliseconds.           |
+| `max_output_bytes` | integer         | —       | Maximum combined stdout+stderr size in bytes. |
+| `max_memory_bytes` | integer         | —       | Memory limit in bytes.                        |
+| `max_cpu_time_ms`  | integer         | —       | CPU time limit in milliseconds.               |
 
-Requires the `sql` feature flag. SQL queries use parameterized placeholders (`?`) instead of template expressions in the query string. Jinja2 expressions (`{{ }}`) are **not allowed** in `sql.query`.
+Note: Earl also blocks all private and loopback IP ranges at the SSRF layer regardless of sandbox settings. `network = true` only enables outbound requests to public addresses.
+
+### SQL
 
 ```hcl
 operation {
   protocol = "sql"
 
   sql {
-    connection_secret = "analytics.database_url"
-    query             = "SELECT id, customer, total FROM orders ORDER BY created_at DESC LIMIT ?"
-    params            = ["{{ args.limit }}"]
+    connection_secret = "myapp.db_url"
+    query             = "SELECT id, name FROM users WHERE status = $1 LIMIT $2"
+    params            = ["{{ args.status }}", "{{ args.limit }}"]
     sandbox {
-      read_only  = true
-      max_rows   = 100
-      max_time_ms = 5000
+      read_only    = true
+      max_rows     = 100
+      max_time_ms  = 5000
     }
   }
-
-  transport { ... }
 }
 ```
 
-| Field       | Type     | Required | Default | Description           |
-| ----------- | -------- | -------- | ------- | --------------------- |
-| `protocol`  | `string` | Yes      | --      | Must be `"sql"`.      |
-| `sql`       | block    | Yes      | --      | SQL query definition. |
-| `transport` | block    | No       | --      | Transport options.    |
+SQL operation-level fields:
 
-#### `sql` block
+| Field       | Type   | Required | Description                            |
+| ----------- | ------ | -------- | -------------------------------------- |
+| `protocol`  | string | yes      | Must be `"sql"`.                       |
+| `sql`       | block  | yes      | Query configuration.                   |
+| `transport` | block  | no       | Transport settings (connection-level). |
 
-| Field               | Type     | Required | Default | Description                                                                                                                                                                                                                                                                                                                            |
-| ------------------- | -------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connection_secret` | `string` | Yes      | --      | Secret key containing the database connection URL. Must not be empty. Must be declared in `annotations.secrets`.                                                                                                                                                                                                                       |
-| `query`             | `string` | Yes      | --      | SQL query to execute. Use `?` for parameterized values. Must not be empty. Must not contain `{{` or `}}`.                                                                                                                                                                                                                              |
-| `params`            | `any[]`  | No       | --      | Positional parameters bound to `?` placeholders in the query. Values support template expressions. Wrap Jinja expressions in quotes (e.g., `["{{ args.limit }}"]`) so the HCL parser sees valid string tokens. Pure expressions like `"{{ args.limit }}"` are automatically parsed as JSON, so integers and other types are preserved. |
-| `sandbox`           | block    | No       | --      | Sandbox restrictions.                                                                                                                                                                                                                                                                                                                  |
+`sql` inner block fields:
 
-#### `sql.sandbox` block
+| Field               | Type   | Required | Description                                                                                                                                                                                           |
+| ------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connection_secret` | string | yes      | Key name in the OS keychain whose value is the database connection URL.                                                                                                                               |
+| `query`             | string | yes      | SQL query with positional placeholders. Syntax varies by database: `$1`, `$2`... for PostgreSQL; `?` for MySQL and SQLite.                                                                            |
+| `params`            | list   | no       | Values for the positional placeholders. Each element supports Jinja expressions and must be quoted as an HCL string: `["{{ args.limit }}"]`. Earl coerces the rendered value to the correct SQL type. |
+| `sandbox`           | block  | no       | Query limits.                                                                                                                                                                                         |
 
-| Field         | Type      | Required | Default | Description                                                                                                            |
-| ------------- | --------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `read_only`   | `boolean` | No       | --      | Restrict to read-only queries. The `sandbox.sql_force_read_only` setting in `config.toml` can override this to `true`. |
-| `max_rows`    | `u64`     | No       | --      | Maximum number of rows to return. The `sandbox.sql_max_rows` setting in `config.toml` can cap this further.            |
-| `max_time_ms` | `u64`     | No       | --      | Maximum query execution time in milliseconds.                                                                          |
+`sql.sandbox` fields:
 
-## `auth`
+| Field         | Type    | Description                                        |
+| ------------- | ------- | -------------------------------------------------- |
+| `read_only`   | boolean | Restrict the connection to read-only transactions. |
+| `max_rows`    | integer | Limit the number of rows returned.                 |
+| `max_time_ms` | integer | Query execution timeout in milliseconds.           |
 
-The `auth` block configures authentication for HTTP, GraphQL, and gRPC operations. The `kind` field selects the authentication strategy. All secrets referenced in auth must be declared in `annotations.secrets`.
+## `body` block (HTTP only)
 
-<Tabs items={["bearer", "api_key", "basic", "oauth2_profile", "none"]}>
-<Tab value="bearer">
+The `body` block inside an HTTP `operation` has a `kind` discriminator field.
 
-Sends an `Authorization: Bearer <token>` header.
-
-```hcl
-auth {
-  kind   = "bearer"
-  secret = "github.token"
-}
-```
-
-| Field    | Type     | Required | Description                             |
-| -------- | -------- | -------- | --------------------------------------- |
-| `kind`   | `string` | Yes      | Must be `"bearer"`.                     |
-| `secret` | `string` | Yes      | Secret key containing the bearer token. |
-
-</Tab>
-<Tab value="api_key">
-
-Sends an API key as a header, query parameter, or cookie.
-
-```hcl
-auth {
-  kind     = "api_key"
-  location = "header"
-  name     = "X-API-Key"
-  secret   = "service.api_key"
-}
-```
-
-| Field      | Type                                  | Required | Description                                              |
-| ---------- | ------------------------------------- | -------- | -------------------------------------------------------- |
-| `kind`     | `string`                              | Yes      | Must be `"api_key"`.                                     |
-| `location` | `"header"` \| `"query"` \| `"cookie"` | Yes      | Where to send the API key. For gRPC, must be `"header"`. |
-| `name`     | `string`                              | Yes      | Header name, query parameter name, or cookie name.       |
-| `secret`   | `string`                              | Yes      | Secret key containing the API key value.                 |
-
-</Tab>
-<Tab value="basic">
-
-Sends an `Authorization: Basic <base64(username:password)>` header.
-
-```hcl
-auth {
-  kind            = "basic"
-  username        = "{{ args.username }}"
-  password_secret = "service.password"
-}
-```
-
-| Field             | Type     | Required | Description                              |
-| ----------------- | -------- | -------- | ---------------------------------------- |
-| `kind`            | `string` | Yes      | Must be `"basic"`.                       |
-| `username`        | `string` | Yes      | Username. Supports template expressions. |
-| `password_secret` | `string` | Yes      | Secret key containing the password.      |
-
-</Tab>
-<Tab value="oauth2_profile">
-
-Uses an OAuth2 profile configured in `config.toml` to obtain an access token. The token is sent as a Bearer header.
-
-```hcl
-auth {
-  kind    = "oauth2_profile"
-  profile = "my_provider"
-}
-```
-
-| Field     | Type     | Required | Description                                          |
-| --------- | -------- | -------- | ---------------------------------------------------- |
-| `kind`    | `string` | Yes      | Must be `"oauth2_profile"`.                          |
-| `profile` | `string` | Yes      | Name of the OAuth2 profile defined in configuration. |
-
-</Tab>
-<Tab value="none">
-
-Explicitly disables authentication.
-
-```hcl
-auth {
-  kind = "none"
-}
-```
-
-| Field  | Type     | Required | Description       |
-| ------ | -------- | -------- | ----------------- |
-| `kind` | `string` | Yes      | Must be `"none"`. |
-
-</Tab>
-</Tabs>
-
-## `body`
-
-The `body` block configures the request body for HTTP operations. The `kind` field selects the body format. Not available for gRPC, Bash, or SQL operations.
-
-<Tabs items={["json", "form_urlencoded", "multipart", "raw_text", "raw_bytes_base64", "file_stream", "none"]}>
-<Tab value="json">
-
-Sends a JSON request body with `Content-Type: application/json`.
+### `kind = "json"`
 
 ```hcl
 body {
-  kind = "json"
+  kind  = "json"
   value = {
-    title = "{{ args.title }}"
-    body  = "{{ args.body }}"
-    labels = "{{ args.labels }}"
+    name  = "{{ args.name }}"
+    count = "{{ args.count }}"
   }
 }
 ```
 
-| Field   | Type     | Required | Description                                        |
-| ------- | -------- | -------- | -------------------------------------------------- |
-| `kind`  | `string` | Yes      | Must be `"json"`.                                  |
-| `value` | `any`    | Yes      | JSON value to send. Supports template expressions. |
+Sends `Content-Type: application/json`. The `value` map supports nested objects and Jinja expressions.
 
-</Tab>
-<Tab value="form_urlencoded">
-
-Sends URL-encoded form data with `Content-Type: application/x-www-form-urlencoded`.
+### `kind = "form_urlencoded"`
 
 ```hcl
 body {
-  kind = "form_urlencoded"
+  kind   = "form_urlencoded"
   fields = {
-    grant_type = "client_credentials"
-    scope      = "{{ args.scope }}"
+    username = "{{ args.username }}"
+    password = "{{ args.password }}"
   }
 }
 ```
 
-| Field    | Type               | Required | Description                                       |
-| -------- | ------------------ | -------- | ------------------------------------------------- |
-| `kind`   | `string`           | Yes      | Must be `"form_urlencoded"`.                      |
-| `fields` | `map<string, any>` | Yes      | Form fields. Values support template expressions. |
+Sends `Content-Type: application/x-www-form-urlencoded`.
 
-</Tab>
-<Tab value="multipart">
-
-Sends multipart form data. Each part must specify exactly one of `value`, `bytes_base64`, or `file_path`.
+### `kind = "multipart"`
 
 ```hcl
 body {
   kind = "multipart"
   parts = [
     {
-      name  = "file"
-      file_path    = "{{ args.file }}"
+      name         = "file"
+      file_path    = "{{ args.path }}"
       content_type = "application/octet-stream"
       filename     = "upload.bin"
     },
@@ -536,107 +405,179 @@ body {
 }
 ```
 
-| Field   | Type     | Required | Description                                            |
-| ------- | -------- | -------- | ------------------------------------------------------ |
-| `kind`  | `string` | Yes      | Must be `"multipart"`.                                 |
-| `parts` | `array`  | Yes      | Array of part objects. Must include at least one part. |
+Sends `Content-Type: multipart/form-data`. Each part in the `parts` list has:
 
-#### Multipart Part Fields
+| Field          | Required     | Description                                                                     |
+| -------------- | ------------ | ------------------------------------------------------------------------------- |
+| `name`         | yes          | Form field name.                                                                |
+| `value`        | one of three | Text content for the part. Supports Jinja expressions.                          |
+| `bytes_base64` | one of three | Base64-encoded binary content.                                                  |
+| `file_path`    | one of three | Path to a file whose contents become the part body. Supports Jinja expressions. |
+| `content_type` | no           | MIME type for the part.                                                         |
+| `filename`     | no           | Filename reported in the `Content-Disposition` header.                          |
 
-| Field          | Type     | Required | Description                                                                     |
-| -------------- | -------- | -------- | ------------------------------------------------------------------------------- |
-| `name`         | `string` | Yes      | Form field name.                                                                |
-| `value`        | `string` | No       | Text value. Mutually exclusive with `bytes_base64` and `file_path`.             |
-| `bytes_base64` | `string` | No       | Base64-encoded binary content. Mutually exclusive with `value` and `file_path`. |
-| `file_path`    | `string` | No       | Path to a file to upload. Mutually exclusive with `value` and `bytes_base64`.   |
-| `content_type` | `string` | No       | MIME type for this part.                                                        |
-| `filename`     | `string` | No       | Filename sent in the multipart Content-Disposition header.                      |
+Exactly one of `value`, `bytes_base64`, or `file_path` is required per part.
 
-</Tab>
-<Tab value="raw_text">
-
-Sends a raw text body.
+### `kind = "raw_text"`
 
 ```hcl
 body {
   kind         = "raw_text"
   value        = "{{ args.payload }}"
-  content_type = "text/plain"
+  content_type = "text/xml"
 }
 ```
 
-| Field          | Type     | Required | Description                                  |
-| -------------- | -------- | -------- | -------------------------------------------- |
-| `kind`         | `string` | Yes      | Must be `"raw_text"`.                        |
-| `value`        | `string` | Yes      | Text content. Supports template expressions. |
-| `content_type` | `string` | No       | MIME type override.                          |
+Sends the rendered string as raw bytes with the given `content_type` (defaults to `text/plain`).
 
-</Tab>
-<Tab value="raw_bytes_base64">
-
-Sends raw binary data from a base64-encoded string.
+### `kind = "raw_bytes_base64"`
 
 ```hcl
 body {
   kind         = "raw_bytes_base64"
-  value        = "{{ args.encoded_data }}"
+  value        = "{{ args.base64_data }}"
   content_type = "application/octet-stream"
 }
 ```
 
-| Field          | Type     | Required | Description                    |
-| -------------- | -------- | -------- | ------------------------------ |
-| `kind`         | `string` | Yes      | Must be `"raw_bytes_base64"`.  |
-| `value`        | `string` | Yes      | Base64-encoded binary content. |
-| `content_type` | `string` | No       | MIME type override.            |
+Decodes the rendered string as base64 and sends the resulting bytes.
 
-</Tab>
-<Tab value="file_stream">
-
-Streams a file as the request body.
+### `kind = "file_stream"`
 
 ```hcl
 body {
   kind         = "file_stream"
   path         = "{{ args.file_path }}"
-  content_type = "application/octet-stream"
+  content_type = "application/pdf"
 }
 ```
 
-| Field          | Type     | Required | Description                                                         |
-| -------------- | -------- | -------- | ------------------------------------------------------------------- |
-| `kind`         | `string` | Yes      | Must be `"file_stream"`.                                            |
-| `path`         | `string` | Yes      | Path to the file. Must not be empty. Supports template expressions. |
-| `content_type` | `string` | No       | MIME type override.                                                 |
+Reads a file from disk and sends its contents as the request body.
 
-</Tab>
-<Tab value="none">
+## `auth` block
 
-Explicitly sends no request body.
+The `auth` block lives inside an `operation` block and has a `kind` discriminator field. Every secret key referenced in `auth` must also appear in `annotations.secrets`.
+
+### `kind = "bearer"`
 
 ```hcl
-body {
-  kind = "none"
+auth {
+  kind   = "bearer"
+  secret = "provider.token"
 }
 ```
 
-| Field  | Type     | Required | Description       |
-| ------ | -------- | -------- | ----------------- |
-| `kind` | `string` | Yes      | Must be `"none"`. |
+| Field    | Required | Description                                                                    |
+| -------- | -------- | ------------------------------------------------------------------------------ |
+| `kind`   | yes      | `"bearer"`                                                                     |
+| `secret` | yes      | Key name in the OS keychain. Value is sent as `Authorization: Bearer <value>`. |
 
-</Tab>
-</Tabs>
+### `kind = "api_key"`
 
-## `transport`
+```hcl
+auth {
+  kind     = "api_key"
+  secret   = "provider.api_key"
+  location = "header"    # header, query, or cookie
+  name     = "X-Api-Key"
+}
+```
 
-Optional transport configuration for timeouts, retries, redirects, TLS, compression, and proxying. Available on all protocols.
+| Field      | Required | Description                                                  |
+| ---------- | -------- | ------------------------------------------------------------ |
+| `kind`     | yes      | `"api_key"`                                                  |
+| `secret`   | yes      | Key name in the OS keychain.                                 |
+| `location` | yes      | Where to send the key: `"header"`, `"query"`, or `"cookie"`. |
+| `name`     | yes      | Header name, query parameter name, or cookie name.           |
+
+### `kind = "basic"`
+
+```hcl
+auth {
+  kind            = "basic"
+  username        = "{{ secrets.jira_email }}"
+  password_secret = "provider.password"
+}
+```
+
+| Field             | Required | Description                                                                                   |
+| ----------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `kind`            | yes      | `"basic"`                                                                                     |
+| `username`        | yes      | Username string. Supports Jinja expressions, including `secrets.*` to pull from the keychain. |
+| `password_secret` | yes      | Key name in the OS keychain whose value is the password.                                      |
+
+### `kind = "o_auth2_profile"`
+
+```hcl
+auth {
+  kind    = "o_auth2_profile"
+  profile = "myprofile"
+}
+```
+
+| Field     | Required | Description                                                                                                                            |
+| --------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`    | yes      | `"o_auth2_profile"`                                                                                                                    |
+| `profile` | yes      | Name of an OAuth2 profile defined in `~/.config/earl/config.toml`. Earl fetches, caches, and refreshes the access token automatically. |
+
+See [Secrets & Authentication](/docs/secrets-and-auth) for OAuth2 profile configuration.
+
+## `result` block
+
+```hcl
+result {
+  decode       = "json"
+  extract      = { json_pointer = "/items" }
+  output       = "Found {{ result | length }} items."
+  result_alias = "items"
+}
+```
+
+| Field          | Type   | Default          | Description                                                                                                                                            |
+| -------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `decode`       | string | `"auto"`         | How to parse the response body before the output template runs.                                                                                        |
+| `extract`      | block  | —                | Extract a subset of the decoded response.                                                                                                              |
+| `output`       | string | `"{{ result }}"` | Jinja template rendered to produce the final output. The variable `result` holds the decoded (and optionally extracted) response.                      |
+| `result_alias` | string | —                | Rename the `result` variable in the output template. `result_alias = "items"` makes the response available as `{{ items }}` instead of `{{ result }}`. |
+
+### Decode modes
+
+| Value      | Description                                                                            |
+| ---------- | -------------------------------------------------------------------------------------- |
+| `"auto"`   | Infers mode from `Content-Type` header, then falls back to JSON detection on the body. |
+| `"json"`   | Parse body as JSON. `result` is the decoded object or array.                           |
+| `"text"`   | Treat body as UTF-8 text. `result` is a string.                                        |
+| `"html"`   | Treat body as HTML text. `result` is a string.                                         |
+| `"xml"`    | Treat body as XML text. `result` is a string.                                          |
+| `"binary"` | Return raw bytes. `result` is the bytes base64-encoded as a string.                    |
+| `"lines"`  | Streaming mode. See [Streaming](/docs/streaming).                                      |
+
+### `extract` options
+
+Extract runs after decode and before the output template. Use it to pull a specific value out of a large response.
+
+```hcl
+# JSON Pointer (RFC 6901)
+extract = { json_pointer = "/data/users" }
+
+# Regular expression — result is the first capture group
+extract = { regex = "token=([A-Za-z0-9]+)" }
+
+# XPath — for XML responses
+extract = { xpath = "//user/name/text()" }
+
+# CSS selector — for HTML responses
+extract = { css_selector = "h1.title" }
+```
+
+## `transport` block
+
+The `transport` block is optional and available for all protocols except SQL (where it applies at connection level). It controls low-level network behavior.
 
 ```hcl
 transport {
-  timeout_ms         = 30000
-  max_response_bytes = 10485760
-  compression        = true
-  proxy_profile      = "corp"
+  timeout_ms        = 30000
+  max_response_bytes = 8388608
 
   redirects {
     follow   = true
@@ -646,226 +587,79 @@ transport {
   retry {
     max_attempts    = 3
     backoff_ms      = 250
-    retry_on_status = [429, 502, 503]
+    retry_on_status = [429, 503]
   }
+
+  compression = true
 
   tls {
-    min_version = "1.2"
+    min_version = "1.2"  # 1.0, 1.1, 1.2, or 1.3
   }
+
+  proxy_profile = "corporate"
 }
 ```
 
-### Top-level Transport Fields
+| Field                   | Type             | Default           | Description                                                              |
+| ----------------------- | ---------------- | ----------------- | ------------------------------------------------------------------------ |
+| `timeout_ms`            | integer          | `30000`           | Request timeout in milliseconds.                                         |
+| `max_response_bytes`    | integer          | `8388608` (8 MiB) | Maximum response body size. Clamped between 1 KiB and 128 MiB.           |
+| `redirects.follow`      | boolean          | `true`            | Whether to follow HTTP redirects.                                        |
+| `redirects.max_hops`    | integer          | `5`               | Maximum redirect chain length.                                           |
+| `retry.max_attempts`    | integer          | `1`               | Total attempts including the first. Values below `1` are treated as `1`. |
+| `retry.backoff_ms`      | integer          | `250`             | Delay between retries in milliseconds.                                   |
+| `retry.retry_on_status` | list of integers | `[]`              | HTTP status codes that trigger a retry (e.g. `[429, 503]`).              |
+| `compression`           | boolean          | `true`            | Whether to accept compressed responses.                                  |
+| `tls.min_version`       | string           | —                 | Minimum TLS version: `"1.0"`, `"1.1"`, `"1.2"`, or `"1.3"`.              |
+| `proxy_profile`         | string           | —                 | Name of a proxy profile defined in `~/.config/earl/config.toml`.         |
 
-| Field                | Type      | Required | Default | Description                                                                                                               |
-| -------------------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `timeout_ms`         | `u64`     | No       | --      | Request timeout in milliseconds. Must be greater than 0.                                                                  |
-| `max_response_bytes` | `u64`     | No       | --      | Maximum response body size in bytes. Must be greater than 0.                                                              |
-| `compression`        | `boolean` | No       | --      | Enable response decompression.                                                                                            |
-| `proxy_profile`      | `string`  | No       | --      | Named proxy profile from `config.toml` `network.proxy_profiles`. Must not be empty when provided. Not supported for gRPC. |
+## `environment_overrides` block
 
-### `transport.redirects`
-
-| Field      | Type      | Required | Default | Description                       |
-| ---------- | --------- | -------- | ------- | --------------------------------- |
-| `follow`   | `boolean` | No       | `true`  | Whether to follow HTTP redirects. |
-| `max_hops` | `integer` | No       | `5`     | Maximum number of redirect hops.  |
-
-### `transport.retry`
-
-| Field             | Type        | Required | Default | Description                                                                                                                   |
-| ----------------- | ----------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `max_attempts`    | `integer`   | No       | `0`     | Maximum number of retry attempts.                                                                                             |
-| `backoff_ms`      | `u64`       | No       | `250`   | Backoff between retries in milliseconds.                                                                                      |
-| `retry_on_status` | `integer[]` | No       | `[]`    | Status codes that trigger a retry. For HTTP/GraphQL these are HTTP status codes; for gRPC these are gRPC status code numbers. |
-
-### `transport.tls`
-
-| Field         | Type     | Required | Default | Description                                                                                       |
-| ------------- | -------- | -------- | ------- | ------------------------------------------------------------------------------------------------- |
-| `min_version` | `string` | No       | --      | Minimum TLS version. Accepted values: `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"`. Not supported for gRPC. |
-
-## `result`
-
-The `result` block controls how the response is decoded, optionally extracted, and rendered to output.
+When an environment is active, its override replaces the command's default `operation` (and optionally `result`) entirely.
 
 ```hcl
-result {
-  decode       = "json"
-  extract {
-    json_pointer = "/items"
-  }
-  output       = "Found {{ result | length }} items"
-  result_alias = "items"
-}
-```
-
-| Field          | Type     | Required | Default  | Description                                                       |
-| -------------- | -------- | -------- | -------- | ----------------------------------------------------------------- |
-| `decode`       | `string` | No       | `"auto"` | Decode strategy for the response body.                            |
-| `extract`      | block    | No       | --       | Optional extraction rule applied after decoding.                  |
-| `output`       | `string` | Yes      | --       | Jinja2 template for the human-readable output. Must not be empty. |
-| `result_alias` | `string` | No       | --       | Additional variable name for `result` in the output template.     |
-
-### `result.decode` Values
-
-| Value    | Description                                                          |
-| -------- | -------------------------------------------------------------------- |
-| `auto`   | Automatically detect the format from Content-Type headers.           |
-| `json`   | Parse the response body as JSON.                                     |
-| `text`   | Treat the response body as plain text.                               |
-| `html`   | Treat the response body as HTML (enables `css_selector` extraction). |
-| `xml`    | Treat the response body as XML (enables `xpath` extraction).         |
-| `binary` | Treat the response body as binary data.                              |
-
-### `result.extract` Shapes
-
-Exactly one extraction field must be provided in the `extract` block. Each shape requires a compatible `decode` mode.
-
-<Tabs items={["json_pointer", "regex", "css_selector", "xpath"]}>
-<Tab value="json_pointer">
-
-Extracts a value from a JSON response using an RFC 6901 JSON Pointer.
-
-```hcl
-extract {
-  json_pointer = "/items/0/name"
-}
-```
-
-| Field          | Type     | Required | Description                                                                                      |
-| -------------- | -------- | -------- | ------------------------------------------------------------------------------------------------ |
-| `json_pointer` | `string` | Yes      | JSON Pointer path (e.g., `/items/0`). Requires `decode = "json"` or `"auto"` with JSON response. |
-
-</Tab>
-<Tab value="regex">
-
-Extracts text using a regular expression. If the regex has a capture group, the first group is returned; otherwise the full match.
-
-```hcl
-extract {
-  regex = "id=([a-z0-9-]+)"
-}
-```
-
-| Field   | Type     | Required | Description                                                           |
-| ------- | -------- | -------- | --------------------------------------------------------------------- |
-| `regex` | `string` | Yes      | Regular expression pattern. Requires decoded text, HTML, or XML body. |
-
-</Tab>
-<Tab value="css_selector">
-
-Extracts text content from HTML elements matching a CSS selector. Returns an array of matched text strings.
-
-```hcl
-extract {
-  css_selector = "h1.title"
-}
-```
-
-| Field          | Type     | Required | Description                                       |
-| -------------- | -------- | -------- | ------------------------------------------------- |
-| `css_selector` | `string` | Yes      | CSS selector. Requires decoded HTML or text body. |
-
-</Tab>
-<Tab value="xpath">
-
-Extracts values from XML using an XPath expression.
-
-```hcl
-extract {
-  xpath = "//item/text()"
-}
-```
-
-| Field   | Type     | Required | Description                                          |
-| ------- | -------- | -------- | ---------------------------------------------------- |
-| `xpath` | `string` | Yes      | XPath expression. Requires decoded XML or text body. |
-
-</Tab>
-</Tabs>
-
-### Output Template Variables
-
-The `result.output` field is a Jinja2 template with access to:
-
-| Variable  | Description                                                       |
-| --------- | ----------------------------------------------------------------- |
-| `args`    | The bound argument values passed to the command.                  |
-| `result`  | The decoded (and optionally extracted) response body.             |
-| _(alias)_ | Same as `result`, available under the name set by `result_alias`. |
-
-<Callout type="warn">
-  `secrets.*` is not available in `result.output`. This prevents secrets from
-  leaking through command output.
-</Callout>
-
-## `environment "<name>"`
-
-The optional `environment "<name>"` block inside a `command` replaces the command's `operation` and optionally its `result` when the named environment is active.
-
-```hcl
-command "ping" {
-  title       = "Ping"
-  summary     = "Health check"
-  description = "HTTP in production, bash locally."
-  annotations {
-    mode                                 = "read"
-    secrets                              = []
-    allow_environment_protocol_switching = true
-  }
-  operation {
-    protocol = "http"
-    method   = "GET"
-    url      = "{{ vars.base_url }}/ping"
-  }
-  environment "local" {
+environment_overrides {
+  staging {
     operation {
-      protocol = "bash"
-      bash {
-        script = "echo pong"
+      protocol = "http"
+      method   = "GET"
+      url      = "https://staging.example.internal/api/items"
+      auth {
+        kind   = "bearer"
+        secret = "myapp.staging_token"
       }
     }
+
     result {
-      decode = "text"
-      output = "local: {{ result }}"
+      decode = "json"
+      output = "[staging] {{ result | length }} items"
     }
   }
-  result {
-    decode = "text"
-    output = "{{ result }}"
+}
+```
+
+Each named block inside `environment_overrides` corresponds to an environment name defined in the provider's `environments` block. See [Environments](/docs/environments) for how environments are configured and activated.
+
+The `result` override inside an environment is optional. If omitted, the command's default `result` block applies.
+
+## `environments` block (provider-level)
+
+```hcl
+environments {
+  default = "production"
+  secrets = ["myapp.prod_token"]
+
+  environments {
+    production = { base_url = "https://api.myapp.com" }
+    staging    = { base_url = "https://staging.myapp.com" }
   }
 }
 ```
 
-| Field       | Type  | Required | Description                                                                            |
-| ----------- | ----- | -------- | -------------------------------------------------------------------------------------- |
-| `operation` | block | Yes      | Replacement operation. Must follow the same protocol rules as a top-level `operation`. |
-| `result`    | block | No       | Replacement result block. Falls back to the command's `result` if omitted.             |
+| Field          | Type            | Description                                                                                                                                                                      |
+| -------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `default`      | string          | Environment name that is active when none is specified.                                                                                                                          |
+| `secrets`      | list of strings | Secrets resolved before environment variable values are rendered.                                                                                                                |
+| `environments` | map             | Named environments. Each environment is a map of string variable names to Jinja template strings. Those variables are available in operation fields as `{{ env.base_url }}` etc. |
 
-When the override `operation` uses a different protocol than the command's default `operation`, `annotations.allow_environment_protocol_switching = true` must be set or validation will fail.
-
-## HCL Functions
-
-Template files support built-in functions for loading external content into string fields.
-
-| Function                | Description                                                                                                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file("path")`          | Read a file relative to the template directory. Path must be relative and must not contain `..` segments. The file must not resolve outside the template directory. |
-| `base64encode("value")` | Base64-encode a string value (standard encoding).                                                                                                                   |
-| `trimspace("value")`    | Trim leading and trailing whitespace.                                                                                                                               |
-
-Functions can be composed:
-
-```hcl
-sql {
-  query = trimspace(file("queries/recent_orders.sql"))
-}
-```
-
-Functions work in two forms:
-
-- As native HCL expressions: `script = file("run.sh")`
-- As string values: `script = "file(\"run.sh\")"`
-
-Both produce the same result. The native form is preferred.
+See [Environments](/docs/environments) for the complete guide.

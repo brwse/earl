@@ -1,0 +1,71 @@
+---
+title: Agent-Assisted Setup
+description: Use the setup-earl skill to have an AI agent install and configure Earl for you.
+---
+
+The `setup-earl` skill handles Earl installation, MCP configuration, and agent platform integration. You paste one prompt; the agent does the rest.
+
+Use this instead of the [Quick Start](/docs/quick-start) when you want the agent to detect which editor platforms are in use (Claude Code, Cursor, Windsurf), write the correct MCP config for each, and drop `CLAUDE.md` / `.cursorrules` / `.windsurfrules` breadcrumbs automatically. Also useful if you have existing `curl`, `gh`, or other CLI calls you want migrated to Earl templates.
+
+The manual Quick Start is a better fit if you want to understand each step, or if you are working in an environment without agent access.
+
+## Installing the skill
+
+Skills are markdown files placed at `~/.claude/skills/<skill-name>/SKILL.md`. To install `setup-earl` into Claude Code:
+
+```bash
+mkdir -p ~/.claude/skills/setup-earl
+curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/skills/setup-earl/SKILL.md \
+  -o ~/.claude/skills/setup-earl/SKILL.md
+```
+
+Then in a new Claude Code session:
+
+```
+Use the setup-earl skill to install and configure Earl for this project.
+```
+
+You can also skip the file install and paste it inline:
+
+```
+Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/setup-earl/SKILL.md
+and any files it references under
+https://raw.githubusercontent.com/brwse/earl/main/skills/references/
+then follow the skill to set up Earl for this project.
+```
+
+## What the agent does
+
+The skill runs in five phases.
+
+**Install.** The agent checks whether `earl` is on PATH. If not, it picks an install method based on the OS — install script for macOS/Linux, PowerShell for Windows, or `cargo install earl` — then runs `earl doctor` to verify.
+
+**Demo.** The agent imports the `system` example template and runs `earl call --yes --json system.list_files --path .`. You see something work before anything else is configured.
+
+**Connect.** The agent scans for `.claude/`, `.cursor/`, `.windsurf/`, and Claude Desktop config files. It writes MCP config to every detected platform, picks full or discovery mode based on how many templates you have, and writes context breadcrumbs to `CLAUDE.md`, `.cursorrules`, or `.windsurfrules`. See [MCP Integration](/docs/mcp) for the difference between modes.
+
+**Route.** One question: do you have existing `curl`, `gh`, or other CLI calls to replace, or are you starting from scratch? The agent runs `migrate-to-earl` or `create-template` based on your answer.
+
+**Lock down (optional).** The agent offers to run `secure-agent`, which stops your agent platform from bypassing Earl with raw CLI tools.
+
+## The two-session model
+
+MCP tools do not activate until you restart your agent — this is a common point of confusion. After writing your MCP config, the skill tells you:
+
+> Earl is now installed and configured. You can use `earl call --yes --json` via the Bash tool right now. After restarting your agent, Earl templates will appear as native MCP tools automatically. Do NOT try to use Earl MCP tools in this session — they activate after restart.
+
+In the current session, call Earl via `earl call --yes --json provider.command --param value` through Bash. After you restart, the templates show up as native tools and you can call them directly.
+
+## What needs a human
+
+Most of the setup is unattended. Two things are not.
+
+**OAuth PKCE.** If a template uses `auth_code_pkce`, the agent cannot complete the browser redirect. It gives you the `earl auth login <profile>` command and waits. You open a browser, finish the flow, the agent continues.
+
+**macOS Keychain prompt.** The first time Earl reads or writes a secret on macOS, the OS asks for permission. Click Allow. It only happens once per entry.
+
+For reference: `client_credentials` flows run fully automated. `device_code` flows are agent-compatible — the agent shows the URL and code, you visit from any device, and it polls until the token arrives.
+
+## Skill source
+
+[`skills/setup-earl/SKILL.md`](https://github.com/brwse/earl/blob/main/skills/setup-earl/SKILL.md) in the Earl repository.

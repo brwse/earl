@@ -1,113 +1,157 @@
 ---
 title: Policy Engine
-description: Control which subjects can invoke which MCP tools when running Earl's HTTP server with JWT authentication
 icon: Shield
+description: JWT-based access control for multi-user and multi-agent MCP HTTP deployments.
 ---
 
-The policy engine controls which authenticated subjects can call which MCP tools. It only applies when JWT authentication is enabled on the HTTP transport — it has no effect on stdio or unauthenticated setups. Without it, any caller who holds a valid token can use any tool.
+The policy engine controls which MCP callers can invoke which tools. It only comes into play when Earl's HTTP transport is running with JWT authentication — if you're using stdio, or you passed `--allow-unauthenticated`, none of this applies.
 
-## How policies work
+## JWT Authentication
 
-Policies are `[[policy]]` entries in `~/.config/earl/config.toml`. Each entry names a set of subjects, a set of tool patterns, an optional mode filter, and an effect of `allow` or `deny`.
+Configure JWT validation in `~/.config/earl/config.toml`.
+
+### OIDC Discovery (recommended)
+
+If your identity provider publishes a standard discovery document, use this. Earl fetches the JWKS endpoint automatically.
 
 ```toml
-[[policy]]
-subjects = ["user:alice", "group:admins"]
-tools = ["github.*"]
-effect = "allow"
-
-[[policy]]
-subjects = ["*"]
-tools = ["github.delete_repo"]
-modes = ["write"]
-effect = "deny"
+[auth.jwt]
+audience = "https://api.yourcompany.com"
+oidc_discovery_url = "https://accounts.yourcompany.com/.well-known/openid-configuration"
 ```
 
-Reading these two rules together: Alice and anyone in the admins group can call any GitHub tool. The second rule then cuts across that — no subject, including admins, can call `github.delete_repo` in write mode. The deny wins regardless of what any allow rule says.
+### Manual JWKS
 
-The `subjects` values are matched against the `sub` claim in the incoming JWT. You control what goes into `sub` — it might be a user ID, an email, a service account identifier, or a role-prefixed string like `user:alice` or `group:admins`. Earl treats the value as an opaque string and matches it with the patterns you provide.
-
-## Policy fields
-
-| Field      | Type       | Required | Description                                                             |
-| ---------- | ---------- | -------- | ----------------------------------------------------------------------- |
-| `subjects` | `string[]` | Yes      | JWT `sub` values to match. Supports `*` glob patterns.                  |
-| `tools`    | `string[]` | Yes      | Tool name patterns to match. Supports `*` glob per dot-separated segment.|
-| `modes`    | `string[]` | No       | Restrict to `read`, `write`, or both. Omit to match either mode.        |
-| `effect`   | `string`   | Yes      | `allow` or `deny`.                                                      |
-
-## Evaluation order
-
-Earl uses a deny-overrides model:
-
-1. Earl collects every policy whose `subjects` patterns match the caller's `sub` claim, whose `tools` patterns match the requested tool name, and whose `modes` (if set) match the tool's annotated mode.
-2. If any collected policy has `effect = "deny"`, the call is blocked. No further evaluation happens.
-3. If any collected policy has `effect = "allow"` and nothing denies, the call proceeds.
-4. If no policies match at all, the call is blocked. This is the default-deny behavior.
-
-This matters when you write a broad allow — say, `subjects = ["*"], tools = ["*"]` as a base rule. You can still carve out exceptions with deny rules, and those exceptions will hold. You do not need to audit every allow rule that might otherwise cover the same subject and tool. A deny always wins.
-
-The common misconfiguration is writing allow rules for an admin group and expecting those to override a deny you added later. They will not. Deny-overrides means the deny rule wins regardless of where it appears in the list.
-
-## Glob pattern semantics
-
-The `*` wildcard matches any sequence of characters within a single dot-separated segment. It does not cross segment boundaries.
-
-| Pattern      | Matches               | Does not match        |
-| ------------ | --------------------- | --------------------- |
-| `github.*`   | `github.create_issue` | `slack.send_message`  |
-| `*.delete_*` | `github.delete_repo`  | `github.admin.delete` |
-| `*`          | any tool              | (nothing)             |
-
-A lone `*` in `subjects` matches any `sub` value, which makes it useful for policies that apply to every authenticated caller.
-
-The single-segment constraint is intentional. If Earl ever gains tools with nested names like `github.admin.delete_everything`, a rule written as `github.*` will not accidentally cover them. You get exactly what you specify.
-
-## A realistic team example
-
-This policy set covers a small engineering team with three kinds of callers: administrators, regular users, and a CI service account.
+Use this when there's no discovery endpoint.
 
 ```toml
-# Admins can do anything
+[auth.jwt]
+audience   = "https://api.yourcompany.com"
+issuer     = "https://accounts.yourcompany.com"
+jwks_uri   = "https://accounts.yourcompany.com/.well-known/jwks.json"
+algorithms = ["RS256"]
+clock_skew_seconds         = 30
+jwks_cache_max_age_seconds = 900
+```
+
+### Fields
+
+| Field                        | Type       | Required                        | Default     | Description                                               |
+| ---------------------------- | ---------- | ------------------------------- | ----------- | --------------------------------------------------------- |
+| `audience`                   | `string`   | Yes                             | —           | Expected `aud` claim                                      |
+| `oidc_discovery_url`         | `string`   | If `issuer`/`jwks_uri` not set  | —           | Discovery URL; resolves issuer and JWKS URI automatically |
+| `issuer`                     | `string`   | If `oidc_discovery_url` not set | —           | Expected `iss` claim                                      |
+| `jwks_uri`                   | `string`   | If `oidc_discovery_url` not set | —           | JWKS endpoint                                             |
+| `algorithms`                 | `string[]` | No                              | `["RS256"]` | Allowed signing algorithms                                |
+| `clock_skew_seconds`         | `integer`  | No                              | `30`        | Clock skew tolerance (max 300)                            |
+| `jwks_cache_max_age_seconds` | `integer`  | No                              | `900`       | JWKS cache TTL in seconds                                 |
+
+Supported algorithms: RS256, RS384, RS512, ES256, ES384, ES512, PS256, PS384, PS512, EdDSA.
+
+Incoming tokens must carry `exp`, `sub`, `iss`, and `aud` claims. The `sub` claim is what policy rules match against.
+
+## Policy Rules
+
+Add `[[policy]]` entries to `~/.config/earl/config.toml`. Each rule targets a set of subjects, a set of tools, an optional mode filter, and an effect.
+
+```toml
+# All authenticated users can read from GitHub
+[[policy]]
+subjects = ["user:*"]
+tools    = ["github.*"]
+modes    = ["read"]
+effect   = "allow"
+
+# Admins can do anything with GitHub tools
 [[policy]]
 subjects = ["group:admins"]
-tools = ["*"]
-effect = "allow"
+tools    = ["github.*"]
+effect   = "allow"
 
-# Regular users can call any read-mode tool
-[[policy]]
-subjects = ["group:users"]
-tools = ["*"]
-modes = ["read"]
-effect = "allow"
-
-# Regular users can call specific write tools they need day-to-day
-[[policy]]
-subjects = ["group:users"]
-tools = ["github.create_issue", "github.add_comment", "linear.create_issue"]
-modes = ["write"]
-effect = "allow"
-
-# CI has access to only the deployment provider
-[[policy]]
-subjects = ["service:ci"]
-tools = ["render.*"]
-effect = "allow"
-
-# Nobody — including admins — can delete repositories or drop databases
+# Nobody can invoke write-mode destructive commands
 [[policy]]
 subjects = ["*"]
-tools = ["github.delete_repo", "postgres.drop_table", "postgres.drop_database"]
-modes = ["write"]
-effect = "deny"
+tools    = ["github.delete_repo", "github.merge_pull"]
+modes    = ["write"]
+effect   = "deny"
 ```
 
-The last rule applies to everyone. Even if a future policy grants an admin broader write access, the explicit deny on those three tools holds.
+### Fields
 
-<Callout type="warn">
-  Policies only apply to authenticated requests. Passing `--allow-unauthenticated` bypasses the policy engine entirely. In that mode, all callers can use all tools, subject only to the `--yes` flag for write-mode operations.
-</Callout>
+| Field      | Type       | Required | Description                                           |
+| ---------- | ---------- | -------- | ----------------------------------------------------- |
+| `subjects` | `string[]` | Yes      | Caller identity patterns                              |
+| `tools`    | `string[]` | Yes      | Tool name patterns                                    |
+| `modes`    | `string[]` | No       | `"read"`, `"write"`, or both. Omit to match any mode. |
+| `effect`   | `string`   | Yes      | `"allow"` or `"deny"`                                 |
 
-## Setting up JWT authentication
+### Subject patterns
 
-The policy engine requires JWT authentication on the HTTP transport. Add an `[auth.jwt]` section to `~/.config/earl/config.toml` with your audience, issuer, and either a JWKS URI or an OIDC discovery URL. Once that is in place, incoming requests must carry a valid `Bearer` token. The `sub` claim from that token is what Earl matches against your `subjects` patterns. See [Configuration](/docs/configuration) for the full `[auth.jwt]` field reference and example configuration.
+| Pattern        | Matches                                       |
+| -------------- | --------------------------------------------- |
+| `user:alice`   | JWT `sub` equals `alice`                      |
+| `user:*`       | Any `sub` value                               |
+| `group:admins` | Callers with `admins` in their `groups` claim |
+| `*`            | Any authenticated caller                      |
+
+### Tool patterns
+
+`*` matches within a single dot-separated segment.
+
+| Pattern      | Matches                                        | Does not match        |
+| ------------ | ---------------------------------------------- | --------------------- |
+| `github.*`   | `github.create_issue`, `github.search_repos`   | `slack.send_message`  |
+| `*.delete_*` | `github.delete_repo`, `stripe.delete_customer` | `github.admin.delete` |
+| `*`          | Any tool                                       | —                     |
+
+## How evaluation works
+
+Earl uses deny-overrides: collect every rule that matches the subject, tool, and mode. If any of them is a deny, the call is rejected. If there's at least one allow and no deny, the call goes through. If nothing matches, the call is rejected — there's no implicit allow.
+
+One deny beats any number of allows.
+
+## Multi-team example
+
+```toml
+# Team Alpha can read from GitHub and Stripe
+[[policy]]
+subjects = ["group:alpha"]
+tools    = ["github.*", "stripe.*"]
+modes    = ["read"]
+effect   = "allow"
+
+# Team Beta has full GitHub access
+[[policy]]
+subjects = ["group:beta"]
+tools    = ["github.*"]
+effect   = "allow"
+
+# Nobody runs write-mode system commands over MCP
+[[policy]]
+subjects = ["*"]
+tools    = ["system.*"]
+modes    = ["write"]
+effect   = "deny"
+```
+
+## Starting the HTTP server
+
+```bash
+earl mcp http --listen 0.0.0.0:8977
+```
+
+Earl won't start without either `[auth.jwt]` configured or `--allow-unauthenticated` passed. You can't use both.
+
+For local dev:
+
+```bash
+earl mcp http --listen 127.0.0.1:8977 --allow-unauthenticated
+```
+
+`--allow-unauthenticated` skips authentication and the policy engine. Don't use it anywhere shared.
+
+## See also
+
+- [MCP Integration](/docs/mcp) — transport options and write-mode safety
+- [Configuration](/docs/configuration) — full `config.toml` reference
+- [Hardening](/docs/hardening) — network egress and production checklist
