@@ -65,13 +65,13 @@ needed command.
 
 Map the user's description to a protocol:
 
-| User mentions | Protocol | Reference file |
-|---------------|----------|----------------|
-| REST, HTTP, API, endpoint, JSON API, webhook | `http` | `../references/http-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/http-templates.md)) |
-| GraphQL, query/mutation (in API context) | `graphql` | `../references/graphql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/graphql-templates.md)) |
-| gRPC, protobuf, service mesh | `grpc` | `../references/grpc-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/grpc-templates.md)) |
-| shell, bash, CLI, script, command line | `bash` | `../references/bash-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/bash-templates.md)) |
-| SQL, database, postgres, mysql, sqlite | `sql` | `../references/sql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/sql-templates.md)) |
+| User mentions                                | Protocol  | Reference file                                                                                                                         |
+| -------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| REST, HTTP, API, endpoint, JSON API, webhook | `http`    | `../references/http-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/http-templates.md))       |
+| GraphQL, query/mutation (in API context)     | `graphql` | `../references/graphql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/graphql-templates.md)) |
+| gRPC, protobuf, service mesh                 | `grpc`    | `../references/grpc-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/grpc-templates.md))       |
+| shell, bash, CLI, script, command line       | `bash`    | `../references/bash-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/bash-templates.md))       |
+| SQL, database, postgres, mysql, sqlite       | `sql`     | `../references/sql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/sql-templates.md))         |
 
 If the answer is genuinely ambiguous, ask one follow-up question.
 
@@ -109,6 +109,7 @@ params = ["{{ args.limit }}"]
 written to disk only after Phase 5 human review and approval.
 
 **Target path** (determine now, write after approval):
+
 - Local (project-specific): `./templates/<provider>.hcl`
 - Global (all projects): `~/.config/earl/templates/<provider>.hcl` (macOS/Linux) or
   `%APPDATA%\earl\templates\<provider>.hcl` (Windows)
@@ -172,6 +173,7 @@ command "<command_name>" {
 ```
 
 **Required for every template:**
+
 - `annotations.mode`: `"read"` if the command reads data, `"write"` if it creates/modifies/deletes
 - `annotations.secrets`: list all secret keys the template needs (format: `"provider.key_name"`)
 - `description` must include a `## Guidance for AI agents` section
@@ -202,12 +204,12 @@ earl templates validate
 
 Fix any errors reported and re-validate. Common errors:
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `HCL parse error` / `unexpected token` | Invalid HCL syntax | Check structure and quotes |
-| `template root must be an object` | Missing version/provider fields | Add `version = 1` and `provider = "..."` |
-| `undefined variable` in Jinja | `{{ args.x }}` doesn't match a param name | Check param names match references |
-| `params = [{{ ... }}]` syntax error | Bare Jinja in HCL array | Wrap in string: `["{{ ... }}"]` |
+| Error                                  | Cause                                     | Fix                                      |
+| -------------------------------------- | ----------------------------------------- | ---------------------------------------- |
+| `HCL parse error` / `unexpected token` | Invalid HCL syntax                        | Check structure and quotes               |
+| `template root must be an object`      | Missing version/provider fields           | Add `version = 1` and `provider = "..."` |
+| `undefined variable` in Jinja          | `{{ args.x }}` doesn't match a param name | Check param names match references       |
+| `params = [{{ ... }}]` syntax error    | Bare Jinja in HCL array                   | Wrap in string: `["{{ ... }}"]`          |
 
 ---
 
@@ -256,6 +258,7 @@ test or sandbox account, a safe test value (e.g. a dedicated test repo), or choo
 command for the initial verification. Warn the user before running write-mode test calls.
 
 If the call fails:
+
 - HTTP 401/403 → secret not set or wrong key name
 - `no such command` → template not loaded, check `earl templates list`
 - Any other error → invoke `troubleshoot-earl`

@@ -41,11 +41,11 @@ The first argument is the command key in `provider.command` form. Remaining
 arguments are passed as `--key value` pairs that bind to the template's declared
 parameters.
 
-| Flag          | Default | Description                                                                                     |
-| ------------- | ------- | ----------------------------------------------------------------------------------------------- |
-| `--env <name>`| —       | Active environment. Overrides `config.toml` and the template default. See [Environments](#environments). |
-| `--yes`       | off     | Auto-approve write-mode commands (skip the `Type YES to continue:` prompt). |
-| `--json`      | off     | Print structured JSON output instead of the rendered text template.         |
+| Flag           | Default | Description                                                                                              |
+| -------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| `--env <name>` | —       | Active environment. Overrides `config.toml` and the template default. See [Environments](#environments). |
+| `--yes`        | off     | Auto-approve write-mode commands (skip the `Type YES to continue:` prompt).                              |
+| `--json`       | off     | Print structured JSON output instead of the rendered text template.                                      |
 
 Write-mode commands prompt for explicit confirmation unless `--yes` is passed.
 

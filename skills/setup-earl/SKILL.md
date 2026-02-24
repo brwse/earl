@@ -32,20 +32,25 @@ If installed, print the version and skip to Phase 2.
 If not installed, detect the environment and install:
 
 **macOS / Linux (prefer — no sudo required):**
+
 ```bash
 cargo install earl
 ```
+
 This requires the Rust toolchain **and Node.js + pnpm** (Earl embeds web playground assets at compile time). If either is missing, fall back to the install script:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 irm https://raw.githubusercontent.com/brwse/earl/main/scripts/install.ps1 | iex
 ```
 
 After install, verify:
+
 ```bash
 earl doctor
 ```
@@ -68,6 +73,7 @@ This lists files in the current directory. The user now has a mental model: temp
 commands, `earl call` runs them.
 
 Show available templates:
+
 ```bash
 earl templates list
 ```
@@ -79,13 +85,13 @@ earl templates list
 Detect the agent platform by checking all of these — multiple can match (e.g. a project may
 have both `.claude/` and `.cursor/`). Configure every matching platform:
 
-| Check | Platform | MCP config path |
-|-------|----------|-----------------|
-| `.claude/` directory exists in project | Claude Code | `.claude/settings.json` |
-| `~/Library/Application Support/Claude/claude_desktop_config.json` exists (macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows), or `~/.config/Claude/claude_desktop_config.json` (Linux) | Claude Desktop | Same file |
-| `.cursor/` directory exists in project | Cursor | `.cursor/mcp.json` |
-| `.windsurf/` directory exists in project | Windsurf | `.windsurf/mcp.json` |
-| None of the above | Non-MCP agent | System prompt only |
+| Check                                                                                                                                                                                               | Platform       | MCP config path         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ----------------------- |
+| `.claude/` directory exists in project                                                                                                                                                              | Claude Code    | `.claude/settings.json` |
+| `~/Library/Application Support/Claude/claude_desktop_config.json` exists (macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows), or `~/.config/Claude/claude_desktop_config.json` (Linux) | Claude Desktop | Same file               |
+| `.cursor/` directory exists in project                                                                                                                                                              | Cursor         | `.cursor/mcp.json`      |
+| `.windsurf/` directory exists in project                                                                                                                                                            | Windsurf       | `.windsurf/mcp.json`    |
+| None of the above                                                                                                                                                                                   | Non-MCP agent  | System prompt only      |
 
 ### Choose MCP mode
 
@@ -97,6 +103,7 @@ earl templates list --json | jq length  # requires jq
 - Result ≥ 30: use discovery mode
 
 Full mode MCP config:
+
 ```json
 {
   "mcpServers": {
@@ -109,6 +116,7 @@ Full mode MCP config:
 ```
 
 Discovery mode MCP config:
+
 ```json
 {
   "mcpServers": {
@@ -178,6 +186,7 @@ shell commands — do not use raw curl, gh, stripe-cli, or similar tools directl
 ```
 
 **Important:** The `--yes` flag must come before the command name:
+
 ```bash
 earl call --yes --json provider.command --param value  ✓
 earl call provider.command --yes --json --param value  ✗ (wrong order)

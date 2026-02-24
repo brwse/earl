@@ -189,15 +189,15 @@ audience = "https://api.example.com"
 oidc_discovery_url = "https://accounts.example.com/.well-known/openid-configuration"
 ```
 
-| Field                        | Type       | Required                           | Default    | Description                                               |
-| ---------------------------- | ---------- | ---------------------------------- | ---------- | --------------------------------------------------------- |
-| `audience`                   | `string`   | Yes                                | —          | Expected `aud` claim in the JWT                           |
-| `oidc_discovery_url`         | `string`   | If `issuer`/`jwks_uri` not set     | —          | OIDC discovery endpoint to resolve issuer and JWKS URI    |
-| `issuer`                     | `string`   | If `oidc_discovery_url` not set    | —          | Expected `iss` claim in the JWT                           |
-| `jwks_uri`                   | `string`   | If `oidc_discovery_url` not set    | —          | URL to fetch the JSON Web Key Set for token verification  |
-| `algorithms`                 | `string[]` | No                                 | `["RS256"]` | Allowed signing algorithms (RS256, RS384, RS512, ES256, ES384, PS256, PS384, PS512, EdDSA) |
-| `clock_skew_seconds`         | `integer`  | No                                 | `30`       | Maximum clock skew tolerance in seconds (capped at 300)   |
-| `jwks_cache_max_age_seconds` | `integer`  | No                                 | `900`      | How long to cache JWKS keys before refreshing             |
+| Field                        | Type       | Required                        | Default     | Description                                                                                |
+| ---------------------------- | ---------- | ------------------------------- | ----------- | ------------------------------------------------------------------------------------------ |
+| `audience`                   | `string`   | Yes                             | —           | Expected `aud` claim in the JWT                                                            |
+| `oidc_discovery_url`         | `string`   | If `issuer`/`jwks_uri` not set  | —           | OIDC discovery endpoint to resolve issuer and JWKS URI                                     |
+| `issuer`                     | `string`   | If `oidc_discovery_url` not set | —           | Expected `iss` claim in the JWT                                                            |
+| `jwks_uri`                   | `string`   | If `oidc_discovery_url` not set | —           | URL to fetch the JSON Web Key Set for token verification                                   |
+| `algorithms`                 | `string[]` | No                              | `["RS256"]` | Allowed signing algorithms (RS256, RS384, RS512, ES256, ES384, PS256, PS384, PS512, EdDSA) |
+| `clock_skew_seconds`         | `integer`  | No                              | `30`        | Maximum clock skew tolerance in seconds (capped at 300)                                    |
+| `jwks_cache_max_age_seconds` | `integer`  | No                              | `900`       | How long to cache JWKS keys before refreshing                                              |
 
 When JWT is configured, clients must include a `Bearer` token in the `Authorization` header. The token must contain `exp`, `sub`, `iss`, and `aud` claims. The `sub` claim identifies the authenticated subject for policy evaluation.
 
@@ -235,12 +235,12 @@ modes = ["write"]
 effect = "deny"
 ```
 
-| Field      | Type       | Required | Description                                                       |
-| ---------- | ---------- | -------- | ----------------------------------------------------------------- |
-| `subjects` | `string[]` | Yes      | JWT `sub` values to match (supports `*` glob)                     |
-| `tools`    | `string[]` | Yes      | Tool name patterns to match (supports `*` glob per segment)       |
-| `modes`    | `string[]` | No       | Restrict to `read` and/or `write` tools (omit for both)           |
-| `effect`   | `string`   | Yes      | `allow` or `deny`                                                 |
+| Field      | Type       | Required | Description                                                 |
+| ---------- | ---------- | -------- | ----------------------------------------------------------- |
+| `subjects` | `string[]` | Yes      | JWT `sub` values to match (supports `*` glob)               |
+| `tools`    | `string[]` | Yes      | Tool name patterns to match (supports `*` glob per segment) |
+| `modes`    | `string[]` | No       | Restrict to `read` and/or `write` tools (omit for both)     |
+| `effect`   | `string`   | Yes      | `allow` or `deny`                                           |
 
 ### Evaluation Rules
 
@@ -255,11 +255,11 @@ Policies use a **deny-overrides** model:
 
 The `*` wildcard matches any characters within a single segment (separated by `.`). A lone `*` matches everything.
 
-| Pattern          | Matches                       | Does Not Match           |
-| ---------------- | ----------------------------- | ------------------------ |
-| `github.*`       | `github.create_issue`         | `slack.send_message`     |
-| `*.delete_*`     | `github.delete_repo`          | `github.admin.delete`    |
-| `*`              | any tool                      | —                        |
+| Pattern      | Matches               | Does Not Match        |
+| ------------ | --------------------- | --------------------- |
+| `github.*`   | `github.create_issue` | `slack.send_message`  |
+| `*.delete_*` | `github.delete_repo`  | `github.admin.delete` |
+| `*`          | any tool              | —                     |
 
 <Callout type="info">
   Policies only apply to authenticated requests. Unauthenticated requests (when

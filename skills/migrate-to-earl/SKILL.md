@@ -32,6 +32,7 @@ invocations, always do a full scan first.
 Present a summary before asking the user to pick a provider:
 
 > "Found API/CLI calls to:
+>
 > - GitHub (12 sites in 4 files)
 > - Stripe (8 sites in 2 files)
 > - Slack (3 sites in 1 file)
@@ -76,6 +77,7 @@ earl templates list --json
 ```
 
 Match each raw call to an Earl command:
+
 - `curl -X GET https://api.github.com/repos/...` → `earl call github.get_repo`
 - `gh issue create ...` → `earl call github.create_issue`
 - `stripe customers list` → `earl call stripe.list_customers`
@@ -144,6 +146,7 @@ If any call fails, resolve it (via `troubleshoot-earl` if needed) before proceed
 ## Phase 6: Checkpoint — Confirm Before Rewriting
 
 Show the user:
+
 1. The list of call sites that will be rewritten
 2. The Earl equivalents they'll be replaced with
 3. The call sites flagged for manual review (complex pipelines)
@@ -182,13 +185,16 @@ subprocess.run(["earl", "call", "--yes", "--json", "github.get_repo", "--owner",
 
 ```javascript
 // Before (Node.js):
-execSync(`curl -H "Authorization: Bearer ${token}" ${url}`)
+execSync(`curl -H "Authorization: Bearer ${token}" ${url}`);
 
 // After (Node.js):
-execSync(`earl call --yes --json github.get_repo --owner ${owner} --repo ${repo}`)
+execSync(
+  `earl call --yes --json github.get_repo --owner ${owner} --repo ${repo}`,
+);
 ```
 
 For flagged complex pipelines, add a comment but leave the original:
+
 ```bash
 # TODO: migrate to earl (complex pipeline — review manually)
 curl ... | jq ... | xargs ...
@@ -207,6 +213,7 @@ earl templates validate
 ## Phase 9: Report
 
 Summarize what was done:
+
 - Which provider was migrated
 - How many call sites were rewritten
 - Which were flagged for manual review

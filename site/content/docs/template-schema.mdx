@@ -8,13 +8,13 @@ Templates are `version = 1` HCL files. Each file declares a provider namespace a
 
 ## Root Fields
 
-| Field                | Type       | Required | Default | Description                                                    |
-| -------------------- | ---------- | -------- | ------- | -------------------------------------------------------------- |
-| `version`            | `integer`  | Yes      | --      | Must be `1`.                                                   |
-| `provider`           | `string`   | Yes      | --      | Namespace for commands (e.g., `github`). Must not be empty.    |
-| `categories`         | `string[]` | No       | `[]`    | Provider-level categories applied to all commands in the file. |
-| `environments`       | block      | No       | --      | Named environments with shared variables. See [environments](#environments). |
-| `command "<name>"`   | block      | Yes      | --      | One or more named command blocks. At least one is required.    |
+| Field              | Type       | Required | Default | Description                                                                  |
+| ------------------ | ---------- | -------- | ------- | ---------------------------------------------------------------------------- |
+| `version`          | `integer`  | Yes      | --      | Must be `1`.                                                                 |
+| `provider`         | `string`   | Yes      | --      | Namespace for commands (e.g., `github`). Must not be empty.                  |
+| `categories`       | `string[]` | No       | `[]`    | Provider-level categories applied to all commands in the file.               |
+| `environments`     | block      | No       | --      | Named environments with shared variables. See [environments](#environments). |
+| `command "<name>"` | block      | Yes      | --      | One or more named command blocks. At least one is required.                  |
 
 Commands are identified by `provider.command` (e.g., `github.search_issues`).
 
@@ -38,11 +38,11 @@ environments {
 }
 ```
 
-| Field              | Type               | Required | Default | Description                                                                                          |
-| ------------------ | ------------------ | -------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| `default`          | `string`           | No       | --      | Environment name used when no `--env` flag or config default is set.                                 |
-| `secrets`          | `string[]`         | No       | `[]`    | Secret keys that vars values are allowed to reference via `{{ secrets.* }}`.                         |
-| `<name> { ... }`   | block              | No       | --      | Named environment. Each key inside the block becomes a `vars.<key>` variable.                        |
+| Field            | Type       | Required | Default | Description                                                                   |
+| ---------------- | ---------- | -------- | ------- | ----------------------------------------------------------------------------- |
+| `default`        | `string`   | No       | --      | Environment name used when no `--env` flag or config default is set.          |
+| `secrets`        | `string[]` | No       | `[]`    | Secret keys that vars values are allowed to reference via `{{ secrets.* }}`.  |
+| `<name> { ... }` | block      | No       | --      | Named environment. Each key inside the block becomes a `vars.<key>` variable. |
 
 Environment names must match `[a-zA-Z0-9_-]` and be 1–64 characters. The same rule applies to `default` and to per-command `environment "<name>"` labels.
 
@@ -86,17 +86,17 @@ command "search_issues" {
 }
 ```
 
-| Field                    | Type       | Required | Default | Description                                                                     |
-| ------------------------ | ---------- | -------- | ------- | ------------------------------------------------------------------------------- |
-| `title`                  | `string`   | Yes      | --      | Human-readable title. Must not be empty.                                        |
-| `summary`                | `string`   | Yes      | --      | One-line summary. Must not be empty.                                            |
-| `description`            | `string`   | Yes      | --      | Detailed markdown description. Must not be empty.                               |
-| `categories`             | `string[]` | No       | `[]`    | Command-level categories (merged with provider categories).                     |
-| `annotations`            | block      | Yes      | --      | Mode and secret declarations.                                                   |
-| `param`                  | block(s)   | No       | `[]`    | Repeatable typed input parameters.                                              |
-| `operation`              | block      | Yes      | --      | Protocol-specific execution definition.                                         |
-| `result`                 | block      | Yes      | --      | Output decoding, extraction, and rendering.                                     |
-| `environment "<name>"`   | block(s)   | No       | --      | Per-environment operation/result override. See [environment overrides](#environment-name). |
+| Field                  | Type       | Required | Default | Description                                                                                |
+| ---------------------- | ---------- | -------- | ------- | ------------------------------------------------------------------------------------------ |
+| `title`                | `string`   | Yes      | --      | Human-readable title. Must not be empty.                                                   |
+| `summary`              | `string`   | Yes      | --      | One-line summary. Must not be empty.                                                       |
+| `description`          | `string`   | Yes      | --      | Detailed markdown description. Must not be empty.                                          |
+| `categories`           | `string[]` | No       | `[]`    | Command-level categories (merged with provider categories).                                |
+| `annotations`          | block      | Yes      | --      | Mode and secret declarations.                                                              |
+| `param`                | block(s)   | No       | `[]`    | Repeatable typed input parameters.                                                         |
+| `operation`            | block      | Yes      | --      | Protocol-specific execution definition.                                                    |
+| `result`               | block      | Yes      | --      | Output decoding, extraction, and rendering.                                                |
+| `environment "<name>"` | block(s)   | No       | --      | Per-environment operation/result override. See [environment overrides](#environment-name). |
 
 ## `annotations`
 
@@ -107,11 +107,11 @@ annotations {
 }
 ```
 
-| Field                                    | Type                  | Required | Default | Description                                                                                              |
-| ---------------------------------------- | --------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| `mode`                                   | `"read"` \| `"write"` | Yes      | --      | Safety mode. Write-mode commands require user confirmation.                                              |
-| `secrets`                                | `string[]`            | No       | `[]`    | Secret keys this command is allowed to access. Auth blocks that reference a secret must declare it here. |
-| `allow_environment_protocol_switching`   | `boolean`             | No       | `false` | Allow an `environment "<name>"` override to use a different protocol than the default `operation`. |
+| Field                                  | Type                  | Required | Default | Description                                                                                              |
+| -------------------------------------- | --------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| `mode`                                 | `"read"` \| `"write"` | Yes      | --      | Safety mode. Write-mode commands require user confirmation.                                              |
+| `secrets`                              | `string[]`            | No       | `[]`    | Secret keys this command is allowed to access. Auth blocks that reference a secret must declare it here. |
+| `allow_environment_protocol_switching` | `boolean`             | No       | `false` | Allow an `environment "<name>"` override to use a different protocol than the default `operation`.       |
 
 ## `param`
 
@@ -836,10 +836,10 @@ command "ping" {
 }
 ```
 
-| Field       | Type   | Required | Description                                                                            |
-| ----------- | ------ | -------- | -------------------------------------------------------------------------------------- |
-| `operation` | block  | Yes      | Replacement operation. Must follow the same protocol rules as a top-level `operation`. |
-| `result`    | block  | No       | Replacement result block. Falls back to the command's `result` if omitted.             |
+| Field       | Type  | Required | Description                                                                            |
+| ----------- | ----- | -------- | -------------------------------------------------------------------------------------- |
+| `operation` | block | Yes      | Replacement operation. Must follow the same protocol rules as a top-level `operation`. |
+| `result`    | block | No       | Replacement result block. Falls back to the command's `result` if omitted.             |
 
 When the override `operation` uses a different protocol than the command's default `operation`, `annotations.allow_environment_protocol_switching = true` must be set or validation will fail.
 

@@ -34,6 +34,7 @@ earl doctor
 ```
 
 If this fails with `command not found: earl`, Earl is not installed. Install it:
+
 ```bash
 cargo install earl  # requires Rust toolchain + Node.js + pnpm
 # or: curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
@@ -52,14 +53,14 @@ earl templates validate
 
 Fix any errors found. Common errors and fixes:
 
-| Error message | Cause | Fix |
-|---|---|---|
-| `HCL parse error` / `unexpected token` | Invalid HCL syntax | Check structure, quotes, and braces |
-| `template root must be an object` | Missing top-level fields | Add `version = 1` and `provider = "..."` |
-| `template must define either 'commands' or 'command', not both` | Used both singular and plural form | Use only `command` blocks |
-| `command X has empty title` | Missing `title` field | Add `title = "..."` to the command block |
-| `undefined variable` | `{{ args.x }}` doesn't match a param name | Check that param names match `{{ args.x }}` references |
-| `params = [{{ ... }}]` | Bare Jinja in HCL array | Wrap in string: `params = ["{{ ... }}"]` |
+| Error message                                                   | Cause                                     | Fix                                                    |
+| --------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------ |
+| `HCL parse error` / `unexpected token`                          | Invalid HCL syntax                        | Check structure, quotes, and braces                    |
+| `template root must be an object`                               | Missing top-level fields                  | Add `version = 1` and `provider = "..."`               |
+| `template must define either 'commands' or 'command', not both` | Used both singular and plural form        | Use only `command` blocks                              |
+| `command X has empty title`                                     | Missing `title` field                     | Add `title = "..."` to the command block               |
+| `undefined variable`                                            | `{{ args.x }}` doesn't match a param name | Check that param names match `{{ args.x }}` references |
+| `params = [{{ ... }}]`                                          | Bare Jinja in HCL array                   | Wrap in string: `params = ["{{ ... }}"]`               |
 
 ---
 
@@ -70,6 +71,7 @@ earl templates list
 ```
 
 If the expected `provider.command` is not listed:
+
 - Check that the file is in `./templates/` or the global template directory:
   `~/.config/earl/templates/` (macOS/Linux) or `%APPDATA%\earl\templates\` (Windows)
 - Check that `provider` in the HCL matches what you're calling (`earl call <provider>.<command>`)
@@ -104,6 +106,7 @@ After confirmation, re-run `earl secrets list` to verify keys are set.
 Check that the MCP config file exists and contains the `earl` entry:
 
 **Claude Code:** `.claude/settings.json`
+
 ```json
 {
   "mcpServers": {
@@ -144,21 +147,21 @@ earl call --yes --json <provider>.<command> --<param> <value>
 
 Match the error to the table:
 
-| Symptom | Category | Fix |
-|---|---|---|
-| `HCL parse error` / `unexpected token` | HCL syntax | Agent: edit template, re-validate |
-| `undefined variable` / `template error` | Jinja render | Agent: fix `{{ args.* }}` references |
-| HTTP 401 / 403 | Auth failure | Human: `earl secrets set <key>` |
-| `address not allowed` | SSRF block | Agent: use a public URL, or use `bash` protocol for local services |
-| `command not found: earl` | Not installed | Agent: run install script |
-| `no such command` | Wrong command name | Agent: check `earl templates list` |
-| MCP tool not visible in agent | MCP not configured or restart needed | Agent: write/fix config; tell user to restart |
-| `earl call` hangs waiting for input | `--yes` flag in wrong position | Agent: reorder — `earl call --yes --json provider.command ...` |
-| `earl secrets set` hangs | macOS keychain dialog | Human: click "Always Allow" in system dialog |
-| OAuth flow required | Browser-based auth | Human: run `earl auth login <profile>`, complete browser flow |
-| `unknown environment` / `invalid environment name` | Bad `--env` value | Agent: check `environments` block in template for valid names |
-| `vars.*` resolves to empty string | No active environment | Agent: pass `--env <name>` or set `[environments] default` in config.toml |
-| `environment protocol switching not allowed` | Protocol mismatch in environment override | Agent: prefer `vars.*` for different base URLs; only add `allow_environment_protocol_switching = true` to `annotations` if a protocol change is genuinely required (bypasses HTTP egress rules — see `secure-agent`) |
+| Symptom                                            | Category                                  | Fix                                                                                                                                                                                                                  |
+| -------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HCL parse error` / `unexpected token`             | HCL syntax                                | Agent: edit template, re-validate                                                                                                                                                                                    |
+| `undefined variable` / `template error`            | Jinja render                              | Agent: fix `{{ args.* }}` references                                                                                                                                                                                 |
+| HTTP 401 / 403                                     | Auth failure                              | Human: `earl secrets set <key>`                                                                                                                                                                                      |
+| `address not allowed`                              | SSRF block                                | Agent: use a public URL, or use `bash` protocol for local services                                                                                                                                                   |
+| `command not found: earl`                          | Not installed                             | Agent: run install script                                                                                                                                                                                            |
+| `no such command`                                  | Wrong command name                        | Agent: check `earl templates list`                                                                                                                                                                                   |
+| MCP tool not visible in agent                      | MCP not configured or restart needed      | Agent: write/fix config; tell user to restart                                                                                                                                                                        |
+| `earl call` hangs waiting for input                | `--yes` flag in wrong position            | Agent: reorder — `earl call --yes --json provider.command ...`                                                                                                                                                       |
+| `earl secrets set` hangs                           | macOS keychain dialog                     | Human: click "Always Allow" in system dialog                                                                                                                                                                         |
+| OAuth flow required                                | Browser-based auth                        | Human: run `earl auth login <profile>`, complete browser flow                                                                                                                                                        |
+| `unknown environment` / `invalid environment name` | Bad `--env` value                         | Agent: check `environments` block in template for valid names                                                                                                                                                        |
+| `vars.*` resolves to empty string                  | No active environment                     | Agent: pass `--env <name>` or set `[environments] default` in config.toml                                                                                                                                            |
+| `environment protocol switching not allowed`       | Protocol mismatch in environment override | Agent: prefer `vars.*` for different base URLs; only add `allow_environment_protocol_switching = true` to `annotations` if a protocol change is genuinely required (bypasses HTTP egress rules — see `secure-agent`) |
 
 ---
 

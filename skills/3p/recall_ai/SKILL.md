@@ -42,6 +42,7 @@ create_bot → [wait: pending→joining→joined] → start_recording → [meeti
 **Do NOT call `get_transcript` immediately after `create_bot`.** You will get an error or empty data. Always poll first.
 
 **Polling intervals:**
+
 - While status is `pending` or `joining`: every 10–15 seconds (max 2 minutes — if longer, the meeting URL may be invalid or the meeting hasn't started)
 - While status is `recording`: every 30 seconds
 - After `stop_recording` or `leave_call`, while transcript is `processing`: every 15 seconds

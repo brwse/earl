@@ -23,13 +23,13 @@ common case. For stronger containment, pair with OS-level firewall rules or a ne
 
 ## Platform Support
 
-| Platform | Mechanism | Hard restriction? |
-|---|---|---|
-| **Claude Code** | `deniedTools` in `.claude/settings.json` | Yes — platform enforced |
-| **Cursor** | `.cursor/mcp.json` or Cursor settings UI | Partial — check Cursor docs for per-tool restrictions |
-| **Windsurf** | `.windsurf/mcp.json` or Windsurf settings UI | Partial — check Windsurf docs for per-tool restrictions |
-| **Claude Desktop** | No bash access | N/A |
-| **Non-MCP CLI agents** | CLAUDE.md instructions only | No — advisory only |
+| Platform               | Mechanism                                    | Hard restriction?                                       |
+| ---------------------- | -------------------------------------------- | ------------------------------------------------------- |
+| **Claude Code**        | `deniedTools` in `.claude/settings.json`     | Yes — platform enforced                                 |
+| **Cursor**             | `.cursor/mcp.json` or Cursor settings UI     | Partial — check Cursor docs for per-tool restrictions   |
+| **Windsurf**           | `.windsurf/mcp.json` or Windsurf settings UI | Partial — check Windsurf docs for per-tool restrictions |
+| **Claude Desktop**     | No bash access                               | N/A                                                     |
+| **Non-MCP CLI agents** | CLAUDE.md instructions only                  | No — advisory only                                      |
 
 This skill primarily targets Claude Code. Instructions for other platforms are best-effort.
 
@@ -46,16 +46,16 @@ earl templates list --json
 
 Note which providers are covered. Map each to the CLI tools to deny:
 
-| Earl template covers | Deny these tools |
-|---|---|
-| `github` | `Bash(gh *)`, `Bash(hub *)` |
-| `stripe` | `Bash(stripe *)` |
-| `slack` | `Bash(slack *)` |
-| `openai` | `Bash(openai *)` |
-| `vercel` | `Bash(vercel *)` |
+| Earl template covers  | Deny these tools                                                 |
+| --------------------- | ---------------------------------------------------------------- |
+| `github`              | `Bash(gh *)`, `Bash(hub *)`                                      |
+| `stripe`              | `Bash(stripe *)`                                                 |
+| `slack`               | `Bash(slack *)`                                                  |
+| `openai`              | `Bash(openai *)`                                                 |
+| `vercel`              | `Bash(vercel *)`                                                 |
 | Any HTTP API template | `Bash(curl *)`, `Bash(wget *)`, `Bash(http *)`, `Bash(httpie *)` |
-| Any SQL template | `Bash(psql *)`, `Bash(mysql *)`, `Bash(sqlite3 *)` |
-| Any gRPC template | `Bash(grpcurl *)` |
+| Any SQL template      | `Bash(psql *)`, `Bash(mysql *)`, `Bash(sqlite3 *)`               |
+| Any gRPC template     | `Bash(grpcurl *)`                                                |
 
 **Do NOT deny `Bash` entirely.** Earl's bash protocol and legitimate shell operations still
 need it.
