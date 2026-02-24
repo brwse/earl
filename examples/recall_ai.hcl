@@ -257,7 +257,6 @@ command "delete_bot" {
   }
 
   result {
-    decode = "json"
     output = "Bot {{ args.bot_id }} deleted."
   }
 }
