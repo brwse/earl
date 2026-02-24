@@ -139,6 +139,7 @@ Templates can configure sandbox behavior per-command:
 
 ```hcl
 operation {
+  protocol = "bash"
   bash {
     script = "curl -s https://api.example.com/data"
     sandbox {
@@ -146,12 +147,14 @@ operation {
       writable_paths = ["output"]   # Paths relative to cwd that can be written
       max_time_ms  = 30000          # Kill script after 30 seconds
       max_output_bytes = 1048576    # Limit stdout/stderr to 1 MB
+      max_memory_bytes = 536870912  # Limit to 512 MB (Linux only)
+      max_cpu_time_ms  = 10000      # Kill after 10 seconds of CPU time
     }
   }
 }
 ```
 
-If neither `sandbox.max_time_ms` nor `sandbox.max_output_bytes` is set, the transport-level `timeout_ms` and `max_response_bytes` apply as fallbacks.
+If neither `sandbox.max_time_ms` nor `sandbox.max_output_bytes` is set, the transport-level `timeout_ms` and `max_response_bytes` apply as fallbacks. Note that `max_memory_bytes` is only enforced on Linux (via `RLIMIT_AS`) and has no effect on macOS, while `max_cpu_time_ms` works on both Linux and macOS.
 
 The sandbox kills the entire process group on timeout using `SIGKILL` via `killpg()`, preventing child process leaks.
 

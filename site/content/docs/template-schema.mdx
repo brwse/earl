@@ -323,6 +323,8 @@ operation {
 | `writable_paths`   | `string[]` | No       | --      | Relative paths the script may write to. Must not contain absolute paths or `..` segments. |
 | `max_time_ms`      | `u64`      | No       | --      | Maximum execution time in milliseconds.                                                   |
 | `max_output_bytes` | `u64`      | No       | --      | Maximum combined stdout+stderr size in bytes.                                             |
+| `max_memory_bytes` | `integer`  | No       | --      | Maximum virtual memory in bytes. Enforced via RLIMIT_AS on Linux; not applicable on macOS. |
+| `max_cpu_time_ms`  | `integer`  | No       | --      | Maximum CPU time in milliseconds. Enforced via RLIMIT_CPU on Linux and macOS.             |
 
 ### SQL Operation
 
@@ -481,7 +483,7 @@ body {
   value = {
     title = "{{ args.title }}"
     body  = "{{ args.body }}"
-    labels = {{ args.labels }}
+    labels = "{{ args.labels }}"
   }
 }
 ```
