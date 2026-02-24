@@ -1,0 +1,33 @@
+[package]
+name = "earl-protocol-browser"
+version = "0.5.0"
+edition.workspace = true
+description = "Browser automation protocol for earl (chromiumoxide)"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+
+[dependencies]
+anyhow = "1.0"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+chromiumoxide = { version = "0.9", default-features = false, features = ["bytes"] }
+directories = "6.0"
+earl-core = { version = "0.5.0", path = "../earl-core" }
+fs4 = { version = "0.12", features = ["tokio"] }
+futures = "0.3"
+rkyv = { version = "0.8", features = ["std", "bytecheck"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tempfile = "3.19"
+thiserror = "2.0"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+which = "7.0"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
