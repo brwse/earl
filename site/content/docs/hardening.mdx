@@ -1,149 +1,196 @@
 ---
-title: Hardening Guide
-description: A deployment checklist for running Earl in production, in front of a team
-icon: Lock
+title: Hardening
+description: Network controls, sandbox limits, and a production checklist for deploying Earl securely.
 ---
 
-Running Earl for yourself is straightforward. Deploying it in front of a team requires a bit more thought — about who can modify what, which transport you're using, and what the agent is allowed to do if something goes wrong. This page walks through the setup decisions that matter before Earl handles production traffic.
+This page covers the configuration knobs that matter before running Earl where other people or production systems depend on it.
 
-## 1. Lock down config and template files
+## SSRF protection
 
-Do this first, before anything else. Earl's security guarantees only hold as long as agents cannot modify the config or template files. If an agent can edit `~/.config/earl/config.toml`, it can whitelist arbitrary network destinations. If it can edit templates, it can add operations that exfiltrate secrets.
+Earl blocks requests to private and loopback IP ranges in `security/ssrf.rs`. This runs on every outbound request — HTTP, GraphQL, gRPC, and OAuth token fetches. There is no configuration option to disable it.
 
-```bash
-chmod 700 ~/.config/earl
-chmod 600 ~/.config/earl/config.toml
-chmod -R go-w ~/.config/earl/templates
-chmod -R 700 ./templates/
-```
+The blocked ranges:
 
-For stronger isolation, run the agent as a separate, less-privileged OS user that can execute `earl` but cannot write to the config directory. File permissions are a good start; process isolation is better.
+| Range                  | Description                                         |
+| ---------------------- | --------------------------------------------------- |
+| 127.0.0.0/8            | IPv4 loopback                                       |
+| 10.0.0.0/8             | RFC 1918 private                                    |
+| 172.16.0.0/12          | RFC 1918 private                                    |
+| 192.168.0.0/16         | RFC 1918 private                                    |
+| 169.254.0.0/16         | Link-local, includes 169.254.169.254 (AWS metadata) |
+| 100.64.0.0/10          | Shared address space (RFC 6598)                     |
+| 192.0.0.0/24           | IETF protocol assignments                           |
+| 198.18.0.0/15          | Benchmarking range                                  |
+| 240.0.0.0/4            | Reserved                                            |
+| ::1/128                | IPv6 loopback                                       |
+| fc00::/7               | IPv6 unique local                                   |
+| fe80::/10              | IPv6 link-local                                     |
+| fec0::/10              | IPv6 site-local                                     |
+| fd00:ec2::254          | Cloud metadata alias                                |
+| ::ffff:169.254.169.254 | Cloud metadata alias (IPv4-mapped)                  |
 
-## 2. Choose your transport
+IPv4-mapped IPv6 addresses like `::ffff:10.0.0.1` are unwrapped and checked against the IPv4 blocked ranges.
 
-Stdio is the right choice for single-agent use. Each agent process gets its own Earl instance with no port to expose and no auth overhead.
+You can verify the behavior by trying to call a template pointed at a blocked address — Earl will return a "blocked potentially unsafe IP address" error before the connection is attempted.
 
-```bash
-earl mcp stdio --mode full --yes
-```
+## Network egress allowlist
 
-HTTP makes sense when multiple agents share an Earl server, or when you need to reach Earl from a different machine. If you use HTTP without authentication, anyone who can reach the port can call your tools. Don't do that in production.
+The SSRF layer blocks inward — private ranges that shouldn't be reachable. The egress allowlist blocks outward — it restricts which public hosts Earl can contact at all.
 
-```bash
-# With JWT auth (recommended for production)
-earl mcp http --listen 127.0.0.1:8977 --mode full --yes
+Without an allowlist, Earl can reach any public IP. With one, any request to a host not on the list is rejected.
 
-# Development only
-earl mcp http --listen 127.0.0.1:8977 --allow-unauthenticated
-```
-
-Configure JWT auth in `~/.config/earl/config.toml`:
+Configure it in `~/.config/earl/config.toml`:
 
 ```toml
-[auth.jwt]
-audience = "https://api.example.com"
-oidc_discovery_url = "https://accounts.example.com/.well-known/openid-configuration"
+[network]
+egress_allowlist = ["api.github.com", "*.stripe.com"]
 ```
 
-## 3. Configure network egress rules
+Wildcards match a single DNS label. `*.stripe.com` matches `api.stripe.com` and `dashboard.stripe.com` but not `api.sub.stripe.com`.
 
-By default, Earl allows outbound requests to any public host. Lock it down to only the destinations your templates actually need:
+For more granular control, use `[[network.allow]]` entries. These let you specify a host, an optional port, and an optional IP CIDR range:
 
 ```toml
 [[network.allow]]
-scheme = "https"
 host = "api.github.com"
 port = 443
-path_prefix = "/"
 
 [[network.allow]]
-scheme = "https"
-host = "api.stripe.com"
-port = 443
-path_prefix = "/v1"
+host = "*.stripe.com"
+
+[[network.allow]]
+cidr = "203.0.113.0/24"
 ```
 
-Once any `[[network.allow]]` rule exists, everything not on the list is blocked. Without any rules, all public destinations are reachable — fine for a single developer, too permissive for a shared deployment.
+If both `egress_allowlist` and `[[network.allow]]` entries are present, a request must match at least one entry from either list.
 
-Earl always blocks requests to private, reserved, and metadata IP addresses regardless of your allowlist. DNS resolution happens before the SSRF check, so a public hostname that resolves to a private IP is still blocked. This cannot be configured away.
+Setting an allowlist is the most effective way to limit what a compromised template or unexpected parameter value can reach.
 
-## 4. Set sandbox limits
+## Write-mode confirmation
 
-Bash templates run inside an OS-level sandbox (bubblewrap on Linux, `sandbox-exec` on macOS). The sandbox is always active; you are configuring its limits, not enabling it.
+Any command annotated with `mode = "write"` prompts before executing:
 
-```toml
-[sandbox]
-bash_max_time_ms = 30000
-bash_max_output_bytes = 1048576
-bash_max_memory_bytes = 536870912  # 512 MB, Linux only
-bash_max_cpu_time_ms = 10000
+```
+github.create_issue is a write command. Proceed? [y/N]
 ```
 
-Templates can also set limits per-command inside their own `sandbox` block. The more restrictive value wins.
+The call blocks until the user responds. In a terminal session this works as expected. In an automated pipeline — CI, a cron job, or an MCP server running unattended — the call either times out or hangs.
 
-For SQL templates, enforce read-only mode globally:
+Pass `--yes` to bypass the prompt for a specific invocation:
 
-```toml
-[sandbox]
-sql_force_read_only = true
-sql_max_rows = 1000
-sql_connection_allowlist = ["myapp.db_url"]
+```bash
+earl call --yes --json github.create_issue --owner myorg --repo myrepo --title "Automated report"
 ```
 
-The `sql_connection_allowlist` is worth paying attention to. Without it, any secret containing a valid connection string can be used as a database connection. List the specific secret keys you intend to allow.
+`--yes` must come before the command name, after `call`.
 
-For per-template SQL sandboxing, the template itself can also declare:
+A few things to consider before using `--yes` broadly:
+
+- It bypasses confirmation for the entire invocation, including any write commands in a chained sequence.
+- In MCP HTTP deployments, the policy engine can restrict write access per caller rather than relying on `--yes`. That's a better control surface for multi-user setups. See [Policy Engine](/docs/policy-engine).
+- For stdio MCP, write-mode prompts appear as MCP log messages. Most agents don't render these to users, which means `--yes` is usually required for any write command to complete in a fully automated flow. If you want a human in the loop for write operations in MCP, use the HTTP transport with the policy engine instead.
+
+## Bash sandbox configuration
+
+The Bash protocol runs scripts in a sandbox. The defaults are conservative:
 
 ```hcl
-sandbox {
-  read_only = true
-  max_rows  = 100
+bash {
+  script = "..."
+  sandbox {
+    network          = false
+    max_time_ms      = 30000
+    max_output_bytes = 1048576
+  }
 }
 ```
 
-## 5. Configure write-mode behavior
+`network = false` blocks all outbound connections from the script. This is the default. If you need network access for a specific script, set `network = true` — but note that SSRF blocking still applies. The script can't reach private IP ranges regardless.
 
-Templates marked `annotations.mode = "write"` require explicit confirmation. On the CLI, users pass `--yes` or type `YES` at the prompt. On the MCP server, write-mode tools are blocked entirely unless you start Earl with `--yes`.
+`max_time_ms` kills the process if it runs longer than the specified number of milliseconds. The example above sets a 30-second limit. There is no default upper bound, so set this explicitly for any script that could stall.
 
-```bash
-# Write-mode tools blocked (default — safe starting point)
-earl mcp stdio --mode full
+`max_output_bytes` truncates stdout and stderr at the specified byte count. Useful for scripts that might produce large or unbounded output.
 
-# Write-mode tools allowed
-earl mcp stdio --mode full --yes
+For any bash command invoked by an agent, `network = false` and explicit time/size limits are the right baseline. Expand from there only if the command's purpose requires it.
+
+## SQL read-only sandbox
+
+SQL commands have two sandbox controls worth enabling by default:
+
+```hcl
+sql {
+  connection_secret = "myapp.db_url"
+  query             = "SELECT id, name FROM users WHERE status = $1 LIMIT $2"
+  params            = ["{{ args.status }}", "{{ args.limit }}"]
+  sandbox {
+    read_only = true
+    max_rows  = 100
+  }
+}
 ```
 
-Decide which write-mode tools your agents actually need before passing `--yes`. If only some agents should have write access, put the write-capable templates on a separate server instance, or use the policy engine (step 8) to restrict by subject.
+`read_only = true` opens the connection in a read-only transaction. Write operations — including those inside stored procedures — fail at the database level, not at the application level. This is a hard constraint rather than a soft check.
 
-## 6. Verify with `earl doctor`
+`max_rows` caps how many rows are returned. Without it, an agent querying a large table with a broad predicate can return enough data to cause problems downstream. Set this to the largest result set that makes sense for the command's purpose.
+
+SQL parameters use positional binding (`$1`, `$2`). They go through the driver's parameter interface, not string interpolation, so they're protected against injection. Quote each Jinja expression as a string in the `params` array — Earl coerces types before sending the query.
+
+## JWT auth and policy engine for HTTP deployments
+
+When running Earl as an MCP HTTP server, configure JWT authentication before exposing it to any network other than localhost:
 
 ```bash
-earl doctor
+earl mcp http --listen 0.0.0.0:8977
 ```
 
-Run this after setup. It checks that your config is loadable, templates parse without errors, and required secrets are present. Fix anything it reports before connecting agents.
+Earl refuses to start this command without either `[auth.jwt]` configured in `config.toml` or `--allow-unauthenticated` passed. Do not use `--allow-unauthenticated` on a shared or production host.
 
-`earl doctor` will not catch everything — it does not check file permissions or network reachability — but it catches the common setup mistakes.
-
-## 7. Configure external secret managers (optional)
-
-If your team already uses 1Password Connect, HashiCorp Vault, AWS Secrets Manager, or similar, Earl can pull secrets directly from those instead of the OS keychain. This is purely optional. See [External Secret Managers](/docs/external-secrets).
-
-## 8. Configure access control policies (optional)
-
-If multiple agents or users share an Earl HTTP server, the policy engine lets you control which subjects can call which tools. Policies use deny-overrides: a matching deny blocks the call regardless of other rules, and a call with no matching policies is denied by default.
+A minimal JWT configuration using OIDC discovery:
 
 ```toml
-[[policy]]
-subjects = ["user:alice", "group:admins"]
-tools = ["github.*"]
-effect = "allow"
-
-[[policy]]
-subjects = ["*"]
-tools = ["github.delete_repo"]
-modes = ["write"]
-effect = "deny"
+[auth.jwt]
+audience           = "https://api.yourcompany.com"
+oidc_discovery_url = "https://accounts.yourcompany.com/.well-known/openid-configuration"
 ```
 
-Policies only apply when JWT auth is configured. Requests that reach Earl via `--allow-unauthenticated` bypass the policy engine entirely. See [Policy Engine](/docs/policy-engine) for the full evaluation rules and glob pattern reference.
+Once JWT is configured, add policy rules to control which callers can invoke which tools:
+
+```toml
+# Read-only GitHub access for all authenticated users
+[[policy]]
+subjects = ["user:*"]
+tools    = ["github.*"]
+modes    = ["read"]
+effect   = "allow"
+
+# Deny write-mode destructive commands for everyone
+[[policy]]
+subjects = ["*"]
+tools    = ["github.delete_repo"]
+modes    = ["write"]
+effect   = "deny"
+```
+
+The policy engine uses deny-overrides: one deny beats any number of allows. If nothing matches, the call is rejected. See [Policy Engine](/docs/policy-engine) for the full rule syntax.
+
+## Production checklist
+
+Before running Earl in production:
+
+- Templates are committed to a version-controlled repository with branch protection and restricted write access
+- Secrets are stored in the OS keychain or an external secret manager — not in template files, environment variables, or CI logs
+- An egress allowlist is configured in `config.toml`, restricted to the specific hosts Earl needs to reach
+- Every bash command has explicit `max_time_ms` and `max_output_bytes` limits set
+- Every SQL command uses `read_only = true` and a `max_rows` limit appropriate for the query
+- Write commands are reviewed and either use the policy engine to restrict write access, or `--yes` is only passed in contexts where a human has authorized it
+- For MCP HTTP deployments: `[auth.jwt]` is configured, `--allow-unauthenticated` is not in use, and at least one restrictive `[[policy]]` entry is in place
+- `earl doctor` runs clean on the production host
+- OAuth endpoint URLs in `config.toml` point to public identity providers, not to internal hosts that happen to respond on those ports
+
+## See also
+
+- [How Earl Works](/docs/how-earl-works) — the full security model and threat analysis
+- [Policy Engine](/docs/policy-engine) — JWT auth and per-caller access control
+- [Secrets & Auth](/docs/secrets-and-auth) — keychain storage, OAuth2, and external secret managers
+- [External Secrets](/docs/external-secrets) — 1Password, Vault, AWS, GCP, Azure
+- [Configuration](/docs/configuration) — full `config.toml` reference

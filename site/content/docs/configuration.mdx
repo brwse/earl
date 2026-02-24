@@ -1,191 +1,424 @@
 ---
 title: Configuration
-description: Config file reference — network policies, OAuth profiles, sandbox, and search
-icon: Settings
+description: Complete reference for ~/.config/earl/config.toml — every section, field, and default value.
 ---
 
-Config file: `~/.config/earl/config.toml`. All sections are optional.
+`~/.config/earl/config.toml` is optional. Earl works without it. When the file exists, it controls template discovery, authentication, network egress, sandbox limits, environments, and access policy. Every section has sensible defaults, so you only need to configure what you're changing.
 
-## File Locations
+Earl creates the config directory (`~/.config/earl/`) on first run if it doesn't exist.
 
-| Path                                     | Purpose                               |
-| ---------------------------------------- | ------------------------------------- |
-| `~/.config/earl/config.toml`             | Main configuration                    |
-| `~/.config/earl/templates/*.hcl`         | Global templates                      |
-| `./templates/*.hcl`                      | Workspace templates (override global) |
-| `~/.local/state/earl/secrets-index.json` | Secret metadata index                 |
-| `~/.cache/earl/search-index-v1.json`     | Search cache                          |
-| `~/.cache/earl/catalog-1.bin`            | Compiled template catalog cache. Invalidated automatically when template files change. Delete this file to force a full rebuild on next run. |
+## Minimal example
 
-## Full Example
+A config file that only restricts outbound network access:
 
 ```toml
-# --- Environments ---
-
-[environments]
-default = "staging"
-
-# --- Network ---
-
 [[network.allow]]
-scheme = "https"
-host = "api.github.com"
-port = 443
+scheme      = "https"
+host        = "api.github.com"
+port        = 443
 path_prefix = "/"
 
-[network.proxy_profiles.corp]
-url = "https://proxy.corp.example.com:8080"
-
-# --- Auth ---
-
-[auth.profiles.github]
-flow = "device_code"
-client_id = "your-client-id"
-token_url = "https://github.com/login/oauth/access_token"
-device_authorization_url = "https://github.com/login/device/code"
-scopes = ["repo", "read:org"]
-
-# --- Sandbox ---
-
-[sandbox]
-bash_max_time_ms = 30000
-bash_max_output_bytes = 1048576
-bash_allow_network = false
-sql_force_read_only = true
-sql_max_rows = 1000
-sql_connection_allowlist = ["myapp.db_url"]
-
-# --- Search ---
-
-[search]
-top_k = 40
-rerank_k = 10
-
-[search.local]
-embedding_model = "BGESmallENV15Q"
-reranker_model = "JINARerankerV1TurboEn"
-
-[search.remote]
-enabled = true
-base_url = "https://search.example.com"
-api_key_secret = "search.api_key"
-embeddings_path = "/embeddings"
-rerank_path = "/rerank"
-openai_compatible = true
-timeout_ms = 10000
+[[network.allow]]
+scheme      = "https"
+host        = "api.stripe.com"
+port        = 443
+path_prefix = "/"
 ```
 
-## Environments
+## Full production example
 
-The `[environments]` section sets a global default environment, applied when no `--env` flag is given on the command line.
+```toml
+# Network egress: allow only specific hosts
+[[network.allow]]
+scheme      = "https"
+host        = "api.github.com"
+port        = 443
+path_prefix = "/"
 
-| Key       | Type     | Required | Description                                           |
-| --------- | -------- | -------- | ----------------------------------------------------- |
-| `default` | `string` | No       | Name of the environment to activate for all commands. |
+[[network.allow]]
+scheme      = "https"
+host        = "api.stripe.com"
+port        = 443
+path_prefix = "/"
+
+# JWT validation for MCP HTTP transport
+[auth.jwt]
+audience           = "https://api.yourcompany.com"
+oidc_discovery_url = "https://accounts.yourcompany.com/.well-known/openid-configuration"
+
+# OAuth2 profile for GitHub browser-based auth
+[auth.profiles.github]
+flow         = "auth_code_pkce"
+client_id    = "your-client-id"
+issuer       = "https://github.com"
+scopes       = ["repo", "read:org"]
+redirect_url = "http://localhost:8080/callback"
+
+# Sandbox: tighter limits than the per-command defaults
+[sandbox]
+bash_allow_network    = false
+bash_max_time_ms      = 10000
+bash_max_output_bytes = 524288
+sql_force_read_only   = true
+sql_max_rows          = 50
+
+# Default environment
+[environments]
+default = "production"
+
+# Policy rules for MCP HTTP (only evaluated when auth.jwt is configured)
+[[policy]]
+subjects = ["user:*"]
+tools    = ["github.*"]
+modes    = ["read"]
+effect   = "allow"
+
+[[policy]]
+subjects = ["*"]
+tools    = ["github.delete_repo"]
+modes    = ["write"]
+effect   = "deny"
+
+# Search: remote semantic search backend (optional)
+[search.remote]
+enabled          = true
+base_url         = "https://search.yourcompany.com"
+api_key_secret   = "search.api_key"
+embeddings_path  = "/embeddings"
+rerank_path      = "/rerank"
+openai_compatible = true
+timeout_ms       = 10000
+```
+
+---
+
+## [search]
+
+Controls how Earl discovers and ranks templates.
+
+```toml
+[search]
+top_k    = 40
+rerank_k = 10
+```
+
+| Field      | Type    | Default | Description                                       |
+| ---------- | ------- | ------- | ------------------------------------------------- |
+| `top_k`    | integer | `40`    | Number of candidates to retrieve before reranking |
+| `rerank_k` | integer | `10`    | Number of results to return after reranking       |
+
+### [search.local]
+
+Local embedding and reranking models. Earl bundles models via `fastembed`; no external service needed.
+
+```toml
+[search.local]
+embedding_model  = "BGESmallENV15Q"
+reranker_model   = "JINARerankerV1TurboEn"
+```
+
+| Field             | Type   | Default                   | Description                          |
+| ----------------- | ------ | ------------------------- | ------------------------------------ |
+| `embedding_model` | string | `"BGESmallENV15Q"`        | fastembed embedding model identifier |
+| `reranker_model`  | string | `"JINARerankerV1TurboEn"` | fastembed reranker model identifier  |
+
+### [search.remote]
+
+Optional remote semantic search backend (OpenAI-compatible API). When `enabled = false` (the default), Earl uses only local models.
+
+```toml
+[search.remote]
+enabled           = true
+base_url          = "https://search.example.com"
+api_key_secret    = "search.api_key"
+embeddings_path   = "/embeddings"
+rerank_path       = "/rerank"
+openai_compatible = true
+timeout_ms        = 10000
+```
+
+| Field               | Type    | Default         | Description                              |
+| ------------------- | ------- | --------------- | ---------------------------------------- |
+| `enabled`           | boolean | `false`         | Enable remote search                     |
+| `base_url`          | string  | —               | Base URL of the remote search service    |
+| `api_key_secret`    | string  | —               | Keychain key name containing the API key |
+| `embeddings_path`   | string  | `"/embeddings"` | Path for the embeddings endpoint         |
+| `rerank_path`       | string  | `"/rerank"`     | Path for the reranking endpoint          |
+| `openai_compatible` | boolean | `true`          | Use OpenAI-compatible request format     |
+| `timeout_ms`        | integer | `10000`         | Request timeout in milliseconds          |
+
+The `api_key_secret` value is a keychain key name, not the key itself. Store the value first:
+
+```bash
+earl secrets set search.api_key
+```
+
+---
+
+## [auth.jwt]
+
+JWT validation for the MCP HTTP transport. Earl won't start `earl mcp http` without either this section configured or `--allow-unauthenticated` passed. The two approaches are mutually exclusive.
+
+Two ways to configure JWT validation:
+
+**OIDC discovery (recommended)** — Earl fetches the JWKS endpoint from the discovery document automatically:
+
+```toml
+[auth.jwt]
+audience           = "https://api.yourcompany.com"
+oidc_discovery_url = "https://accounts.yourcompany.com/.well-known/openid-configuration"
+```
+
+**Manual JWKS** — use this when there's no OIDC discovery endpoint:
+
+```toml
+[auth.jwt]
+audience                   = "https://api.yourcompany.com"
+issuer                     = "https://accounts.yourcompany.com"
+jwks_uri                   = "https://accounts.yourcompany.com/.well-known/jwks.json"
+algorithms                 = ["RS256"]
+clock_skew_seconds         = 30
+jwks_cache_max_age_seconds = 900
+```
+
+`oidc_discovery_url` and `issuer`/`jwks_uri` are mutually exclusive. Earl errors if you set both.
+
+| Field                        | Type     | Required                   | Default     | Description                                                    |
+| ---------------------------- | -------- | -------------------------- | ----------- | -------------------------------------------------------------- |
+| `audience`                   | string   | Yes                        | —           | Expected `aud` claim in incoming tokens                        |
+| `oidc_discovery_url`         | string   | If no `issuer`/`jwks_uri`  | —           | OIDC discovery URL; resolves issuer and JWKS URI automatically |
+| `issuer`                     | string   | If no `oidc_discovery_url` | —           | Expected `iss` claim                                           |
+| `jwks_uri`                   | string   | If no `oidc_discovery_url` | —           | JWKS endpoint URL                                              |
+| `algorithms`                 | string[] | No                         | `["RS256"]` | Allowed signing algorithms                                     |
+| `clock_skew_seconds`         | integer  | No                         | `30`        | Clock skew tolerance (max effective: 300)                      |
+| `jwks_cache_max_age_seconds` | integer  | No                         | `900`       | JWKS cache TTL in seconds                                      |
+
+Supported algorithms: RS256, RS384, RS512, ES256, ES384, ES512, PS256, PS384, PS512, EdDSA.
+
+Incoming tokens must carry `exp`, `sub`, `iss`, and `aud` claims. The `sub` claim is what `[[policy]]` rules match against.
+
+---
+
+## [auth.profiles.*]
+
+OAuth2 profiles used by templates with `auth { kind = "o_auth2_profile" profile = "..." }`. Add one `[auth.profiles.<name>]` section per profile.
+
+Three flows are available. Which one fits depends on whether a human needs to be in the loop.
+
+### Auth Code + PKCE
+
+Opens a browser. A human must authorize before the token is issued. Not suitable for fully unattended flows.
+
+```toml
+[auth.profiles.myprofile]
+flow         = "auth_code_pkce"
+client_id    = "your-client-id"
+issuer       = "https://accounts.example.com"
+scopes       = ["read", "write"]
+redirect_url = "http://localhost:8080/callback"
+```
+
+Earl opens the authorization URL in the default browser. A local server listens at the `redirect_url` for the authorization code. The default redirect is `http://127.0.0.1:8976/callback` if `redirect_url` is omitted.
+
+### Device Code
+
+Works without a browser on the machine running Earl. Earl prints a short code and a URL; a human enters the code from any device. Earl polls until authorization completes. Agent-compatible.
+
+```toml
+[auth.profiles.device]
+flow                     = "device_code"
+client_id                = "your-client-id"
+device_authorization_url = "https://accounts.example.com/device/code"
+token_url                = "https://accounts.example.com/token"
+scopes                   = ["repo"]
+```
+
+If your provider supports OIDC discovery, set `issuer` instead of listing endpoint URLs:
+
+```toml
+[auth.profiles.device]
+flow      = "device_code"
+client_id = "your-client-id"
+issuer    = "https://accounts.example.com"
+scopes    = ["repo"]
+```
+
+### Client Credentials
+
+No human involved. Used for M2M flows and service accounts. `earl auth login` completes immediately.
+
+```toml
+[auth.profiles.service]
+flow              = "client_credentials"
+client_id         = "your-client-id"
+client_secret_key = "myservice.client_secret"
+token_url         = "https://accounts.example.com/token"
+scopes            = ["api.read"]
+```
+
+`client_secret_key` is a keychain key name. Store the value first:
+
+```bash
+earl secrets set myservice.client_secret
+```
+
+### OAuth profile fields
+
+| Field                      | Type     | Required                  | Description                                                                       |
+| -------------------------- | -------- | ------------------------- | --------------------------------------------------------------------------------- |
+| `flow`                     | string   | Yes                       | `auth_code_pkce`, `device_code`, or `client_credentials`                          |
+| `client_id`                | string   | Yes                       | OAuth2 client ID                                                                  |
+| `client_secret_key`        | string   | `client_credentials` only | Keychain key name for the client secret                                           |
+| `issuer`                   | string   | If no endpoint URLs       | OIDC issuer; Earl fetches discovery document to find endpoints                    |
+| `authorization_url`        | string   | `auth_code_pkce` only     | Authorization endpoint (if no `issuer`)                                           |
+| `token_url`                | string   | If no `issuer`            | Token endpoint                                                                    |
+| `device_authorization_url` | string   | `device_code` only        | Device authorization endpoint (if no `issuer`)                                    |
+| `redirect_url`             | string   | No                        | Callback URL for `auth_code_pkce`; defaults to `http://127.0.0.1:8976/callback`   |
+| `scopes`                   | string[] | No                        | Requested OAuth2 scopes                                                           |
+| `use_auth_request_body`    | boolean  | No                        | Send client credentials in the request body instead of the `Authorization` header |
+
+---
+
+## [[network.allow]]
+
+Restricts which hosts Earl can contact. Without any entries, Earl can reach any public IP (SSRF blocking of private ranges still applies regardless). With entries, any request to a host not matching at least one rule is rejected.
+
+Each entry is a separate `[[network.allow]]` block with four fields, all required:
+
+```toml
+[[network.allow]]
+scheme      = "https"
+host        = "api.github.com"
+port        = 443
+path_prefix = "/"
+
+[[network.allow]]
+scheme      = "https"
+host        = "api.stripe.com"
+port        = 443
+path_prefix = "/"
+```
+
+| Field         | Type    | Description                                   |
+| ------------- | ------- | --------------------------------------------- |
+| `scheme`      | string  | URL scheme to match (`"https"` or `"http"`)   |
+| `host`        | string  | Exact hostname to allow                       |
+| `port`        | integer | Port number to allow                          |
+| `path_prefix` | string  | URL path prefix; use `"/"` to allow all paths |
+
+`path_prefix = "/v2/"` allows only paths starting with `/v2/`. Use `"/"` to allow the full host.
+
+This is separate from SSRF blocking, which operates at the IP layer and cannot be disabled. The network allowlist operates at the URL layer and restricts outbound access to specific destinations. See [Hardening](/docs/hardening) for the full list of SSRF-blocked ranges.
+
+### [network.proxy_profiles.*]
+
+Named proxy configurations, referenced by templates using `transport { proxy_profile = "..." }`.
+
+```toml
+[network.proxy_profiles.corp]
+url = "http://proxy.corp.example.com:8080"
+```
+
+| Field | Type   | Required | Description                         |
+| ----- | ------ | -------- | ----------------------------------- |
+| `url` | string | Yes      | Proxy URL including scheme and port |
+
+---
+
+## [sandbox]
+
+Global defaults for Bash and SQL sandbox limits. Per-command `sandbox { }` blocks in templates override these for individual commands.
+
+```toml
+[sandbox]
+bash_allow_network    = false
+bash_max_time_ms      = 30000
+bash_max_output_bytes = 1048576
+bash_max_memory_bytes = 134217728
+bash_max_cpu_time_ms  = 30000
+sql_force_read_only   = true
+sql_max_rows          = 100
+sql_connection_allowlist = []
+```
+
+| Field                      | Type     | Default | Description                                                                   |
+| -------------------------- | -------- | ------- | ----------------------------------------------------------------------------- |
+| `bash_allow_network`       | boolean  | `false` | Allow outbound network access from Bash scripts (SSRF blocking still applies) |
+| `bash_max_time_ms`         | integer  | none    | Kill Bash processes after this many milliseconds                              |
+| `bash_max_output_bytes`    | integer  | none    | Truncate Bash stdout + stderr at this byte count                              |
+| `bash_max_memory_bytes`    | integer  | none    | Memory limit for Bash sandbox processes                                       |
+| `bash_max_cpu_time_ms`     | integer  | none    | CPU time limit for Bash sandbox processes                                     |
+| `sql_force_read_only`      | boolean  | `true`  | Open SQL connections in read-only transactions                                |
+| `sql_max_rows`             | integer  | none    | Cap rows returned by SQL queries                                              |
+| `sql_connection_allowlist` | string[] | `[]`    | Keychain key names whose connection strings are permitted                     |
+
+`sql_force_read_only = true` is the default. Set it to `false` only if you have SQL commands that genuinely need to write. The setting opens connections in a read-only transaction at the database level — write operations fail at the driver, not just at the application.
+
+---
+
+## [environments]
+
+Sets the default environment when no `--env` flag is passed to `earl call`.
 
 ```toml
 [environments]
-default = "staging"
+default = "production"
 ```
 
-The value must match an environment name declared in the template's `environments` block. An invalid or misspelled name is rejected at startup. See [Environments](/docs/environments) for a complete guide, or [Template Schema](/docs/template-schema#environments) for the field reference.
+| Field     | Type   | Default | Description              |
+| --------- | ------ | ------- | ------------------------ |
+| `default` | string | none    | Default environment name |
 
-## Network Allowlist
+The `--env` flag on `earl call` overrides this. This config value overrides the `default` set inside a template's `environments { }` block. For how environments work in templates, see [Environments](/docs/environments).
 
-`[[network.allow]]` restricts outbound HTTP traffic. Without any entries, all destinations are allowed. With one or more entries, requests must match at least one rule.
+---
 
-| Field         | Type     | Required | Description                                      |
-| ------------- | -------- | -------- | ------------------------------------------------ |
-| `scheme`      | `string` | Yes      | `https` or `http`                                |
-| `host`        | `string` | Yes      | Exact hostname                                   |
-| `port`        | `u16`    | Yes      | TCP port (usually `443`)                         |
-| `path_prefix` | `string` | Yes      | Only paths starting with this prefix are allowed |
+## [[policy]]
 
-## Proxy Profiles
-
-Named proxy profiles under `[network.proxy_profiles.<name>]`. Templates reference them via `transport.proxy_profile`.
+Access control rules for the MCP HTTP transport. Only evaluated when `[auth.jwt]` is configured. Each rule is a separate `[[policy]]` block.
 
 ```toml
-[network.proxy_profiles.corp]
-url = "https://proxy.corp.example.com:8080"
+# Read-only GitHub access for all authenticated users
+[[policy]]
+subjects = ["user:*"]
+tools    = ["github.*"]
+modes    = ["read"]
+effect   = "allow"
+
+# Block destructive GitHub operations for everyone
+[[policy]]
+subjects = ["*"]
+tools    = ["github.delete_repo"]
+modes    = ["write"]
+effect   = "deny"
 ```
 
-## OAuth Profiles
+| Field      | Type     | Required | Description                                                  |
+| ---------- | -------- | -------- | ------------------------------------------------------------ |
+| `subjects` | string[] | Yes      | Caller identity patterns matched against the JWT `sub` claim |
+| `tools`    | string[] | Yes      | Tool name patterns (`provider.command` format)               |
+| `modes`    | string[] | No       | `"read"`, `"write"`, or both. Omit to match any mode.        |
+| `effect`   | string   | Yes      | `"allow"` or `"deny"`                                        |
 
-Define profiles under `[auth.profiles.<name>]` and reference them from templates via `auth.kind = "oauth2_profile"`. See [Auth](/docs/secrets-and-auth) for flow details.
+**Subject patterns:**
 
-| Flow                 | Required Fields                         |
-| -------------------- | --------------------------------------- |
-| `auth_code_pkce`     | `token_url`, `authorization_url`        |
-| `device_code`        | `token_url`, `device_authorization_url` |
-| `client_credentials` | `token_url`, `client_secret_key`        |
+| Pattern        | Matches                                       |
+| -------------- | --------------------------------------------- |
+| `user:alice`   | JWT `sub` equals `alice`                      |
+| `user:*`       | Any `sub` value                               |
+| `group:admins` | Callers with `admins` in their `groups` claim |
+| `*`            | Any authenticated caller                      |
 
-All flows require `client_id`. Optional fields: `client_secret_key` (required for `client_credentials`), `redirect_url`, `scopes`, `issuer`, `use_auth_request_body`.
+**Tool patterns:** `*` matches within a single segment.
 
-## Sandbox
+| Pattern      | Matches                                 |
+| ------------ | --------------------------------------- |
+| `github.*`   | All github commands                     |
+| `*.delete_*` | Any delete command across all providers |
+| `*`          | Any tool                                |
 
-The `[sandbox]` section controls execution limits for Bash and SQL protocol operations. These settings apply both to direct `earl call` invocations and to tools served through the MCP server.
+**Evaluation:** deny-overrides. One deny beats any number of allows. If no rule matches, the call is rejected. There is no implicit allow.
 
-### Bash
+If `[auth.jwt]` is configured but no `[[policy]]` rules exist, all tool calls are denied. `earl doctor` warns about this.
 
-| Key                     | Type             | Default | Description                                     |
-| ----------------------- | ---------------- | ------- | ----------------------------------------------- |
-| `bash_max_time_ms`      | `u64` (optional) | —       | Maximum wall-clock time for a Bash command (ms) |
-| `bash_max_output_bytes` | `u64` (optional) | —       | Maximum stdout/stderr capture size (bytes)      |
-| `bash_allow_network`    | `bool`           | `false` | Allow network access from Bash commands         |
-| `bash_max_memory_bytes` | `integer`        | —       | Maximum virtual memory per Bash command, in bytes. Enforced via RLIMIT_AS on Linux; not applicable on macOS. |
-| `bash_max_cpu_time_ms`  | `integer`        | —       | Maximum CPU time per Bash command, in milliseconds. Enforced on both Linux and macOS. |
-
-### SQL
-
-| Key                        | Type             | Default | Description                                                  |
-| -------------------------- | ---------------- | ------- | ------------------------------------------------------------ |
-| `sql_force_read_only`      | `bool`           | `true`  | Force all SQL queries to be read-only                        |
-| `sql_max_rows`             | `u64` (optional) | —       | Maximum number of rows returned per query                    |
-| `sql_connection_allowlist` | `string[]`       | `[]`    | Secret keys whose values are permitted as connection strings |
-
-The `sql_connection_allowlist` entries refer to secret names managed by `earl secrets`. Only connections whose secret key appears in this list are allowed.
-
-```toml
-[sandbox]
-bash_max_time_ms = 30000
-sql_force_read_only = true
-sql_connection_allowlist = ["myapp.db_url", "analytics.readonly_url"]
-```
-
-## Search
-
-Controls the semantic search engine used by `earl templates search` and MCP discovery mode.
-
-### Global
-
-| Key               | Type    | Default | Description                          |
-| ----------------- | ------- | ------- | ------------------------------------ |
-| `search.top_k`    | `usize` | `40`    | Candidates retrieved from embeddings |
-| `search.rerank_k` | `usize` | `10`    | Results returned after reranking     |
-
-### Local Models
-
-| Key                            | Type     | Default                 | Description                |
-| ------------------------------ | -------- | ----------------------- | -------------------------- |
-| `search.local.embedding_model` | `string` | `BGESmallENV15Q`        | Local embedding model name |
-| `search.local.reranker_model`  | `string` | `JINARerankerV1TurboEn` | Local reranker model name  |
-
-### Remote Backend
-
-Enable a remote search backend for embedding and reranking when local models are not sufficient.
-
-| Key                               | Type     | Default       | Description                              |
-| --------------------------------- | -------- | ------------- | ---------------------------------------- |
-| `search.remote.enabled`           | `bool`   | `false`       | Enable remote search backend             |
-| `search.remote.base_url`          | `string` | —             | Base URL of the remote service           |
-| `search.remote.api_key_secret`    | `string` | —             | Secret key name for the API key          |
-| `search.remote.embeddings_path`   | `string` | `/embeddings` | Path appended to base URL for embeddings |
-| `search.remote.rerank_path`       | `string` | `/rerank`     | Path appended to base URL for reranking  |
-| `search.remote.openai_compatible` | `bool`   | `true`        | Use OpenAI-compatible request format     |
-| `search.remote.timeout_ms`        | `u64`    | `10000`       | Request timeout in milliseconds          |
-
-<Callout type="info">
-  Run `earl doctor` to verify your configuration. See
-  [Troubleshooting](/docs/troubleshooting) for common errors.
-</Callout>
+See [Policy Engine](/docs/policy-engine) for subject patterns, tool glob syntax, and the evaluation model.

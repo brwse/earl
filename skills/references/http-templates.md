@@ -112,8 +112,9 @@ auth {
 
 # Basic auth
 auth {
-  kind   = "basic"
-  secret = "myapi.credentials"
+  kind            = "basic"
+  username        = "myuser"
+  password_secret = "myapi.password"
 }
 
 # API key in header (use headers instead of auth block)

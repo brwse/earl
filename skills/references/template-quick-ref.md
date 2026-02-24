@@ -83,11 +83,11 @@ operation {
 
 ## Auth Block Kinds
 
-| Kind     | Fields    | Use case                                 |
-| -------- | --------- | ---------------------------------------- |
-| `bearer` | `secret`  | API tokens (most REST/GraphQL APIs)      |
-| `basic`  | `secret`  | Basic HTTP auth (username:password)      |
-| `oauth2` | `profile` | OAuth2 flows (configured in config.toml) |
+| Kind              | Fields                        | Use case                                 |
+| ----------------- | ----------------------------- | ---------------------------------------- |
+| `bearer`          | `secret`                      | API tokens (most REST/GraphQL APIs)      |
+| `basic`           | `username`, `password_secret` | Basic HTTP auth                          |
+| `o_auth2_profile` | `profile`                     | OAuth2 flows (configured in config.toml) |
 
 ## Body Block Kinds (HTTP only)
 

@@ -1,0 +1,225 @@
+---
+title: Streaming
+description: How to use streaming responses in Earl — HTTP SSE, newline-delimited JSON, and gRPC server-streaming.
+---
+
+Most Earl commands complete in a single round-trip: send a request, receive a response, format it. Streaming is for cases where the server sends data progressively — a language model token stream, a log tail, a long-running export. Instead of waiting for the full response, Earl prints output as chunks arrive.
+
+## When to use streaming
+
+Streaming makes sense when:
+
+- The server uses Server-Sent Events (SSE) to push incremental data.
+- The response is newline-delimited JSON (NDJSON) — each line is a separate JSON object.
+- The server takes long enough that you want to see partial results rather than waiting.
+- You're calling a gRPC server-streaming RPC.
+
+For normal JSON APIs that respond in under a second, streaming adds complexity without benefit.
+
+## HTTP streaming
+
+Two changes are needed to enable HTTP streaming: set `stream = true` in the operation block, and set `decode = "lines"` in the result block.
+
+```hcl
+operation {
+  protocol = "http"
+  method   = "POST"
+  url      = "https://api.example.com/stream"
+  stream   = true
+
+  auth { kind = "bearer"; secret = "provider.token" }
+
+  body {
+    kind  = "json"
+    value = { prompt = "{{ args.prompt }}" }
+  }
+}
+
+result {
+  decode = "lines"
+  output = "{{ result }}"
+}
+```
+
+With `stream = true`, Earl does not buffer the full response. It reads the body line by line, running the `output` template once per line. Each iteration prints immediately to stdout.
+
+## How `decode = "lines"` works
+
+With `decode = "lines"`, the variable `result` in your output template is the current line — a single string from the response body. The template runs once per line, and output appears as each line arrives.
+
+This is different from every other decode mode, where `result` holds the full decoded response and the template runs exactly once.
+
+## Server-Sent Events (SSE)
+
+SSE responses look like this on the wire:
+
+```
+data: {"id":"1","delta":"Hello"}
+data: {"id":"2","delta":" world"}
+data: [DONE]
+```
+
+Earl strips the `data: ` prefix from each line before passing it to the output template. `[DONE]` lines and blank lines still arrive as `result` — handle them in the template if needed.
+
+A practical SSE streaming command:
+
+```hcl
+command "stream_completion" {
+  title       = "Stream completion"
+  summary     = "Stream a chat completion response token by token"
+  description = "Call the completions API and print tokens as they arrive."
+
+  annotations {
+    mode    = "read"
+    secrets = ["openai.api_key"]
+  }
+
+  param "prompt" {
+    type        = "string"
+    required    = true
+    description = "The prompt to complete"
+  }
+
+  operation {
+    protocol = "http"
+    method   = "POST"
+    url      = "https://api.openai.com/v1/chat/completions"
+    stream   = true
+
+    auth { kind = "bearer"; secret = "openai.api_key" }
+
+    body {
+      kind = "json"
+      value = {
+        model    = "gpt-4o"
+        stream   = "true"
+        messages = [{ role = "user"; content = "{{ args.prompt }}" }]
+      }
+    }
+  }
+
+  result {
+    decode = "lines"
+    output = "{% if result != '[DONE]' %}{% set chunk = result | from_json %}{{ chunk.choices[0].delta.content | default('') }}{% endif %}"
+  }
+}
+```
+
+The `data: ` prefix is already stripped, so `result` in the template is the raw JSON payload for each event. `[DONE]` signals the end of the stream — the template handles it with an `if` check.
+
+## Newline-delimited JSON (NDJSON)
+
+NDJSON responses send one JSON object per line, with no SSE envelope:
+
+```
+{"id":1,"event":"order.created","amount":9900}
+{"id":2,"event":"order.updated","amount":9900}
+```
+
+No prefix stripping applies here — `result` is the raw line. Parse it with `from_json`:
+
+```hcl
+command "tail_events" {
+  title       = "Tail events"
+  summary     = "Stream events from the webhook log"
+  description = "Stream the live event feed as newline-delimited JSON."
+
+  annotations {
+    mode    = "read"
+    secrets = ["myapp.api_key"]
+  }
+
+  operation {
+    protocol = "http"
+    method   = "GET"
+    url      = "https://api.myapp.com/events/stream"
+    stream   = true
+
+    auth { kind = "api_key"; secret = "myapp.api_key"; location = "header"; name = "X-Api-Key" }
+  }
+
+  result {
+    decode = "lines"
+    output = "{% set ev = result | from_json %}[{{ ev.event }}] order {{ ev.id }} — ${{ (ev.amount / 100) | round(2) }}"
+  }
+}
+```
+
+If the server sends blank lines or comments (common in SSE but not NDJSON), guard with `{% if result %}` before calling `from_json`.
+
+## gRPC server-streaming
+
+Earl supports server-streaming RPCs — one request, multiple response messages. Client-streaming and bidirectional streaming are not supported.
+
+Set `stream = true` in the operation block. The `result` block uses `decode = "json"` (gRPC response messages are already structured), and the output template runs once per response message.
+
+```hcl
+command "watch_logs" {
+  title       = "Watch logs"
+  summary     = "Stream log entries from the logging service"
+  description = "Open a server-streaming RPC and print log entries as they arrive."
+
+  annotations {
+    mode    = "read"
+    secrets = ["logging.api_key"]
+  }
+
+  param "service_name" {
+    type        = "string"
+    required    = true
+    description = "Service whose logs to stream"
+  }
+
+  param "tail" {
+    type        = "integer"
+    required    = false
+    default     = 100
+    description = "Number of recent lines to include at stream start"
+  }
+
+  operation {
+    protocol = "grpc"
+    url      = "https://logging.example.com"
+    stream   = true
+
+    auth { kind = "bearer"; secret = "logging.api_key" }
+
+    grpc {
+      service = "logging.v1.LogService"
+      method  = "WatchLogs"
+      body = {
+        service_name = "{{ args.service_name }}"
+        tail         = "{{ args.tail }}"
+      }
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "[{{ result.timestamp }}] {{ result.severity }}: {{ result.message }}"
+  }
+}
+```
+
+Each gRPC response message arrives as a separate `result` value. With `stream = true` and a server-streaming RPC, the connection stays open until the server closes it.
+
+If the gRPC server doesn't expose reflection (or only supports v1alpha), provide a descriptor set:
+
+```hcl
+grpc {
+  service             = "logging.v1.LogService"
+  method              = "WatchLogs"
+  descriptor_set_file = "logging.pb"
+  body = {
+    service_name = "{{ args.service_name }}"
+    tail         = "{{ args.tail }}"
+  }
+}
+```
+
+## Streaming limitations
+
+- Client-streaming and bidirectional streaming are not supported. Earl sends one request message and receives zero or more response messages. This covers LLM APIs, event feeds, and log tails, but not cases where the client sends a stream of messages to the server.
+- SQL does not support streaming. The `stream` flag has no effect on SQL operations.
+- `decode = "lines"` runs the output template once per line, not once total. If you need to accumulate results across lines, that's not possible in the template — you'd need to post-process the output.
+- The output template for streaming runs per chunk. Any state you try to carry between chunks (counting, accumulation) won't work. Design templates to be stateless per line.

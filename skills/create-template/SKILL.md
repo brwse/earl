@@ -125,7 +125,7 @@ file rather than overwriting it.
 
 **Environments (optional):** If the user needs staging/production separation, add an
 `environments` block at the provider level. Environment variables are available as `vars.*`
-in all template expressions. See the [template schema docs](https://earl.dev/docs/template-schema#environments)
+in all template expressions. See the [template schema docs](https://brwse.github.io/earl/docs/template-schema#environments)
 for full syntax. Only add environments when the user explicitly needs them — most templates
 don't.
 

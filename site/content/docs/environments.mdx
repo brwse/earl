@@ -1,193 +1,224 @@
 ---
 title: Environments
-description: Named environments let one template target multiple endpoints — production, staging, local — with per-environment variables and optional per-command overrides.
-icon: Layers
+description: Switch between production, staging, and other environments in Earl templates.
 ---
 
-Named environments let a single template file target multiple endpoints.
-Declare them once at the provider level, then switch between them with a
-flag at call time.
+Environments let a single template target different backends — typically a production API and a staging one — without duplicating the command logic. You define named environments at the provider level, then optionally override the full operation for specific environments in each command.
 
-## Defining environments
+## How it works
 
-Add an `environments` block at the root of your template file, alongside the
-`provider` declaration:
+There are two pieces:
+
+1. **The `environments` block** at the top of the template defines the available environments and their values (usually base URLs). This is where you set the default.
+2. **`environment_overrides` blocks** inside individual commands replace the entire operation when a specific environment is active.
+
+The two pieces are independent. You can use `environments` without any `environment_overrides`, and just interpolate `{{ env.base_url }}` into your operation URL. Or you can skip the top-level block and use `environment_overrides` to swap operations entirely.
+
+## The `environments` block
+
+This goes at the top of the template file, before any `command` blocks:
 
 ```hcl
-version  = 1
-provider = "myservice"
-
 environments {
   default = "production"
-
-  production {
-    base_url = "https://api.example.com"
-    label    = "prod"
-  }
-
-  staging {
-    base_url = "https://staging-api.example.com"
-    label    = "staging"
-  }
-}
-
-command "ping" {
-  title       = "Ping"
-  summary     = "Health check"
-  description = "Returns pong."
-  annotations { mode = "read" }
-  operation {
-    protocol = "http"
-    method   = "GET"
-    url      = "{{ vars.base_url }}/ping"
-  }
-  result {
-    decode = "text"
-    output = "[{{ vars.label }}] {{ result }}"
+  secrets = ["github.token"]
+  environments {
+    production = { base_url = "https://api.github.com" }
+    staging    = { base_url = "https://staging.github.internal" }
   }
 }
 ```
 
-Each named block (`production`, `staging`) becomes an environment. Every
-key inside it is injected as a `vars.<key>` variable when that environment
-is active.
+When a command runs, the active environment's fields are available as `{{ env.<key> }}`. In the example above, `{{ env.base_url }}` resolves to `https://api.github.com` in production and `https://staging.github.internal` in staging.
 
-| Field            | Type       | Required | Description                                                              |
-| ---------------- | ---------- | -------- | ------------------------------------------------------------------------ |
-| `default`        | `string`   | No       | Environment activated when no `--env` flag or config default is set.     |
-| `secrets`        | `string[]` | No       | Secret keys whose values `vars` entries are allowed to reference.        |
-| `<name> { ... }` | block      | No       | Named environment. Each key becomes a `vars.<key>` variable when active. |
+`secrets` lists secrets that apply to all environments. Individual environments can add their own fields — if staging uses a different token, you can put that key name in the staging entry:
 
-Environment names must match `[a-zA-Z0-9_-]` and be 1–64 characters.
+```hcl
+environments {
+  default = "production"
+  secrets = ["github.token"]
+  environments {
+    production = { base_url = "https://api.github.com" }
+    staging    = { base_url = "https://staging.github.internal"; token_key = "github.staging_token" }
+  }
+}
+```
 
-## Using environment variables
+The top-level `secrets` list is for secrets shared across all environments. Per-environment values in the `environments { }` inner block are data fields that end up in `env.*`, not automatic secret references.
 
-Inside any Jinja2 field (`url`, `headers`, `body`, `result.output`, etc.)
-use `vars.<key>` to read the active environment's value:
+## Using `{{ env.* }}` in operations
+
+Once you have an `environments` block, use `env.<key>` anywhere in the operation:
 
 ```hcl
 operation {
   protocol = "http"
   method   = "GET"
-  url      = "{{ vars.base_url }}/items"
-  headers  = { "X-Env": "{{ vars.label }}" }
-}
-```
+  url      = "{{ env.base_url }}/search/repositories"
 
-If no environment is active, `vars` is an empty map and any `vars.*`
-reference resolves to an empty string.
-
-## Secrets in environments
-
-To use a secret value inside an environment variable, declare it in the
-`secrets` list on the `environments` block, then reference it with
-`{{ secrets.<key> }}` inside the environment:
-
-```hcl
-environments {
-  default = "production"
-  secrets = ["myservice.staging_token"]
-
-  staging {
-    base_url  = "https://staging-api.example.com"
-    api_token = "{{ secrets.myservice.staging_token }}"
+  auth {
+    kind   = "bearer"
+    secret = "github.token"
   }
 }
 ```
 
-The `secrets` list is a security guard: Earl will reject a template whose
-environment block references a secret that is not declared there.
+This is the simplest form of environment switching: one operation, parameterized by environment values.
 
-## Per-command overrides
+## `environment_overrides`
 
-An `environment "<name>"` block inside a `command` replaces that command's
-`operation` (and optionally its `result`) when the named environment is
-active:
+When the difference between environments is more than a URL — different auth, different protocol, different headers — you can replace the entire operation for a specific environment:
 
 ```hcl
-command "ping" {
-  title       = "Ping"
-  summary     = "Health check"
-  description = "HTTP in production, bash locally."
+command "search_repos" {
+  title   = "Search repositories"
+  summary = "Search GitHub repos by query"
+  description = "Search GitHub repositories."
+
   annotations {
-    mode                                 = "read"
-    allow_environment_protocol_switching = true
+    mode    = "read"
+    secrets = ["github.token"]
   }
+
+  param "query" {
+    type        = "string"
+    required    = true
+    description = "Search query"
+  }
+
   operation {
     protocol = "http"
     method   = "GET"
-    url      = "{{ vars.base_url }}/ping"
+    url      = "{{ env.base_url }}/search/repositories"
+
+    auth {
+      kind   = "bearer"
+      secret = "github.token"
+    }
+
+    query = { q = "{{ args.query }}" }
   }
-  environment "local" {
-    operation {
-      protocol = "bash"
-      bash {
-        script = "echo pong"
+
+  environment_overrides {
+    staging {
+      operation {
+        protocol = "http"
+        method   = "GET"
+        url      = "https://staging.github.internal/search/repositories"
+
+        auth {
+          kind   = "bearer"
+          secret = "github.staging_token"
+        }
+
+        query = { q = "{{ args.query }}" }
       }
     }
-    result {
-      decode = "text"
-      output = "local: {{ result }}"
-    }
-  }
-  result {
-    decode = "text"
-    output = "{{ result }}"
   }
 }
 ```
 
-When the `local` environment is active, the bash operation runs instead of
-the HTTP one. If the override omits `result`, the command's top-level
-`result` block is used as a fallback.
+When the active environment is `staging`, Earl uses the override operation and ignores the default one entirely. For all other environments, the default operation runs.
 
-| Field       | Type  | Required | Description                                                                     |
-| ----------- | ----- | -------- | ------------------------------------------------------------------------------- |
-| `operation` | block | Yes      | Replacement operation. Must follow the same protocol rules as a root operation. |
-| `result`    | block | No       | Replacement result block. Falls back to the command's `result` if omitted.      |
+The override is a complete replacement, not a merge. If the default operation has headers or query params you want to keep in staging, you need to repeat them.
+
+## Activating an environment
+
+Pass `--env` to `earl call`:
+
+```bash
+earl call --env staging github.search_repos --query "rust"
+```
+
+Or set a default in `~/.config/earl/config.toml`:
+
+```toml
+[environments]
+default = "staging"
+```
+
+The `--env` flag overrides the config file default. The config file default overrides the template's `default` value.
 
 ## Protocol switching
 
-When a per-command environment override changes the `protocol` field, you
-must set `allow_environment_protocol_switching = true` in the command's
-`annotations` block. Without it, validation fails:
+By default, Earl rejects environment overrides that switch the protocol (e.g., from `http` to `grpc`). This prevents silent behavior changes when swapping environments.
+
+If you need to switch protocols between environments, set the annotation:
 
 ```hcl
 annotations {
-  mode                                 = "read"
   allow_environment_protocol_switching = true
 }
 ```
 
-This flag is intentionally explicit. Switching protocols changes the
-security surface of a command, and Earl requires templates to acknowledge
-that.
+Without this, an override that changes `protocol` will cause Earl to error when the template loads.
 
-## Resolution priority
+## Complete example
 
-Earl resolves the active environment in this order (highest wins):
+```hcl
+version    = 1
+provider   = "github"
+categories = ["scm"]
 
-| Priority | Source                                                  |
-| -------- | ------------------------------------------------------- |
-| 1 (high) | `--env <name>` flag on `earl call`                      |
-| 2        | `environments.default` in `~/.config/earl/config.toml` |
-| 3        | `environments.default` in the template file             |
-| 4 (low)  | No active environment                                   |
+environments {
+  default = "production"
+  secrets = ["github.token"]
+  environments {
+    production = { base_url = "https://api.github.com" }
+    staging    = { base_url = "https://staging.github.internal" }
+  }
+}
 
-```bash
-# Activate staging just for this call
-earl call myservice.ping --env staging
+command "search_repos" {
+  title       = "Search repositories"
+  summary     = "Search GitHub repos by query"
+  description = "Search GitHub repositories using GitHub's search API."
 
-# Set a persistent default in config.toml
-# [environments]
-# default = "staging"
+  annotations {
+    mode    = "read"
+    secrets = ["github.token"]
+  }
+
+  param "query" {
+    type        = "string"
+    required    = true
+    description = "Search query (e.g. 'language:rust stars:>100')"
+  }
+
+  param "per_page" {
+    type        = "integer"
+    required    = false
+    default     = 20
+    description = "Results per page (max 100)"
+  }
+
+  operation {
+    protocol = "http"
+    method   = "GET"
+    url      = "{{ env.base_url }}/search/repositories"
+
+    auth {
+      kind   = "bearer"
+      secret = "github.token"
+    }
+
+    query = {
+      q        = "{{ args.query }}"
+      per_page = "{{ args.per_page }}"
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "Found {{ result.total_count }} repos:\n{% for r in result.items[:5] %}  - {{ r.full_name }}\n{% endfor %}"
+  }
+}
 ```
 
-See [Configuration](/docs/configuration#environments) to set a config-level
-default, and [CLI Reference](/docs/commands#environments) for the full `--env`
-flag description.
+Run against staging:
 
-## Reference
+```bash
+earl call --env staging github.search_repos --query "language:rust"
+```
 
-Full field-by-field reference for the `environments` block and
-`environment "<name>"` overrides: [Template Schema — environments](/docs/template-schema#environments).
+For a field-by-field reference, see [Template Schema](/docs/template-schema). For using external secret URIs in environment-specific auth, see [External Secrets](/docs/external-secrets).

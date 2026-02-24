@@ -1,61 +1,18 @@
 ---
 title: Introduction
-description: AI-safe CLI for AI agents
-icon: BookOpen
+description: Earl is a CLI and MCP server that connects AI agents to external services while keeping secrets, write operations, and network egress under human control.
 ---
 
-An AI agent with shell access can read your `.env` file, call any URL, and exfiltrate credentials without leaving a trace. Earl cuts those attack surfaces by giving agents a gate instead of raw shell access: they invoke named templates, secrets stay in the OS keychain, and outbound traffic follows an explicit allowlist you define.
+Earl is a CLI and MCP server that connects AI agents to external services — HTTP, GraphQL, gRPC, Bash, SQL — while keeping secrets, write operations, and network egress under human control.
 
-```
-┌─────────────┐      ┌──────────────┐      ┌───────────────────┐
-│  AI Agent   │ ───▶ │     earl     │ ───▶ │ External Service  │
-│  (Request)  │      │ (Gate/Policy)│      │ (API, DB, shell…) │
-└─────────────┘      └──────────────┘      └───────────────────┘
-       ▲                    │
-       └──────── Result ────┘
-```
+## The problem it solves
 
-## How it works
+In early 2026, OpenClaw — the dominant open-source AI agent — had a rough stretch: 341 malicious skills on its ClawHub marketplace, a 1-click RCE CVE, command injection in SSH, credential exfiltration through prompt injection. Different vectors, same root cause.
 
-You define allowed operations as HCL templates. Each template declares the URL, method, parameters, and which secrets the operation can access. You store credentials in the OS keychain with `earl secrets set`. Your agent calls `earl call provider.command --param value`. Earl resolves secrets, checks network rules, and executes — blocking anything that doesn't match a template.
+ClawHub skills are Markdown documents that the LLM reads and executes. Prompt injection isn't an edge case in that model — it's baked in. No amount of review process changes that.
 
-That's the whole model. Agents can do exactly what you've approved. Nothing more.
+Earl takes a different approach. Operations are HCL files committed to your repository. The LLM calls a template by name; it never reads the template content. Credentials stay in the OS keychain, never in LLM context. Write operations require explicit authorization. The network layer blocks private and loopback addresses with no config bypass.
 
-<Callout type="warn">
-  Earl's guarantees hold as long as agents cannot modify config or template files.
-  If an agent can edit `config.toml`, it can whitelist arbitrary network destinations.
-  Lock down the config directory after setup: `chmod 700 ~/.config/earl`
-</Callout>
+More detail on each of these: [How Earl Works](/docs/how-earl-works).
 
-<Cards>
-  <Card
-    title="Quick Start"
-    href="/docs/quick-start"
-    description="Install Earl and make your first API call in a few minutes."
-  />
-  <Card
-    title="How Earl Works"
-    href="/docs/how-earl-works"
-    description="How Earl protects secrets, enforces network rules, and blocks SSRF attacks."
-  />
-  <Card
-    title="Templates"
-    href="/docs/templates"
-    description="Write HCL templates that define what your agent is allowed to call."
-  />
-  <Card
-    title="Secrets & Auth"
-    href="/docs/secrets-and-auth"
-    description="Store credentials in the OS keychain and configure OAuth2 profiles."
-  />
-  <Card
-    title="MCP Server"
-    href="/docs/mcp"
-    description="Expose your templates as MCP tools for Claude and other agents."
-  />
-  <Card
-    title="CLI Reference"
-    href="/docs/commands"
-    description="Complete CLI reference."
-  />
-</Cards>
+Ready to get something running: [Quick Start](/docs/quick-start).
