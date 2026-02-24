@@ -60,19 +60,21 @@ pub fn bind_arguments(
                 out.insert(param.name.clone(), default_value.clone());
             } else if param.required {
                 return Err(BindError::MissingRequired(param.name.clone()));
-            }
+            } // else: optional with no default — leave absent; Chainable rendering
+              // returns Undefined which maps to null in render_string_value
         }
     }
 
     for param in params {
-        if let Some(value) = out.get(&param.name)
-            && !matches_type(value, param.r#type)
-        {
-            return Err(BindError::InvalidType {
-                name: param.name.clone(),
-                expected: param.r#type.to_string(),
-                actual: value_type_name(value),
-            });
+        if let Some(value) = out.get(&param.name) {
+            // Null means the optional param was not provided — no type to validate.
+            if !value.is_null() && !matches_type(value, param.r#type) {
+                return Err(BindError::InvalidType {
+                    name: param.name.clone(),
+                    expected: param.r#type.to_string(),
+                    actual: value_type_name(value),
+                });
+            }
         }
     }
 

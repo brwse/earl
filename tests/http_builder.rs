@@ -512,7 +512,7 @@ async fn builds_graphql_payload_and_headers() {
     });
 
     let mut args = Map::new();
-    args.insert("user_id".to_string(), json!("42"));
+    args.insert("user_id".to_string(), json!(42));
 
     let prepared = build_prepared_request_with_token_provider(
         &entry,

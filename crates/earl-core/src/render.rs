@@ -31,12 +31,21 @@ pub fn render_key_value_map(
         let rendered_value = renderer.render_value(value, context)?;
 
         match rendered_value {
+            Value::Null => {} // Skip null values — lets templates use `| default("null")` for optional params
             Value::Array(values) => {
                 for value in values {
-                    out.push((rendered_key.clone(), value_to_string(value)?));
+                    let s = value_to_string(value)?;
+                    if !s.is_empty() {
+                        out.push((rendered_key.clone(), s));
+                    }
                 }
             }
-            other => out.push((rendered_key, value_to_string(other)?)),
+            other => {
+                let s = value_to_string(other)?;
+                if !s.is_empty() {
+                    out.push((rendered_key, s));
+                }
+            }
         }
     }
 

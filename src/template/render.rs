@@ -6,7 +6,10 @@ use serde_json::{Map, Value};
 
 static JINJA_ENV: LazyLock<Environment<'static>> = LazyLock::new(|| {
     let mut env = Environment::new();
-    env.set_undefined_behavior(UndefinedBehavior::Strict);
+    // Chainable: accessing an absent optional param returns Undefined rather
+    // than erroring. Template-level typos are caught at load time by
+    // validate_template_args, so Chainable is safe at runtime.
+    env.set_undefined_behavior(UndefinedBehavior::Chainable);
     env
 });
 
@@ -42,16 +45,38 @@ pub fn render_string_raw(input: &str, context: &Value) -> Result<String> {
 }
 
 fn render_string_value(input: &str, context: &Value) -> Result<Value> {
-    let rendered = render_string_raw(input, context)?;
-    if is_pure_expression(input)
-        && let Ok(v) = serde_json::from_str::<Value>(&rendered)
-    {
-        return Ok(v);
+    if let Some(expr_str) = pure_expression(input) {
+        // Evaluate the expression directly to get a typed minijinja Value.
+        // This cleanly handles:
+        //   - Undefined (absent optional param) → Value::Null
+        //   - None/null                          → Value::Null
+        //   - Integer, float, bool, array, object → correct JSON type
+        //   - Explicit empty string ""            → Value::String("") (preserved)
+        let expr = JINJA_ENV
+            .compile_expression(expr_str)
+            .with_context(|| format!("template render failed for string `{input}`"))?;
+        let result = expr
+            .eval(context)
+            .with_context(|| format!("template render failed for string `{input}`"))?;
+        if result.is_undefined() {
+            return Ok(Value::Null);
+        }
+        return serde_json::to_value(&result)
+            .with_context(|| format!("template render failed for string `{input}`"));
     }
+    let rendered = render_string_raw(input, context)?;
     Ok(Value::String(rendered))
 }
 
-fn is_pure_expression(input: &str) -> bool {
+/// If `input` is a single `{{ expr }}` with no nested braces, return the inner
+/// expression string. Returns `None` for multi-expression strings or plain text.
+fn pure_expression(input: &str) -> Option<&str> {
     let trimmed = input.trim();
-    trimmed.starts_with("{{") && trimmed.ends_with("}}")
+    if trimmed.starts_with("{{") && trimmed.ends_with("}}") {
+        let inner = &trimmed[2..trimmed.len() - 2];
+        if !inner.contains("{{") {
+            return Some(inner.trim());
+        }
+    }
+    None
 }
