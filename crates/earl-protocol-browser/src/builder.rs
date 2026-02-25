@@ -5,6 +5,8 @@ use serde_json::Value;
 use crate::PreparedBrowserCommand;
 use crate::schema::{BrowserOperationTemplate, BrowserStep};
 
+const DEFAULT_SESSION_ID: &str = "default";
+
 /// Build a `PreparedBrowserCommand` from a `BrowserOperationTemplate` by
 /// rendering all Jinja template strings with the given context.
 pub fn build_browser_request(
@@ -18,12 +20,13 @@ pub fn build_browser_request(
         bail!("operation.browser.steps must not be empty");
     }
 
-    let session_id = tmpl
-        .session_id
-        .as_deref()
-        .map(|s| renderer.render_str(s, context))
-        .transpose()?
-        .filter(|s| !s.is_empty());
+    let session_id = match tmpl.session_id.as_deref() {
+        None => Some(DEFAULT_SESSION_ID.to_string()),
+        Some(s) => {
+            let rendered = renderer.render_str(s, context)?;
+            if rendered.is_empty() { None } else { Some(rendered) }
+        }
+    };
 
     // Render all string fields in each step via the renderer.
     let steps: Vec<BrowserStep> = tmpl
@@ -140,9 +143,10 @@ mod tests {
         .unwrap();
         let ctx = serde_json::json!({});
         let cmd = build_browser_request(&op, &ctx, &PassthroughRenderer).unwrap();
-        assert_eq!(cmd.session_id.as_deref(), Some("default"));
+        assert_eq!(cmd.session_id.as_deref(), Some(super::DEFAULT_SESSION_ID));
     }
 
+    // Setting session_id = "" is the explicit opt-out from the default session.
     #[test]
     fn explicit_empty_session_id_is_ephemeral() {
         let op: crate::schema::BrowserOperationTemplate = serde_json::from_str(
