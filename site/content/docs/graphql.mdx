@@ -1,0 +1,182 @@
+---
+title: GraphQL
+icon: Braces
+description: Call GraphQL APIs from an Earl template.
+---
+
+The GraphQL protocol sends queries and mutations to a GraphQL endpoint over HTTP POST.
+
+## A complete example
+
+Here is a template that fetches basic info about a GitHub repository:
+
+```hcl
+version    = 1
+provider   = "github"
+categories = ["scm"]
+
+command "get_repo" {
+  title       = "Get repository"
+  summary     = "Fetch basic info about a GitHub repository"
+  description = "Returns the star count, description, and primary language for a repository."
+
+  annotations {
+    mode    = "read"
+    secrets = ["github.token"]
+  }
+
+  param "owner" {
+    type        = "string"
+    required    = true
+    description = "Repository owner (user or org)"
+  }
+
+  param "repo" {
+    type        = "string"
+    required    = true
+    description = "Repository name"
+  }
+
+  operation {
+    protocol = "graphql"
+    url      = "https://api.github.com/graphql"
+
+    auth {
+      kind   = "bearer"
+      secret = "github.token"
+    }
+
+    graphql {
+      query = <<-GQL
+        query($owner: String!, $repo: String!) {
+          repository(owner: $owner, name: $repo) {
+            stargazerCount
+            description
+            primaryLanguage { name }
+          }
+        }
+      GQL
+      variables = {
+        owner = "{{ args.owner }}"
+        repo  = "{{ args.repo }}"
+      }
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "{{ result.data.repository.stargazerCount }} stars — {{ result.data.repository.description | default('no description') }}"
+  }
+}
+```
+
+Store your token and run it:
+
+```bash
+earl secrets set github.token
+earl call github.get_repo --owner torvalds --repo linux
+```
+
+## Walk-through
+
+### operation
+
+```hcl
+operation {
+  protocol = "graphql"
+  url      = "https://api.github.com/graphql"
+  ...
+}
+```
+
+`protocol = "graphql"` and `url` are the only required fields. All GraphQL requests go out as HTTP POST — there is no `method` field.
+
+### graphql block
+
+```hcl
+graphql {
+  query = <<-GQL
+    query($owner: String!, $repo: String!) {
+      repository(owner: $owner, name: $repo) {
+        stargazerCount
+        description
+        primaryLanguage { name }
+      }
+    }
+  GQL
+  variables = {
+    owner = "{{ args.owner }}"
+    repo  = "{{ args.repo }}"
+  }
+}
+```
+
+`query` holds the GQL document. The heredoc syntax (`<<-GQL ... GQL`) keeps multi-line queries readable without escaping.
+
+`variables` is a map whose keys must match the `$variable` declarations in the query. Values support Jinja expressions — `"{{ args.owner }}"` is rendered before the request is sent.
+
+A third field, `operation_name`, is optional. Use it only when the document contains multiple named operations and you need to tell the server which one to execute.
+
+### result
+
+```hcl
+result {
+  decode = "json"
+  output = "{{ result.data.repository.stargazerCount }} stars — {{ result.data.repository.description | default('no description') }}"
+}
+```
+
+The GraphQL response is a JSON envelope. `decode = "json"` parses it and makes the full object available as `result`. Successful data is at `result.data.<field>`. If the server returns errors, they appear at `result.errors`.
+
+## Mutations
+
+Mutations work the same way. Use the `mutation` keyword in the GQL document and set `mode = "write"` in annotations.
+
+```hcl
+command "add_star" {
+  title       = "Star repository"
+  summary     = "Add a star to a GitHub repository"
+  description = "Stars a repository on behalf of the authenticated user."
+
+  annotations {
+    mode    = "write"
+    secrets = ["github.token"]
+  }
+
+  param "repo_id" {
+    type        = "string"
+    required    = true
+    description = "GraphQL node ID of the repository"
+  }
+
+  operation {
+    protocol = "graphql"
+    url      = "https://api.github.com/graphql"
+
+    auth {
+      kind   = "bearer"
+      secret = "github.token"
+    }
+
+    graphql {
+      query = <<-GQL
+        mutation($id: ID!) {
+          addStar(input: { starrableId: $id }) {
+            starrable { stargazerCount }
+          }
+        }
+      GQL
+      variables = {
+        id = "{{ args.repo_id }}"
+      }
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "Starred. New star count: {{ result.data.addStar.starrable.stargazerCount }}"
+  }
+}
+```
+
+For the full field reference, see [Template Schema — GraphQL](/docs/template-schema#graphql).
