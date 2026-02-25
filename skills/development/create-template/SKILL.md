@@ -67,11 +67,11 @@ Map the user's description to a protocol:
 
 | User mentions                                | Protocol  | Reference file                                                                                                                         |
 | -------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| REST, HTTP, API, endpoint, JSON API, webhook | `http`    | `../references/http-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/http-templates.md))       |
-| GraphQL, query/mutation (in API context)     | `graphql` | `../references/graphql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/graphql-templates.md)) |
-| gRPC, protobuf, service mesh                 | `grpc`    | `../references/grpc-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/grpc-templates.md))       |
-| shell, bash, CLI, script, command line       | `bash`    | `../references/bash-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/bash-templates.md))       |
-| SQL, database, postgres, mysql, sqlite       | `sql`     | `../references/sql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/references/sql-templates.md))         |
+| REST, HTTP, API, endpoint, JSON API, webhook | `http`    | `../references/http-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/http-templates.md))       |
+| GraphQL, query/mutation (in API context)     | `graphql` | `../references/graphql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/graphql-templates.md)) |
+| gRPC, protobuf, service mesh                 | `grpc`    | `../references/grpc-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/grpc-templates.md))       |
+| shell, bash, CLI, script, command line       | `bash`    | `../references/bash-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/bash-templates.md))       |
+| SQL, database, postgres, mysql, sqlite       | `sql`     | `../references/sql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/sql-templates.md))         |
 
 If the answer is genuinely ambiguous, ask one follow-up question.
 
