@@ -6,17 +6,17 @@ description: Markdown skills for Claude Code and other agent platforms — setup
 
 Skills are Markdown files that give an agent platform-specific instructions. For Claude Code, they live at `~/.claude/skills/<skill-name>/SKILL.md`. You install a skill once; from then on, you reference it in a prompt and the agent follows it.
 
-Earl ships five skills. Each one handles a distinct task — setup, template authoring, codebase migration, security hardening, and diagnosis.
+Earl ships six skills in two categories: **development** skills for setting up and managing Earl, and **runtime** skills that agents invoke automatically during task execution.
 
 ## Installing a skill
 
 ```bash
 mkdir -p ~/.claude/skills/<skill-name>
-curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/skills/<skill-name>/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/skills/<category>/<skill-name>/SKILL.md \
   -o ~/.claude/skills/<skill-name>/SKILL.md
 ```
 
-Replace `<skill-name>` with the skill you want. Then in a new agent session:
+Replace `<category>` with `development` or `runtime`, and `<skill-name>` with the skill you want. Then in a new agent session:
 
 ```
 Use the <skill-name> skill to <goal>.
@@ -25,7 +25,7 @@ Use the <skill-name> skill to <goal>.
 If you'd rather not install the file, paste this into your agent:
 
 ```
-Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/<skill-name>/SKILL.md
+Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/<category>/<skill-name>/SKILL.md
 and follow the skill to <goal>.
 ```
 
@@ -33,7 +33,11 @@ The agent fetches and runs it inline. Nothing is written to disk.
 
 ## Available skills
 
-### setup-earl
+### Development skills
+
+Development skills are human-initiated. You invoke them when setting up, extending, or troubleshooting Earl.
+
+#### setup-earl
 
 Installs Earl, writes MCP config for every detected agent platform, and sets up context breadcrumbs. The full walkthrough is at [Agent-Assisted Setup](/docs/agent-assisted-setup).
 
@@ -41,7 +45,7 @@ Installs Earl, writes MCP config for every detected agent platform, and sets up 
 Use the setup-earl skill to install and configure Earl for this project.
 ```
 
-### create-template
+#### create-template
 
 Guides the agent through writing a new Earl template for an API you specify. The agent works through five steps:
 
@@ -57,7 +61,7 @@ The result is a committed `.hcl` file ready to use. The agent does not guess at 
 Use the create-template skill to build an Earl template for the Linear API.
 ```
 
-### migrate-to-earl
+#### migrate-to-earl
 
 Points the agent at a codebase and converts existing API calls to Earl templates. The agent:
 
@@ -73,7 +77,7 @@ Useful when you have a repo full of inline `curl` commands and want them all goi
 Use the migrate-to-earl skill to convert all curl and gh calls in this repo to Earl templates.
 ```
 
-### secure-agent
+#### secure-agent
 
 Prevents the agent platform from bypassing Earl with raw CLI tools. It writes rules to `CLAUDE.md`, `.cursorrules`, or `.windsurfrules` (whichever applies) instructing the agent not to use `curl`, `gh`, `wget`, or raw HTTP directly — everything should go through `earl call`. If the platform supports allow/deny lists, the skill configures those too.
 
@@ -83,7 +87,7 @@ Run this after `setup-earl` when you want to actually enforce Earl as the only n
 Use the secure-agent skill to lock down this project so the agent only uses Earl for API calls.
 ```
 
-### troubleshoot-earl
+#### troubleshoot-earl
 
 Diagnoses Earl problems step by step. The agent runs `earl doctor`, checks keychain access, validates template files, inspects MCP config, and suggests fixes for whatever it finds. Start here when something isn't working and you don't know where to look.
 
@@ -91,6 +95,26 @@ Diagnoses Earl problems step by step. The agent runs `earl doctor`, checks keych
 Use the troubleshoot-earl skill to figure out why earl call is failing.
 ```
 
+### Runtime skills
+
+Runtime skills are invoked automatically by the agent during task execution — you do not need to reference them explicitly.
+
+#### earl
+
+Discovers available Earl commands and calls them correctly. When the agent needs to call an API, run a database query, or execute a shell command, it searches for the right template, asks for approval on write-mode commands, and calls with the correct flag order. If no template covers the task, it reports the gap and stops rather than falling back to raw CLI tools.
+
+Install it once and the agent uses it automatically:
+
+```bash
+mkdir -p ~/.claude/skills/earl
+curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/skills/runtime/earl/SKILL.md \
+  -o ~/.claude/skills/earl/SKILL.md
+```
+
 ## The skill repository
 
-All skills are at [`github.com/brwse/earl/tree/main/skills/`](https://github.com/brwse/earl/tree/main/skills/). Third-party skills for specific integrations — memory systems, recall tools, specialized workflows — are under `skills/3p/`. The third-party skills aren't maintained by Earl but follow the same format and can be installed the same way.
+Skills are organized by category at [`github.com/brwse/earl/tree/main/skills/`](https://github.com/brwse/earl/tree/main/skills/):
+
+- `skills/development/` — setup, template authoring, migration, hardening, troubleshooting
+- `skills/runtime/` — the `earl` skill for agent runtime use
+- `skills/3p/` — third-party skills for specific integrations (memory systems, recall tools, specialized workflows); not maintained by Earl but follow the same format and install the same way
