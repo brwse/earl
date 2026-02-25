@@ -40,7 +40,7 @@ earl.tool_search(query="<intent>", limit=5)
 earl templates search --json "<intent>"
 ```
 
-If the first query returns nothing or nothing relevant, try one rephrasing. If still nothing,
+If the first query returns nothing or nothing relevant (no match on the core action or subject), try one rephrasing. If still nothing,
 report that no template covers this task and stop. Do not improvise.
 
 ---
@@ -51,6 +51,7 @@ Read the matched command's parameter schema from the search result. For each req
 
 - If the value is clear from task context: use it.
 - If the value is ambiguous or missing: ask the human. Do not guess.
+- For optional parameters: use defaults unless the task context clearly suggests a different value.
 
 ---
 
@@ -62,7 +63,7 @@ Check the command's mode from the search result.
 
 **Write-mode:** show the human exactly what will be called before executing:
 
-> I'm going to run: `earl call --yes --json provider.command --param value`
+> I'm going to call: `provider.command` with these arguments: `{param: value}`
 > Does this look right?
 
 Wait for explicit approval before continuing.
@@ -82,6 +83,12 @@ earl call provider.command --yes --json --param value   ✗
 
 ```
 earl.tool_call(name="provider.command", arguments={"param": "value"})
+```
+
+**CLI path:**
+
+```bash
+earl call --yes --json provider.command --param value
 ```
 
 ---
@@ -120,3 +127,9 @@ page of results), ask the user whether to fetch the next page. Do not paginate a
 
 For anything not covered above, surface the full error with context and suggest invoking
 `troubleshoot-earl` if available.
+
+## Next Steps
+
+- If no template exists for the task: invoke `create-template`
+- If Earl is not installed or not responding: invoke `troubleshoot-earl`
+- If you need to restrict the agent from bypassing Earl: invoke `secure-agent`
