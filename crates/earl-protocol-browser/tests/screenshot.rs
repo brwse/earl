@@ -56,9 +56,10 @@ async fn screenshot_produces_valid_png() {
 
     let result = execute(data).await.expect("execute should succeed");
 
+    // No path given — result contains only `data`, not `path`.
     assert!(
-        result["path"].is_string(),
-        "result should have a 'path' string field; got: {result}"
+        result["path"].is_null(),
+        "result should NOT have a 'path' field when no path is given; got: {result}"
     );
     assert!(
         result["data"].is_string(),
@@ -192,8 +193,8 @@ async fn screenshot_to_specified_path_writes_file() {
     let server = spawn(routes).await;
 
     let id = unique_id();
-    let path = std::env::temp_dir().join(format!("earl-test-screenshot-{id}.png"));
-    let path_str = path.to_string_lossy().to_string();
+    // Use a relative path — validate_file_path rejects absolute paths.
+    let path_str = format!("earl-test-screenshot-{id}.png");
 
     let data = PreparedBrowserCommand {
         session_id: None,

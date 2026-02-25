@@ -280,10 +280,8 @@ async fn storage_state_round_trips_cookies_across_sessions() {
     let server = spawn(routes).await;
 
     let id = unique_id();
-    let tmp_path = std::env::temp_dir()
-        .join(format!("earl-test-state-{id}.json"))
-        .to_string_lossy()
-        .to_string();
+    // Use a relative path — validate_file_path rejects absolute paths.
+    let tmp_path = format!("earl-test-state-{id}.json");
 
     // Session A: navigate, set cookie, export storage state to file.
     let session_a = PreparedBrowserCommand {

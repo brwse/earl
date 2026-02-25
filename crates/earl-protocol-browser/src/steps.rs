@@ -120,20 +120,17 @@ pub async fn execute_steps(
 /// Attempt to capture a diagnostic screenshot on step failure.
 /// Errors here are silently swallowed so they don't mask the original error.
 async fn attempt_failure_screenshot(page: &Page) {
-    let path = std::env::temp_dir().join(format!(
-        "earl-browser-failure-{}.png",
-        chrono::Utc::now().timestamp_millis()
-    ));
-    if let Ok(Ok(_)) = tokio::time::timeout(
-        std::time::Duration::from_secs(2),
-        page.save_screenshot(
-            chromiumoxide::page::ScreenshotParams::builder().build(),
-            &path,
-        ),
-    )
-    .await
+    let params = chromiumoxide::page::ScreenshotParams::builder().build();
+    if let Ok(Ok(bytes)) =
+        tokio::time::timeout(std::time::Duration::from_secs(2), page.screenshot(params)).await
     {
-        eprintln!("diagnostic screenshot saved: {}", path.display());
+        let path = std::env::temp_dir().join(format!(
+            "earl-browser-failure-{}.png",
+            chrono::Utc::now().timestamp_millis()
+        ));
+        if let Ok(()) = std::fs::write(&path, &bytes) {
+            eprintln!("diagnostic screenshot saved: {}", path.display());
+        }
     }
 }
 
@@ -279,11 +276,15 @@ pub async fn execute_step(ctx: &StepContext<'_>, step: &BrowserStep) -> Result<V
         BrowserStep::ConsoleMessages { .. } => {
             Ok(json!({"messages": [], "note": "console_messages: not yet implemented"}))
         }
-        BrowserStep::ConsoleClear { .. } => Ok(json!({"ok": true})),
+        BrowserStep::ConsoleClear { .. } => {
+            Ok(json!({"ok": true, "note": "console_clear: not yet implemented"}))
+        }
         BrowserStep::NetworkRequests { .. } => {
             Ok(json!({"requests": [], "note": "network_requests: not yet implemented"}))
         }
-        BrowserStep::NetworkClear { .. } => Ok(json!({"ok": true})),
+        BrowserStep::NetworkClear { .. } => {
+            Ok(json!({"ok": true, "note": "network_clear: not yet implemented"}))
+        }
         BrowserStep::Route { .. } => Ok(json!({"ok": true, "note": "route: not yet implemented"})),
         BrowserStep::RouteList { .. } => {
             Ok(json!({"routes": [], "note": "route_list: not yet implemented"}))
@@ -597,29 +598,30 @@ async fn step_screenshot(
     if let Some(p) = path {
         validate_file_path(p)?;
     }
-    let out_path = path.map(std::path::PathBuf::from).unwrap_or_else(|| {
-        std::env::temp_dir().join(format!(
-            "earl-screenshot-{}.png",
-            chrono::Utc::now().timestamp_millis()
-        ))
-    });
 
+    // Use page.screenshot() to get bytes directly — avoids a temp-file round-trip
+    // and ensures no world-readable file is left behind when no path is given.
     let params = chromiumoxide::page::ScreenshotParams::builder()
         .full_page(full_page.unwrap_or(false))
         .build();
 
-    ctx.page
-        .save_screenshot(params, &out_path)
+    let bytes = ctx
+        .page
+        .screenshot(params)
         .await
         .map_err(|e| anyhow::anyhow!("screenshot failed: {e}"))?;
 
-    let bytes = tokio::fs::read(&out_path).await?;
-    let data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
-
-    Ok(json!({
-        "path": out_path.to_string_lossy(),
-        "data": data,
-    }))
+    if let Some(p) = path {
+        // User wants the file saved to disk.
+        tokio::fs::write(p, &bytes)
+            .await
+            .map_err(|e| anyhow::anyhow!("screenshot write {p}: {e}"))?;
+        Ok(json!({"path": p}))
+    } else {
+        // No path — return bytes as base64 only.
+        let data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+        Ok(json!({"data": data}))
+    }
 }
 
 // ── Interaction helpers ────────────────────────────────────────────────────────
@@ -1622,6 +1624,11 @@ async fn step_handle_dialog(
 
 async fn step_pdf_save(ctx: &StepContext<'_>, path: Option<&str>) -> Result<Value> {
     use chromiumoxide::cdp::browser_protocol::page::PrintToPdfParams;
+
+    if let Some(p) = path {
+        validate_file_path(p)?;
+    }
+
     let result = ctx
         .page
         .execute(PrintToPdfParams::default())
@@ -1634,20 +1641,16 @@ async fn step_pdf_save(ctx: &StepContext<'_>, path: Option<&str>) -> Result<Valu
         .map_err(|e| anyhow::anyhow!("pdf_save base64 decode: {e}"))?;
 
     if let Some(p) = path {
-        validate_file_path(p)?;
+        // User wants the file saved to disk — no temp file needed.
+        tokio::fs::write(p, &pdf_bytes)
+            .await
+            .map_err(|e| anyhow::anyhow!("pdf_save write {p}: {e}"))?;
+        Ok(json!({"path": p, "size": pdf_bytes.len()}))
+    } else {
+        // No path given — return bytes as base64; nothing written to disk.
+        let data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &pdf_bytes);
+        Ok(json!({"data": data, "size": pdf_bytes.len()}))
     }
-    let out_path = path.map(std::path::PathBuf::from).unwrap_or_else(|| {
-        std::env::temp_dir().join(format!(
-            "earl-pdf-{}.pdf",
-            chrono::Utc::now().timestamp_millis()
-        ))
-    });
-
-    tokio::fs::write(&out_path, &pdf_bytes)
-        .await
-        .map_err(|e| anyhow::anyhow!("pdf_save write: {e}"))?;
-
-    Ok(json!({"path": out_path.to_string_lossy(), "size": pdf_bytes.len()}))
 }
 
 // ── GenerateLocator ─────────────────────────────────────────────────────────

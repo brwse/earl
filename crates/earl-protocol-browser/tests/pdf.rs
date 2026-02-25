@@ -32,8 +32,8 @@ async fn pdf_save_writes_valid_pdf_to_disk() {
     let server = spawn(routes).await;
 
     let id = unique_id();
-    let path = std::env::temp_dir().join(format!("earl-test-invoice-{id}.pdf"));
-    let path_str = path.to_string_lossy().to_string();
+    // Use a relative path — validate_file_path rejects absolute paths.
+    let path_str = format!("earl-test-invoice-{id}.pdf");
 
     let data = PreparedBrowserCommand {
         session_id: None,
@@ -84,13 +84,13 @@ async fn pdf_save_writes_valid_pdf_to_disk() {
     std::fs::remove_file(&path_str).ok();
 }
 
-/// Test 8.2 — pdf_save with no path creates a temporary file.
+/// Test 8.2 — pdf_save with no path returns base64 data without writing a file.
 ///
-/// Omits the `path` field so that the executor chooses a temp file location.
-/// Verifies the returned path is non-empty, ends with `.pdf`, and exists on
-/// disk.
+/// Omits the `path` field.  The executor must return `{"data": "<base64>",
+/// "size": N}` without touching the file system.  The base64 data must decode
+/// to valid PDF bytes (magic header `%PDF`).
 #[tokio::test]
-async fn pdf_save_no_path_creates_temp_file() {
+async fn pdf_save_no_path_returns_base64_data() {
     if skip_if_no_chrome() {
         return;
     }
@@ -100,7 +100,7 @@ async fn pdf_save_no_path_creates_temp_file() {
     let mut routes = HashMap::new();
     routes.insert(
         "GET /".to_string(),
-        Response::html("<html><body><p>temp PDF test</p></body></html>"),
+        Response::html("<html><body><p>base64 PDF test</p></body></html>"),
     );
     let server = spawn(routes).await;
 
@@ -125,22 +125,34 @@ async fn pdf_save_no_path_creates_temp_file() {
 
     let result = execute(data).await.expect("execute should succeed");
 
-    let returned_path = result["path"]
+    // No path given — result must have `data`, not `path`.
+    assert!(
+        result["path"].is_null(),
+        "result should NOT have a 'path' field when no path is given; got: {result}"
+    );
+
+    let data_b64 = result["data"]
         .as_str()
-        .expect("result should have a non-null 'path' field");
+        .expect("result should have a non-null 'data' field");
+    assert!(!data_b64.is_empty(), "base64 data should be non-empty");
 
-    assert!(
-        !returned_path.is_empty(),
-        "returned path should be a non-empty string"
-    );
-    assert!(
-        returned_path.ends_with(".pdf"),
-        "returned path should end with '.pdf'; got: {returned_path}"
-    );
-    assert!(
-        std::path::Path::new(returned_path).exists(),
-        "PDF file should exist on disk at {returned_path}"
-    );
+    let size = result["size"]
+        .as_u64()
+        .expect("result should have a numeric 'size' field");
+    assert!(size > 0, "size should be greater than 0");
 
-    std::fs::remove_file(returned_path).ok();
+    // Decode and verify PDF magic bytes: %PDF = [0x25, 0x50, 0x44, 0x46]
+    let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data_b64)
+        .expect("data should be valid base64");
+    assert!(
+        bytes.len() >= 4,
+        "decoded PDF should have at least 4 bytes; got {}",
+        bytes.len()
+    );
+    assert_eq!(
+        &bytes[..4],
+        &[0x25, 0x50, 0x44, 0x46],
+        "expected PDF magic bytes (%PDF); got: {:?}",
+        &bytes[..4]
+    );
 }
