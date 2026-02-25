@@ -1259,8 +1259,12 @@ async fn step_cookie_set(
 
 async fn step_cookie_delete(ctx: &StepContext<'_>, name: &str) -> Result<Value> {
     use chromiumoxide::cdp::browser_protocol::network::DeleteCookiesParams;
+    // CDP requires at least one of `url` or `domain`; use the current page URL.
+    let url = ctx.page.url().await.ok().flatten();
+    let mut params = DeleteCookiesParams::new(name);
+    params.url = url;
     ctx.page
-        .execute(DeleteCookiesParams::new(name))
+        .execute(params)
         .await
         .map_err(|e| anyhow::anyhow!("cookie_delete: {e}"))?;
     Ok(json!({"ok": true, "name": name}))
