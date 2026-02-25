@@ -54,6 +54,8 @@ annotations {
 
 The list is a hard requirement, not documentation. Leave one out and Earl will let the command run without pre-flight checks — the error just shows up later and less clearly.
 
+For the full secrets and authentication reference, see [Secrets & Auth](/docs/secrets-and-auth).
+
 ## Write descriptions for the agent, not a human reader
 
 The `description` field is not documentation. It is the only text an agent reads when deciding whether to call a command. A description that explains the mechanism — "calls the GitHub search API" — tells the agent nothing useful it can't already infer from the command name.
@@ -137,3 +139,5 @@ operation {
 `path` is appended to `url`. The path stays visible in the command, the base URL lives in one place in the `environments` block, and switching environments changes the host without touching any command logic.
 
 Without `path`, environment-switching often requires either duplicating the full URL in every operation or using a `{{ vars.base_url }}/v2/users/{{ args.id }}` construction that works but buries the path structure. The `path` field makes the separation explicit.
+
+For the complete guide to environment switching, see [Environments](/docs/environments).
