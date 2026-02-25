@@ -47,7 +47,7 @@ This works well when you have a small-to-medium number of templates. The agent's
 
 ### Discovery mode
 
-One MCP tool is exposed: `earl.search`. The agent calls it with a description of what it wants to do, gets back matching tools, and calls the result.
+Two MCP tools are exposed: `earl.tool_search` and `earl.tool_call`. The agent calls `earl.tool_search` with a natural language description to find relevant templates, then calls `earl.tool_call` with the exact tool name returned from search.
 
 ```bash
 earl mcp stdio --mode discovery
@@ -55,6 +55,45 @@ earl mcp http --listen 0.0.0.0:8977 --mode discovery
 ```
 
 Use discovery mode when you have a large template collection and don't want tool descriptions competing for context. The tradeoff: the agent has to know to search before it can call, which adds a round trip. For most workloads with under ~50 commands, full mode is fine.
+
+## Calling templates
+
+How an agent calls Earl depends on which mode is running.
+
+### Full mode
+
+Templates appear as native MCP tools. `earl call github.search_repos` becomes an MCP tool named `github.search_repos`. The agent calls it directly with the declared parameters — nothing special required.
+
+### Discovery mode
+
+Two tools are visible. The agent calls `earl.tool_search` first:
+
+```
+earl.tool_search("find open pull requests on GitHub")
+```
+
+The tool returns a ranked list of matching template names. The agent picks one and calls `earl.tool_call`:
+
+```
+earl.tool_call("github.list_pull_requests", { "owner": "myorg", "repo": "myrepo", "state": "open" })
+```
+
+### CLI fallback
+
+Before MCP is configured, or in the current session after writing the MCP config (see [Two-session model](#the-two-session-model) below), call Earl through the terminal:
+
+```bash
+earl call --yes --json provider.command --param value
+```
+
+`--yes` skips the write-mode confirmation prompt. `--json` returns structured output instead of the rendered text template. Both flags must come before the command name.
+
+To find available commands:
+
+```bash
+earl templates list
+earl templates search "what you want to do"
+```
 
 ## The two-session model
 
