@@ -108,4 +108,35 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
       - name: Validate crates.io package
-        run: cargo publish --dry-run --locked --no-verify
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Publish in dependency order matching release.yml.
+          # - Skip crates that already exist on crates.io (idempotent).
+          # - Skip crates whose workspace dependencies haven't been
+          #   published yet (valid for newly-added protocol crates before
+          #   their first release).
+          CRATES=(
+            earl-core
+            earl-protocol-http
+            earl-protocol-grpc
+            earl-protocol-bash
+            earl-protocol-sql
+            earl-protocol-browser
+            earl
+          )
+
+          for crate in "${CRATES[@]}"; do
+            echo "Dry-run for $crate..."
+            output=$(cargo publish --dry-run --locked --no-verify -p "$crate" 2>&1) && echo "$output" || {
+              if echo "$output" | grep -q "already exists on crates.io index"; then
+                echo "$crate already on crates.io, skipping."
+              elif echo "$output" | grep -q "no matching package named"; then
+                echo "$crate has unpublished workspace dependencies, skipping."
+              else
+                echo "$output" >&2
+                exit 1
+              fi
+            }
+          done

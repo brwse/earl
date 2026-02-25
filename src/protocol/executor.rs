@@ -193,11 +193,9 @@ pub fn start_streaming_request(
                 Err(anyhow::anyhow!("streaming not supported for SQL protocol"))
             }
             #[cfg(feature = "browser")]
-            PreparedProtocolData::Browser(_) => {
-                Err(anyhow::anyhow!(
-                    "streaming not supported for browser protocol"
-                ))
-            }
+            PreparedProtocolData::Browser(_) => Err(anyhow::anyhow!(
+                "streaming not supported for browser protocol"
+            )),
             _ => Err(anyhow::anyhow!(
                 "unsupported protocol (feature not enabled)"
             )),
