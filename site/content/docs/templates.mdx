@@ -1,7 +1,7 @@
 ---
 title: Writing Templates
 icon: FileCode2
-description: How Earl templates work — the mental model, file layout, five protocols, and the HCL/Jinja authoring rule you need to know.
+description: How Earl templates work — the mental model, file layout, six protocols, and the HCL/Jinja authoring rule you need to know.
 ---
 
 Templates are HCL files that define what an AI agent is allowed to do with a provider. Every command an agent can invoke maps to exactly one `command` block. The LLM sees the command's title, summary, description, and parameter names. It never reads the template body — the URL, method, headers, auth setup, and request structure. That separation means the agent cannot alter the operation itself, only supply the parameter values the template author declared.
@@ -152,7 +152,7 @@ Inside the `operation` block, parameters are available as `args.<name>`:
 url = "https://api.github.com/repos/{{ args.owner }}/{{ args.repo }}"
 ```
 
-## The five protocols
+## The six protocols
 
 ### HTTP
 
@@ -275,6 +275,44 @@ operation {
 ```
 
 SQL parameters go through the driver's parameter interface, not string interpolation. Quote every Jinja expression in the array — HCL needs them as strings, but Earl coerces them to the right types before sending the query. Placeholder syntax is database-specific: `$1`, `$2`... for PostgreSQL; `?` for MySQL and SQLite.
+
+### Browser
+
+```hcl
+operation {
+  protocol = "browser"
+
+  browser {
+    session_id            = "{{ args.session_id }}"  # optional; omit for one-shot
+    headless              = true
+    timeout_ms            = 30000
+    on_failure_screenshot = true
+    steps = [
+      { action = "navigate",  url      = "{{ args.url }}" },
+      { action = "fill",      selector = "#username", text = "{{ args.user }}" },
+      { action = "fill",      selector = "#password", text = "{{ secrets['site.password'] }}" },
+      { action = "click",     selector = "button[type=submit]" },
+      { action = "wait_for",  text = "Dashboard", timeout_ms = 5000 },
+      { action = "snapshot" },
+    ]
+  }
+}
+```
+
+Each command runs a sequence of `steps`. Every step is an inline object with an `action` field and zero or more action-specific fields. The result of the command is the last step's output — a JSON object whose shape depends on the action (e.g. `snapshot` returns `{"text": "..."}`, `evaluate` returns `{"value": ...}`).
+
+Steps support two cross-cutting fields available on every action:
+
+| Field        | Default | Description                                                           |
+| ------------ | ------- | --------------------------------------------------------------------- |
+| `optional`   | `false` | When `true`, a failure on this step is skipped and execution continues. |
+| `timeout_ms` | —       | Per-step timeout, overrides the command-level `timeout_ms`.           |
+
+**Session persistence** — set `session_id` to a stable string to keep the browser alive between commands. A subsequent command with the same `session_id` reconnects to the same browser instance, preserving cookies, localStorage, and page state. Omit `session_id` for one-shot commands that start and stop a fresh browser.
+
+The `snapshot` action returns an accessibility tree as a text description. Use the `ref` handles it contains to identify elements for subsequent `click`, `fill`, and other interaction steps without needing CSS selectors.
+
+For the full list of actions and their fields, see [Template Schema — Browser steps](/docs/template-schema#step-reference).
 
 ## Auth
 

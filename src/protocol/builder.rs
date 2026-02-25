@@ -63,6 +63,8 @@ pub enum PreparedProtocolData {
     Bash(PreparedBashScript),
     #[cfg(feature = "sql")]
     Sql(PreparedSqlQuery),
+    #[cfg(feature = "browser")]
+    Browser(earl_protocol_browser::PreparedBrowserCommand),
 }
 
 pub use earl_core::{PreparedBody, PreparedMultipartPart};
@@ -77,6 +79,9 @@ pub use earl_protocol_bash::PreparedBashScript;
 
 #[cfg(feature = "sql")]
 pub use earl_protocol_sql::PreparedSqlQuery;
+
+#[cfg(feature = "browser")]
+pub use earl_protocol_browser::PreparedBrowserCommand;
 
 // ── Builder entry-points ─────────────────────────────────────
 
@@ -376,6 +381,26 @@ where
                 args,
                 redactor: Redactor::new(secret_values),
                 protocol_data: PreparedProtocolData::Sql(data),
+            })
+        }
+        #[cfg(feature = "browser")]
+        OperationTemplate::Browser(browser_operation) => {
+            let data = earl_protocol_browser::builder::build_browser_request(
+                browser_operation,
+                &context,
+                &renderer,
+            )?;
+
+            Ok(PreparedRequest {
+                key: entry.key.clone(),
+                mode: entry.mode,
+                stream: operation.is_streaming(),
+                allow_rules: Vec::new(),
+                transport,
+                result_template: result_template.clone(),
+                args,
+                redactor: Redactor::new(secret_values),
+                protocol_data: PreparedProtocolData::Browser(data),
             })
         }
         _ => bail!("unsupported protocol (feature not enabled)"),

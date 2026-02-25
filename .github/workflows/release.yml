@@ -272,6 +272,7 @@ jobs:
             earl-protocol-grpc
             earl-protocol-bash
             earl-protocol-sql
+            earl-protocol-browser
             earl
           )
 

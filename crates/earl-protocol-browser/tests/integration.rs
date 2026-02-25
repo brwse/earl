@@ -1,0 +1,167 @@
+//! Integration tests for the browser protocol.
+//!
+//! Chrome-dependent tests skip gracefully when Chrome is not found on the host.
+//! The URL-scheme validation test does not require Chrome.
+//!
+//! Chrome tests are serialized via a process-wide `Mutex` to avoid the
+//! Chromium singleton-lock error that occurs when two instances try to use the
+//! same profile directory at the same time.
+
+mod common;
+use common::*;
+
+use earl_core::{ProtocolExecutor, RawExecutionResult};
+use earl_protocol_browser::schema::BrowserStep;
+use earl_protocol_browser::{BrowserExecutor, PreparedBrowserCommand, steps::validate_url_scheme};
+
+// ── scheme-validation tests (no Chrome required) ──────────────────────────────
+
+#[test]
+fn allowed_schemes_are_accepted() {
+    assert!(validate_url_scheme("http://example.com").is_ok());
+    assert!(validate_url_scheme("https://example.com").is_ok());
+}
+
+#[test]
+fn file_scheme_is_rejected() {
+    let err = validate_url_scheme("file:///etc/passwd").unwrap_err();
+    assert!(
+        err.to_string().contains("file"),
+        "error should mention the disallowed scheme; got: {err}"
+    );
+}
+
+#[test]
+fn javascript_scheme_is_rejected() {
+    let err = validate_url_scheme("javascript:alert(1)").unwrap_err();
+    assert!(
+        err.to_string().contains("javascript"),
+        "error should mention the disallowed scheme; got: {err}"
+    );
+}
+
+#[test]
+fn data_scheme_is_rejected() {
+    let err = validate_url_scheme("data:text/html,<h1>hi</h1>").unwrap_err();
+    assert!(
+        err.to_string().contains("data"),
+        "error should mention the disallowed scheme; got: {err}"
+    );
+}
+
+#[test]
+fn blob_scheme_is_rejected() {
+    let err = validate_url_scheme("blob:https://example.com/uuid").unwrap_err();
+    assert!(
+        err.to_string().contains("blob"),
+        "error should mention the disallowed scheme; got: {err}"
+    );
+}
+
+// ── Chrome-dependent tests ────────────────────────────────────────────────────
+
+/// Navigate to `https://example.com`, take a snapshot, and verify the raw
+/// result body contains a JSON object with a `"text"` field.
+#[tokio::test]
+#[ignore = "requires external network"]
+async fn navigate_and_snapshot() {
+    if skip_if_no_chrome() {
+        return;
+    }
+
+    let _guard = common::chrome_lock().await;
+
+    let data = PreparedBrowserCommand {
+        session_id: None,
+        headless: true,
+        timeout_ms: 30_000,
+        on_failure_screenshot: false,
+        steps: vec![
+            BrowserStep::Navigate {
+                url: "https://example.com".into(),
+                expected_status: None,
+                timeout_ms: None,
+                optional: false,
+            },
+            BrowserStep::Snapshot {
+                timeout_ms: None,
+                optional: false,
+            },
+        ],
+    };
+
+    let ctx = make_context();
+    let mut executor = BrowserExecutor;
+    let result: RawExecutionResult = executor
+        .execute(&data, &ctx)
+        .await
+        .expect("execute should succeed");
+
+    assert_eq!(result.content_type.as_deref(), Some("application/json"));
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&result.body).expect("body should be valid JSON");
+
+    // The last step was Snapshot; its result should be an object containing
+    // at least a "text" key with the page's accessibility tree text.
+    assert!(
+        json.get("text").is_some(),
+        "snapshot result should have a 'text' field; got: {json}"
+    );
+}
+
+/// Navigate to `https://example.com`, attempt to click a non-existent element
+/// with `optional: true` (so the step is silently skipped), then take a
+/// snapshot.  The overall execution must succeed.
+#[tokio::test]
+#[ignore = "requires external network"]
+async fn optional_step_continues_on_failure() {
+    if skip_if_no_chrome() {
+        return;
+    }
+
+    let _guard = common::chrome_lock().await;
+
+    let data = PreparedBrowserCommand {
+        session_id: None,
+        headless: true,
+        timeout_ms: 30_000,
+        on_failure_screenshot: false,
+        steps: vec![
+            BrowserStep::Navigate {
+                url: "https://example.com".into(),
+                expected_status: None,
+                timeout_ms: None,
+                optional: false,
+            },
+            // This element does not exist; because optional = true the step
+            // engine should log a warning and continue rather than abort.
+            BrowserStep::Click {
+                r#ref: None,
+                selector: Some("#this-element-does-not-exist-abc123".into()),
+                double_click: false,
+                timeout_ms: Some(2_000),
+                optional: true,
+            },
+            BrowserStep::Snapshot {
+                timeout_ms: None,
+                optional: false,
+            },
+        ],
+    };
+
+    let ctx = make_context();
+    let mut executor = BrowserExecutor;
+    let result = executor
+        .execute(&data, &ctx)
+        .await
+        .expect("execute should succeed even though the click step failed");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&result.body).expect("body should be valid JSON");
+
+    assert!(
+        json.get("text").is_some(),
+        "final snapshot result should have a 'text' field; got: {json}"
+    );
+}

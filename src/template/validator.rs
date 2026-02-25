@@ -227,6 +227,8 @@ fn validate_operation(
         OperationTemplate::Bash(op) => validate_bash_operation(command_name, op),
         #[cfg(feature = "sql")]
         OperationTemplate::Sql(op) => validate_sql_operation(command_name, op, allowed_secrets),
+        #[cfg(feature = "browser")]
+        OperationTemplate::Browser(_) => Ok(()),
         _ => bail!("unsupported protocol (feature not enabled)"),
     }
 }

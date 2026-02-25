@@ -93,6 +93,8 @@ pub enum OperationTemplate {
     Bash(BashOperationTemplate),
     #[cfg(feature = "sql")]
     Sql(SqlOperationTemplate),
+    #[cfg(feature = "browser")]
+    Browser(earl_protocol_browser::BrowserOperationTemplate),
 }
 
 impl OperationTemplate {
@@ -109,6 +111,8 @@ impl OperationTemplate {
             OperationTemplate::Bash(_) => OperationProtocol::Bash,
             #[cfg(feature = "sql")]
             OperationTemplate::Sql(_) => OperationProtocol::Sql,
+            #[cfg(feature = "browser")]
+            OperationTemplate::Browser(_) => OperationProtocol::Browser,
             _ => unreachable!(),
         }
     }
@@ -126,6 +130,8 @@ impl OperationTemplate {
             OperationTemplate::Bash(op) => op.transport.as_ref(),
             #[cfg(feature = "sql")]
             OperationTemplate::Sql(op) => op.transport.as_ref(),
+            #[cfg(feature = "browser")]
+            OperationTemplate::Browser(_) => None,
             _ => None,
         }
     }
@@ -139,6 +145,8 @@ impl OperationTemplate {
             OperationTemplate::Graphql(op) => op.auth.as_ref(),
             #[cfg(feature = "grpc")]
             OperationTemplate::Grpc(op) => op.auth.as_ref(),
+            #[cfg(feature = "browser")]
+            OperationTemplate::Browser(_) => None,
             _ => None,
         }
     }
@@ -152,6 +160,8 @@ impl OperationTemplate {
             OperationTemplate::Graphql(op) => Some(op.url.as_str()),
             #[cfg(feature = "grpc")]
             OperationTemplate::Grpc(op) => Some(op.url.as_str()),
+            #[cfg(feature = "browser")]
+            OperationTemplate::Browser(_) => None,
             _ => None,
         }
     }
@@ -196,6 +206,8 @@ impl OperationTemplate {
             OperationTemplate::Bash(op) => op.stream,
             #[cfg(feature = "sql")]
             OperationTemplate::Sql(_) => false,
+            #[cfg(feature = "browser")]
+            OperationTemplate::Browser(_) => false,
             _ => false,
         }
     }
@@ -214,6 +226,8 @@ pub enum OperationProtocol {
     Bash,
     #[cfg(feature = "sql")]
     Sql,
+    #[cfg(feature = "browser")]
+    Browser,
 }
 
 #[cfg(feature = "http")]
@@ -233,3 +247,60 @@ pub use earl_protocol_bash::{BashOperationTemplate, BashSandboxTemplate, BashScr
 
 #[cfg(feature = "sql")]
 pub use earl_protocol_sql::{SqlOperationTemplate, SqlQueryTemplate, SqlSandboxTemplate};
+
+// ── Browser ───────────────────────────────────────────
+
+#[cfg(feature = "browser")]
+pub use earl_protocol_browser::BrowserOperationTemplate;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_environments_deserializes_from_normalized_json() {
+        let json = serde_json::json!({
+            "default": "production",
+            "secrets": ["myservice.prod_token"],
+            "environments": {
+                "production": { "base_url": "https://api.myservice.com" },
+                "staging":    { "base_url": "https://staging.myservice.com" }
+            }
+        });
+        let pe: ProviderEnvironments = serde_json::from_value(json).unwrap();
+        assert_eq!(pe.default.as_deref(), Some("production"));
+        assert_eq!(pe.secrets, vec!["myservice.prod_token"]);
+        assert_eq!(
+            pe.environments["production"]["base_url"],
+            "https://api.myservice.com"
+        );
+        assert_eq!(
+            pe.environments["staging"]["base_url"],
+            "https://staging.myservice.com"
+        );
+    }
+
+    #[test]
+    fn provider_environments_defaults_work() {
+        let json = serde_json::json!({
+            "environments": { "staging": { "url": "https://staging.example.com" } }
+        });
+        let pe: ProviderEnvironments = serde_json::from_value(json).unwrap();
+        assert!(pe.default.is_none());
+        assert!(pe.secrets.is_empty());
+        assert!(pe.environments.contains_key("staging"));
+    }
+
+    #[cfg(feature = "browser")]
+    #[test]
+    fn browser_operation_deserializes() {
+        let json = r#"{
+            "protocol": "browser",
+            "browser": {
+                "steps": [{"action":"navigate","url":"https://example.com"}]
+            }
+        }"#;
+        let op: OperationTemplate = serde_json::from_str(json).unwrap();
+        assert!(matches!(op, OperationTemplate::Browser(_)));
+    }
+}
