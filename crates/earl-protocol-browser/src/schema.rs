@@ -116,12 +116,7 @@ pub enum BrowserStep {
         #[serde(default)]
         selector: Option<String>,
         #[serde(default)]
-        button: Option<String>,
-        #[serde(default)]
         double_click: bool,
-        #[rkyv(with = earl_core::with::AsJson)]
-        #[serde(default)]
-        modifiers: Vec<Value>,
         #[serde(default)]
         timeout_ms: Option<u64>,
         #[serde(default)]
@@ -159,8 +154,6 @@ pub enum BrowserStep {
         text: String,
         #[serde(default)]
         submit: Option<bool>,
-        #[serde(default)]
-        slowly: bool,
         #[serde(default)]
         timeout_ms: Option<u64>,
         #[serde(default)]

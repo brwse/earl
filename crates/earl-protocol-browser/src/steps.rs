@@ -23,9 +23,18 @@ pub fn validate_url_scheme(url: &str) -> Result<()> {
 
 // ── File path validation ───────────────────────────────────────────────────────
 
-/// Reject paths that contain `..` components to prevent path traversal.
+/// Reject file paths that could escape the working directory.
+///
+/// Only relative paths are permitted — absolute paths are rejected to prevent
+/// writes to arbitrary filesystem locations. `..` components are also rejected
+/// to block traversal out of the working directory.
 fn validate_file_path(path: &str) -> Result<()> {
     let p = std::path::Path::new(path);
+    if p.is_absolute() {
+        return Err(anyhow::anyhow!(
+            "file path \"{path}\" is not allowed: only relative paths are permitted"
+        ));
+    }
     if p.components().any(|c| c == std::path::Component::ParentDir) {
         return Err(anyhow::anyhow!(
             "file path \"{path}\" is not allowed: path traversal (`..`) is not permitted"
@@ -147,9 +156,7 @@ pub async fn execute_step(ctx: &StepContext<'_>, step: &BrowserStep) -> Result<V
         BrowserStep::Click {
             r#ref,
             selector,
-            button: _,
             double_click,
-            modifiers: _,
             ..
         } => step_click(ctx, r#ref.as_deref(), selector.as_deref(), *double_click).await,
         BrowserStep::Hover {
@@ -160,7 +167,6 @@ pub async fn execute_step(ctx: &StepContext<'_>, step: &BrowserStep) -> Result<V
             selector,
             text,
             submit,
-            slowly: _,
             ..
         } => step_fill(ctx, r#ref.as_deref(), selector.as_deref(), text, *submit).await,
         BrowserStep::SelectOption {
@@ -269,23 +275,21 @@ pub async fn execute_step(ctx: &StepContext<'_>, step: &BrowserStep) -> Result<V
         BrowserStep::Resize { width, height, .. } => step_resize(ctx, *width, *height).await,
         BrowserStep::Close { .. } => step_close(ctx).await,
 
-        // ── Network (stubs — event subscription required) ─────────────────
-        BrowserStep::ConsoleMessages { .. } => Ok(
-            json!({"messages": [], "note": "console message collection requires event subscription (session mode)"}),
-        ),
-        BrowserStep::ConsoleClear { .. } => Ok(json!({"ok": true})),
-        BrowserStep::NetworkRequests { .. } => Ok(
-            json!({"requests": [], "note": "network request recording requires event subscription (session mode)"}),
-        ),
-        BrowserStep::NetworkClear { .. } => Ok(json!({"ok": true})),
-        BrowserStep::Route { .. } => {
-            Ok(json!({"ok": true, "note": "network routing requires session mode"}))
+        // ── Network (stubs — not yet implemented) ────────────────────────
+        BrowserStep::ConsoleMessages { .. } => {
+            Ok(json!({"messages": [], "note": "console_messages: not yet implemented"}))
         }
+        BrowserStep::ConsoleClear { .. } => Ok(json!({"ok": true})),
+        BrowserStep::NetworkRequests { .. } => {
+            Ok(json!({"requests": [], "note": "network_requests: not yet implemented"}))
+        }
+        BrowserStep::NetworkClear { .. } => Ok(json!({"ok": true})),
+        BrowserStep::Route { .. } => Ok(json!({"ok": true, "note": "route: not yet implemented"})),
         BrowserStep::RouteList { .. } => {
-            Ok(json!({"routes": [], "note": "network routing requires session mode"}))
+            Ok(json!({"routes": [], "note": "route_list: not yet implemented"}))
         }
         BrowserStep::Unroute { .. } => {
-            Ok(json!({"ok": true, "note": "network routing requires session mode"}))
+            Ok(json!({"ok": true, "note": "unroute: not yet implemented"}))
         }
 
         // ── Cookies ───────────────────────────────────────────────────────
@@ -335,31 +339,31 @@ pub async fn execute_step(ctx: &StepContext<'_>, step: &BrowserStep) -> Result<V
         BrowserStep::SetStorageState { path, .. } => step_set_storage_state(ctx, path).await,
 
         // ── File / Dialog / Download ──────────────────────────────────────
-        BrowserStep::FileUpload { .. } => Ok(
-            json!({"ok": true, "note": "file_upload dispatches to active file chooser; trigger the chooser first"}),
-        ),
+        BrowserStep::FileUpload { .. } => {
+            Ok(json!({"ok": true, "note": "file_upload: not yet implemented"}))
+        }
         BrowserStep::HandleDialog {
             accept,
             prompt_text,
             ..
         } => step_handle_dialog(ctx, *accept, prompt_text.as_deref()).await,
         BrowserStep::Download { .. } => {
-            Ok(json!({"ok": true, "note": "download monitoring requires session mode"}))
+            Ok(json!({"ok": true, "note": "download: not yet implemented"}))
         }
 
         // ── Output / Recording ────────────────────────────────────────────
         BrowserStep::PdfSave { path, .. } => step_pdf_save(ctx, path.as_deref()).await,
         BrowserStep::StartVideo { .. } => {
-            Ok(json!({"ok": true, "note": "video recording requires session mode"}))
+            Ok(json!({"ok": true, "note": "video recording: not yet implemented"}))
         }
         BrowserStep::StopVideo { .. } => {
-            Ok(json!({"ok": true, "note": "video recording requires session mode"}))
+            Ok(json!({"ok": true, "note": "video recording: not yet implemented"}))
         }
         BrowserStep::StartTracing { .. } => {
-            Ok(json!({"ok": true, "note": "tracing requires session mode"}))
+            Ok(json!({"ok": true, "note": "tracing: not yet implemented"}))
         }
         BrowserStep::StopTracing { .. } => {
-            Ok(json!({"ok": true, "note": "tracing requires session mode"}))
+            Ok(json!({"ok": true, "note": "tracing: not yet implemented"}))
         }
         BrowserStep::GenerateLocator { r#ref, .. } => step_generate_locator(ctx, r#ref).await,
     }
@@ -512,10 +516,16 @@ async fn step_snapshot(ctx: &StepContext<'_>) -> Result<Value> {
     // The full tree can be large; we call the flat list version.
     // CDP `GetFullAXTree` returns all nodes flat with parent_id references.
     // Build the tree by finding root nodes (no parent_id) and recursing.
+    // A depth limit guards against stack overflow on pathologically deep trees.
+    const MAX_TREE_DEPTH: usize = 80;
     fn build_tree(
         node_id_str: &str,
         node_map: &HashMap<String, &chromiumoxide::cdp::browser_protocol::accessibility::AxNode>,
+        depth: usize,
     ) -> Option<AXNode> {
+        if depth > MAX_TREE_DEPTH {
+            return None;
+        }
         let cdp = node_map.get(node_id_str)?;
         if cdp.ignored {
             return None;
@@ -546,7 +556,7 @@ async fn step_snapshot(ctx: &StepContext<'_>) -> Result<Value> {
             .as_deref()
             .unwrap_or(&[])
             .iter()
-            .filter_map(|child_id| build_tree(child_id.inner(), node_map))
+            .filter_map(|child_id| build_tree(child_id.inner(), node_map, depth + 1))
             .collect();
 
         Some(AXNode {
@@ -567,7 +577,7 @@ async fn step_snapshot(ctx: &StepContext<'_>) -> Result<Value> {
                     .map(|pid| !node_map.contains_key(pid.inner()))
                     .unwrap_or(true)
         })
-        .filter_map(|n| build_tree(n.node_id.inner(), &node_map))
+        .filter_map(|n| build_tree(n.node_id.inner(), &node_map, 0))
         .collect();
 
     let max_nodes = 5000;
@@ -1704,10 +1714,17 @@ mod tests {
     }
 
     #[test]
-    fn validate_file_path_accepts_normal_paths() {
-        assert!(validate_file_path("/tmp/output.png").is_ok());
+    fn validate_file_path_rejects_absolute_paths() {
+        assert!(validate_file_path("/tmp/output.png").is_err());
+        assert!(validate_file_path("/etc/passwd").is_err());
+        assert!(validate_file_path("/home/user/.bashrc").is_err());
+    }
+
+    #[test]
+    fn validate_file_path_accepts_relative_paths() {
         assert!(validate_file_path("relative/path.pdf").is_ok());
         assert!(validate_file_path("file.json").is_ok());
+        assert!(validate_file_path("output/screenshot.png").is_ok());
     }
 
     #[test]

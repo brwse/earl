@@ -139,9 +139,7 @@ async fn optional_step_continues_on_failure() {
             BrowserStep::Click {
                 r#ref: None,
                 selector: Some("#this-element-does-not-exist-abc123".into()),
-                button: None,
                 double_click: false,
-                modifiers: vec![],
                 timeout_ms: Some(2_000),
                 optional: true,
             },

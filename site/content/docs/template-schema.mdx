@@ -426,9 +426,9 @@ Every step object has two cross-cutting optional fields in addition to its actio
 
 | Action          | Key fields                                                     | Result shape   |
 | --------------- | -------------------------------------------------------------- | -------------- |
-| `click`         | `ref` or `selector`, `double_click`, `button`, `modifiers`     | `{"ok": true}` |
+| `click`         | `ref` or `selector`, `double_click`                             | `{"ok": true}` |
 | `hover`         | `ref` or `selector`                                            | `{"ok": true}` |
-| `fill`          | `ref` or `selector`, `text`, `submit`, `slowly`                | `{"ok": true}` |
+| `fill`          | `ref` or `selector`, `text`, `submit`                          | `{"ok": true}` |
 | `fill_form`     | `fields` (array of `{ref/selector, value, type}`)              | `{"ok": true}` |
 | `select_option` | `ref` or `selector`, `values` (array)                          | `{"ok": true}` |
 | `check`         | `ref` or `selector`                                            | `{"ok": true}` |
