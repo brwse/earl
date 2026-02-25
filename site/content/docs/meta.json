@@ -5,14 +5,19 @@
     "---Getting Started---",
     "quick-start",
     "agent-assisted-setup",
-    "---Templates---",
-    "templates",
-    "template-schema",
+    "---Protocols---",
+    "http",
+    "graphql",
+    "grpc",
+    "bash",
+    "sql",
+    "browser",
     "streaming",
+    "environments",
+    "best-practices",
     "---Secrets & Access---",
     "secrets-and-auth",
     "external-secrets",
-    "environments",
     "---MCP & Agents---",
     "mcp",
     "policy-engine",
@@ -23,6 +28,7 @@
     "hardening",
     "---Reference---",
     "commands",
-    "troubleshooting"
+    "troubleshooting",
+    "template-schema"
   ]
 }
