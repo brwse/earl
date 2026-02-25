@@ -359,6 +359,174 @@ SQL operation-level fields:
 | `max_rows`    | integer | Limit the number of rows returned.                 |
 | `max_time_ms` | integer | Query execution timeout in milliseconds.           |
 
+### Browser
+
+```hcl
+operation {
+  protocol = "browser"
+
+  browser {
+    session_id            = "{{ args.session_id }}"
+    headless              = true
+    timeout_ms            = 30000
+    on_failure_screenshot = true
+    steps = [
+      { action = "navigate", url = "{{ args.url }}" },
+      { action = "snapshot" },
+    ]
+  }
+}
+```
+
+Browser operation-level fields:
+
+| Field      | Type   | Required | Description           |
+| ---------- | ------ | -------- | --------------------- |
+| `protocol` | string | yes      | Must be `"browser"`.  |
+| `browser`  | block  | yes      | Browser configuration. |
+
+`browser` inner block fields:
+
+| Field                  | Type            | Default | Description                                                                                                                            |
+| ---------------------- | --------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `steps`                | list of objects | yes     | Ordered list of step objects to execute. Each object must include an `action` field.                                                   |
+| `session_id`           | string          | —       | Stable identifier for a persistent browser session. Omit for a one-shot command.                                                       |
+| `headless`             | boolean         | `true`  | Run Chrome in headless mode.                                                                                                           |
+| `timeout_ms`           | integer         | `30000` | Global timeout in milliseconds for the entire command.                                                                                 |
+| `on_failure_screenshot`| boolean         | `true`  | Capture a screenshot and attach it to the error output when any non-optional step fails.                                               |
+
+Every step object has two cross-cutting optional fields in addition to its action-specific fields:
+
+| Field        | Default | Description                                                             |
+| ------------ | ------- | ----------------------------------------------------------------------- |
+| `action`     | —       | Required. Identifies the step type. See step reference below.           |
+| `optional`   | `false` | When `true`, failure on this step is ignored and execution continues.   |
+| `timeout_ms` | —       | Per-step timeout in milliseconds, overrides the command-level timeout.  |
+
+#### Step reference {#browser}
+
+**Navigation**
+
+| Action            | Key fields                                                  | Result shape              |
+| ----------------- | ----------------------------------------------------------- | ------------------------- |
+| `navigate`        | `url` (required), `expected_status`, `timeout_ms`          | `{"ok": true}`            |
+| `navigate_back`   | —                                                           | `{"ok": true}`            |
+| `navigate_forward`| —                                                           | `{"ok": true}`            |
+| `reload`          | —                                                           | `{"ok": true}`            |
+
+**Observation**
+
+| Action            | Key fields                                          | Result shape                               |
+| ----------------- | --------------------------------------------------- | ------------------------------------------ |
+| `snapshot`        | —                                                   | `{"text": "<accessibility tree>", "raw": [...]}` |
+| `screenshot`      | `path`, `type` (`png`/`jpeg`), `full_page`, `ref`   | `{"data": "<base64>", "path": "..."}` |
+| `pdf_save`        | `path`                                              | `{"path": "..."}` |
+
+**Interaction**
+
+| Action          | Key fields                                                     | Result shape   |
+| --------------- | -------------------------------------------------------------- | -------------- |
+| `click`         | `ref` or `selector`, `double_click`, `button`, `modifiers`     | `{"ok": true}` |
+| `hover`         | `ref` or `selector`                                            | `{"ok": true}` |
+| `fill`          | `ref` or `selector`, `text`, `submit`, `slowly`                | `{"ok": true}` |
+| `fill_form`     | `fields` (array of `{ref/selector, value, type}`)              | `{"ok": true}` |
+| `select_option` | `ref` or `selector`, `values` (array)                          | `{"ok": true}` |
+| `check`         | `ref` or `selector`                                            | `{"ok": true}` |
+| `uncheck`       | `ref` or `selector`                                            | `{"ok": true}` |
+| `press_key`     | `key` (e.g. `"Enter"`, `"Tab"`, `"Escape"`)                   | `{"ok": true}` |
+| `drag`          | `start_ref`/`start_selector`, `end_ref`/`end_selector`         | `{"ok": true}` |
+| `file_upload`   | `ref` or `selector`, `paths` (array)                           | `{"ok": true}` |
+| `handle_dialog` | `accept` (boolean), `prompt_text`                              | `{"ok": true, "accept": ...}` |
+
+**Mouse**
+
+| Action       | Key fields                              | Result shape   |
+| ------------ | --------------------------------------- | -------------- |
+| `mouse_move` | `x`, `y`                                | `{"ok": true}` |
+| `mouse_click`| `x`, `y`, `button`                      | `{"ok": true}` |
+| `mouse_drag` | `start_x`, `start_y`, `end_x`, `end_y` | `{"ok": true}` |
+| `mouse_down` | `x`, `y`, `button`                      | `{"ok": true}` |
+| `mouse_up`   | `x`, `y`, `button`                      | `{"ok": true}` |
+| `mouse_wheel`| `delta_x`, `delta_y`                    | `{"ok": true}` |
+
+**Wait and assertions**
+
+| Action                  | Key fields                                            | Result shape   |
+| ----------------------- | ----------------------------------------------------- | -------------- |
+| `wait_for`              | `text`, `text_gone`, `time` (seconds), `timeout_ms`  | `{"ok": true}` |
+| `verify_text_visible`   | `text`                                                | `{"ok": true}` |
+| `verify_element_visible`| `role`, `accessible_name`                             | `{"ok": true}` |
+| `verify_list_visible`   | `ref`, `items` (array)                                | `{"ok": true}` |
+| `verify_value`          | `ref`, `value`                                        | `{"ok": true}` |
+
+**JavaScript**
+
+| Action     | Key fields                              | Result shape          |
+| ---------- | --------------------------------------- | --------------------- |
+| `evaluate` | `function` (JS arrow function string), `ref` | `{"value": ...}` |
+| `run_code` | `code` (JS statements string)           | `{"ok": true}`        |
+
+**Cookies**
+
+| Action          | Key fields                                                              | Result shape                  |
+| --------------- | ----------------------------------------------------------------------- | ----------------------------- |
+| `cookie_list`   | `domain` (filter, optional)                                             | `{"cookies": [...]}`          |
+| `cookie_get`    | `name`                                                                  | `{"value": "..."}` |
+| `cookie_set`    | `name`, `value`, `domain`, `path`, `expires`, `http_only`, `secure`    | `{"ok": true}`                |
+| `cookie_delete` | `name`                                                                  | `{"ok": true}`                |
+| `cookie_clear`  | —                                                                       | `{"ok": true}`                |
+
+**Storage**
+
+| Action                   | Key fields         | Result shape            |
+| ------------------------ | ------------------ | ----------------------- |
+| `local_storage_get`      | `key`              | `{"value": "..."}`      |
+| `local_storage_set`      | `key`, `value`     | `{"ok": true}`          |
+| `local_storage_delete`   | `key`              | `{"ok": true}`          |
+| `local_storage_clear`    | —                  | `{"ok": true}`          |
+| `session_storage_get`    | `key`              | `{"value": "..."}`      |
+| `session_storage_set`    | `key`, `value`     | `{"ok": true}`          |
+| `session_storage_delete` | `key`              | `{"ok": true}`          |
+| `session_storage_clear`  | —                  | `{"ok": true}`          |
+| `storage_state`          | `path` (optional)  | `{"cookies": [...], "local_storage": {...}}` |
+| `set_storage_state`      | `path`             | `{"ok": true}`          |
+
+**Tabs and viewport**
+
+| Action   | Key fields                                            | Result shape                  |
+| -------- | ----------------------------------------------------- | ----------------------------- |
+| `tabs`   | `operation` (`list`/`new`/`close`/`select`), `index` | `{"tabs": [...]}` or `{"ok": true}` |
+| `resize` | `width`, `height`                                     | `{"ok": true}`                |
+| `close`  | —                                                     | `{"ok": true}`                |
+
+**Network (session mode only)**
+
+| Action          | Key fields                                           | Result shape              |
+| --------------- | ---------------------------------------------------- | ------------------------- |
+| `route`         | `pattern`, `status`, `body`, `content_type`          | `{"ok": true}`            |
+| `route_list`    | —                                                    | `{"routes": [...]}`       |
+| `unroute`       | `pattern`                                            | `{"ok": true}`            |
+| `console_messages` | —                                                 | `{"messages": [...]}`     |
+| `console_clear` | —                                                    | `{"ok": true}`            |
+| `network_requests` | —                                                 | `{"requests": [...]}`     |
+| `network_clear` | —                                                    | `{"ok": true}`            |
+| `download`      | `path`                                               | `{"path": "..."}`         |
+
+**Recording**
+
+| Action          | Key fields             | Result shape       |
+| --------------- | ---------------------- | ------------------ |
+| `start_video`   | `width`, `height`      | `{"ok": true}`     |
+| `stop_video`    | —                      | `{"path": "..."}`  |
+| `start_tracing` | —                      | `{"ok": true}`     |
+| `stop_tracing`  | —                      | `{"path": "..."}`  |
+
+**Utility**
+
+| Action             | Key fields    | Result shape               |
+| ------------------ | ------------- | -------------------------- |
+| `generate_locator` | `ref`         | `{"selector": "..."}`      |
+
 ## `body` block (HTTP only)
 
 The `body` block inside an HTTP `operation` has a `kind` discriminator field.
