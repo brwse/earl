@@ -607,7 +607,7 @@ async fn step_fill(
     .map_err(|e| anyhow::anyhow!("fill clear value: {e}"))?;
     el.type_str(text).await.map_err(|e| anyhow::anyhow!("fill type_str: {e}"))?;
     if submit.unwrap_or(false) {
-        el.press_key("Return").await.map_err(|e| anyhow::anyhow!("fill submit: {e}"))?;
+        el.press_key("Enter").await.map_err(|e| anyhow::anyhow!("fill submit: {e}"))?;
     }
     Ok(json!({"ok": true}))
 }
