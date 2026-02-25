@@ -79,6 +79,8 @@ operation {
 
 Note: Earl's SSRF protection resolves the gRPC endpoint hostname to an IP at connection setup and pins to that IP for the duration of the call. This causes TLS verification to fail when the resolved IP doesn't match the certificate's hostname. If you encounter this with a server that doesn't have a matching TLS certificate, use `http://` together with `descriptor_set_file` rather than relying on reflection.
 
+For the full list of auth kinds and OAuth2 profile setup, see [Secrets & Auth](/docs/secrets-and-auth).
+
 ### grpc block
 
 ```hcl
@@ -134,6 +136,10 @@ protoc --descriptor_set_out=inventory.pb --include_imports inventory.proto
 The path in `descriptor_set_file` is relative to the template file. If the template is at `templates/inventory.hcl`, then `inventory.pb` should be at `templates/inventory.pb`.
 
 ## Streaming
+
+To switch between production and staging endpoints, see [Environments](/docs/environments).
+
+For naming conventions and other patterns that apply across all protocols, see [Best Practices](/docs/best-practices).
 
 For server-streaming RPCs — where one request produces multiple response messages — see [Streaming — gRPC server streaming](/docs/streaming#grpc-server-streaming).
 

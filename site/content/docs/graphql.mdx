@@ -91,6 +91,8 @@ operation {
 
 `protocol = "graphql"` and `url` are the only required fields. GraphQL requests default to HTTP POST. A `method` field exists but is rarely needed — only set it if the server requires `GET` instead of the standard `POST`.
 
+For the full list of auth kinds and OAuth2 profile setup, see [Secrets & Auth](/docs/secrets-and-auth).
+
 ### graphql block
 
 ```hcl
@@ -178,5 +180,9 @@ command "add_star" {
   }
 }
 ```
+
+To switch between production and staging endpoints, see [Environments](/docs/environments).
+
+For naming conventions, secret declarations, and other patterns that apply across all protocols, see [Best Practices](/docs/best-practices).
 
 For the full field reference, see [Template Schema — GraphQL](/docs/template-schema#graphql).

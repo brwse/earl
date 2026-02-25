@@ -203,4 +203,12 @@ command "create_issue" {
 }
 ```
 
-The `body` block supports six kinds: `json`, `form_urlencoded`, `multipart`, `raw_text`, `raw_bytes_base64`, and `file_stream`. See [Template Schema](/docs/template-schema#http) for the full field reference.
+The `body` block supports six kinds: `json`, `form_urlencoded`, `multipart`, `raw_text`, `raw_bytes_base64`, and `file_stream`.
+
+For streaming responses — Server-Sent Events or newline-delimited JSON — see [Streaming](/docs/streaming#http-streaming).
+
+To switch between production and staging URLs without duplicating commands, see [Environments](/docs/environments).
+
+For naming conventions, secret declarations, and other patterns that apply across all protocols, see [Best Practices](/docs/best-practices).
+
+For the full field reference, see [Template Schema — HTTP](/docs/template-schema#http).
