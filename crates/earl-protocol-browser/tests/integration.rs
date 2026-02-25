@@ -7,62 +7,16 @@
 //! Chromium singleton-lock error that occurs when two instances try to use the
 //! same profile directory at the same time.
 
-use std::sync::Mutex;
-use std::time::Duration;
+mod common;
+use common::*;
 
-use earl_core::{CommandMode, ExecutionContext, ProtocolExecutor, RawExecutionResult, Redactor};
-use earl_core::schema::ResultTemplate;
-use earl_core::transport::ResolvedTransport;
+use earl_core::{ProtocolExecutor, RawExecutionResult};
 use earl_protocol_browser::{
     BrowserExecutor,
     PreparedBrowserCommand,
     steps::validate_url_scheme,
 };
 use earl_protocol_browser::schema::BrowserStep;
-use serde_json::Map;
-
-/// Serializes Chrome-launching tests so they don't clobber the Chromium
-/// singleton lock when the test harness runs them in parallel.
-static CHROME_SERIAL: Mutex<()> = Mutex::new(());
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-/// Returns `true` (and prints a message) when Chrome is not found so that the
-/// caller can skip the rest of the test.
-fn skip_if_no_chrome() -> bool {
-    if earl_protocol_browser::launcher::find_chrome().is_err() {
-        eprintln!("skipping — Chrome not found on this host");
-        return true;
-    }
-    false
-}
-
-/// Build a minimal `ExecutionContext` suitable for passing to
-/// `BrowserExecutor::execute`.  The browser executor ignores the context
-/// entirely (it uses only `PreparedBrowserCommand`), so the values here are
-/// arbitrary but structurally valid.
-fn make_context() -> ExecutionContext {
-    ExecutionContext {
-        key: "test".to_string(),
-        mode: CommandMode::Read,
-        allow_rules: vec![],
-        transport: ResolvedTransport {
-            timeout: Duration::from_secs(30),
-            follow_redirects: true,
-            max_redirect_hops: 10,
-            retry_max_attempts: 0,
-            retry_backoff: Duration::from_millis(100),
-            retry_on_status: vec![],
-            compression: false,
-            tls_min_version: None,
-            proxy_url: None,
-            max_response_bytes: 10_000_000,
-        },
-        result_template: ResultTemplate::default(),
-        args: Map::new(),
-        redactor: Redactor::new(vec![]),
-    }
-}
 
 // ── scheme-validation tests (no Chrome required) ──────────────────────────────
 
