@@ -1,0 +1,138 @@
+---
+title: gRPC
+icon: Zap
+description: Call gRPC services from an Earl template.
+---
+
+The gRPC protocol sends unary and server-streaming RPCs to a gRPC endpoint, with schema discovery via server reflection or a compiled descriptor file.
+
+## A complete example
+
+Here is a template that fetches a single inventory item by ID:
+
+```hcl
+version    = 1
+provider   = "inventory"
+categories = ["warehouse"]
+
+command "get_item" {
+  title       = "Get inventory item"
+  summary     = "Fetch a single inventory item by ID"
+  description = "Returns the item name, quantity, and warehouse location for the given item ID."
+
+  annotations {
+    mode    = "read"
+    secrets = ["inventory.api_key"]
+  }
+
+  param "id" {
+    type        = "string"
+    required    = true
+    description = "Item ID"
+  }
+
+  operation {
+    protocol = "grpc"
+    url      = "https://grpc.inventory.example.com"
+
+    auth {
+      kind   = "bearer"
+      secret = "inventory.api_key"
+    }
+
+    grpc {
+      service = "inventory.v1.ItemService"
+      method  = "GetItem"
+      body = {
+        id = "{{ args.id }}"
+      }
+    }
+  }
+
+  result {
+    decode = "json"
+    output = "{{ result.name }} — qty: {{ result.quantity }}, location: {{ result.warehouseLocation }}"
+  }
+}
+```
+
+Store your secret and run it:
+
+```bash
+earl secrets set inventory.api_key
+earl call inventory.get_item --id abc123
+```
+
+## Walk-through
+
+### operation
+
+```hcl
+operation {
+  protocol = "grpc"
+  url      = "https://grpc.inventory.example.com"
+  ...
+}
+```
+
+`protocol = "grpc"` and `url` are required. Use `https://` for TLS — standard for gRPC in production. Use `http://` only for plaintext connections, such as a local development server.
+
+### grpc block
+
+```hcl
+grpc {
+  service = "inventory.v1.ItemService"
+  method  = "GetItem"
+  body = {
+    id = "{{ args.id }}"
+  }
+}
+```
+
+`service` is the fully qualified service name from the proto definition — package name plus service name. `method` is the RPC name exactly as declared in the proto file. Both are case-sensitive.
+
+`body` is a map of request fields. The keys must match the proto field names exactly. Values support Jinja expressions, so `"{{ args.id }}"` is rendered before the request is serialized.
+
+### Reflection
+
+When `descriptor_set_file` is omitted, Earl calls gRPC reflection v1 to discover the service schema at request time. This requires the server to have reflection enabled. If the server only supports the older v1alpha reflection protocol, use a descriptor file instead (see below).
+
+### result
+
+```hcl
+result {
+  decode = "json"
+  output = "{{ result.name }} — qty: {{ result.quantity }}, location: {{ result.warehouseLocation }}"
+}
+```
+
+gRPC responses are deserialized from protobuf and returned to the template as JSON. Field names follow the camelCase JSON names from the proto definition — `warehouse_location` in the proto becomes `warehouseLocation` in `result`.
+
+## With a descriptor file
+
+When the server doesn't support reflection, compile the proto file to a binary descriptor and reference it in the `grpc` block:
+
+```hcl
+grpc {
+  service             = "inventory.v1.ItemService"
+  method              = "GetItem"
+  descriptor_set_file = "inventory.pb"
+  body = {
+    id = "{{ args.id }}"
+  }
+}
+```
+
+Generate the descriptor file with `protoc`:
+
+```bash
+protoc --descriptor_set_out=inventory.pb --include_imports inventory.proto
+```
+
+The path in `descriptor_set_file` is relative to the template file. If the template is at `templates/inventory.hcl`, then `inventory.pb` should be at `templates/inventory.pb`.
+
+## Streaming
+
+For server-streaming RPCs — where one request produces multiple response messages — see [Streaming — gRPC server streaming](/docs/streaming#grpc-server-streaming).
+
+For the full field reference, see [Template Schema — gRPC](/docs/template-schema#grpc).
