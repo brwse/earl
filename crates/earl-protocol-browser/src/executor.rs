@@ -165,7 +165,9 @@ async fn run_with_session(
     updated_sf.interrupted = step_result.is_err();
     // best-effort — don't mask the step error, but warn so "session didn't persist" is debuggable
     if let Err(e) = updated_sf.save_to(&sf_path) {
-        tracing::warn!(session_id, path = %sf_path.display(), error = %e, "failed to persist session file");
+        // Omit session_id from the log to avoid cleartext-logging of the session identifier;
+        // the session file path already conveys the relevant context.
+        tracing::warn!(path = %sf_path.display(), error = %e, "failed to persist session file");
     }
 
     step_result
