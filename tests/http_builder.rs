@@ -92,7 +92,7 @@ fn empty_args() -> Map<String, serde_json::Value> {
 }
 
 #[tokio::test]
-async fn builds_api_key_in_all_locations() {
+async fn api_key_in_header_sets_request_header() {
     let ws = common::temp_workspace();
     let manager =
         common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
@@ -100,67 +100,166 @@ async fn builds_api_key_in_all_locations() {
         .set("api.key", SecretString::new("secret123".to_string().into()))
         .unwrap();
 
-    for location in [
-        ApiKeyLocation::Header,
-        ApiKeyLocation::Query,
-        ApiKeyLocation::Cookie,
-    ] {
-        let entry = base_entry(
-            Some(AuthTemplate::ApiKey {
-                location: location.clone(),
-                name: "X-Token".to_string(),
-                secret: "api.key".to_string(),
-            }),
-            None,
-            vec!["api.key"],
-        );
+    let entry = base_entry(
+        Some(AuthTemplate::ApiKey {
+            location: ApiKeyLocation::Header,
+            name: "X-Token".to_string(),
+            secret: "api.key".to_string(),
+        }),
+        None,
+        vec!["api.key"],
+    );
 
-        let prepared = build_prepared_request_with_token_provider(
-            &entry,
-            empty_args(),
-            &manager,
-            |_profile| async { Ok("unused".to_string()) },
-            &default_allow_rules(),
-            &default_proxy_profiles(),
-            &SandboxConfig::default(),
-            None,
-        )
-        .await
-        .unwrap();
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        empty_args(),
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
 
-        let redacted = prepared.redactor.redact("secret123");
-        assert_eq!(redacted, "[REDACTED]");
-
-        let http_data = match &prepared.protocol_data {
-            PreparedProtocolData::Http(data) => data,
-            _ => panic!("expected Http protocol data"),
-        };
-
-        match location {
-            ApiKeyLocation::Header => assert!(
-                http_data
-                    .headers
-                    .iter()
-                    .any(|(k, v)| k == "X-Token" && v == "secret123")
-            ),
-            ApiKeyLocation::Query => assert!(
-                http_data
-                    .query
-                    .iter()
-                    .any(|(k, v)| k == "X-Token" && v == "secret123")
-            ),
-            ApiKeyLocation::Cookie => assert!(
-                http_data
-                    .cookies
-                    .iter()
-                    .any(|(k, v)| k == "X-Token" && v == "secret123")
-            ),
-        }
-    }
+    let http_data = match &prepared.protocol_data {
+        PreparedProtocolData::Http(data) => data,
+        _ => panic!("expected Http protocol data"),
+    };
+    assert!(
+        http_data
+            .headers
+            .iter()
+            .any(|(k, v)| k == "X-Token" && v == "secret123")
+    );
 }
 
 #[tokio::test]
-async fn builds_bearer_basic_and_oauth_profile_auth() {
+async fn api_key_secret_is_registered_in_redactor() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    manager
+        .set("api.key", SecretString::new("secret123".to_string().into()))
+        .unwrap();
+
+    let entry = base_entry(
+        Some(AuthTemplate::ApiKey {
+            location: ApiKeyLocation::Header,
+            name: "X-Token".to_string(),
+            secret: "api.key".to_string(),
+        }),
+        None,
+        vec!["api.key"],
+    );
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        empty_args(),
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(prepared.redactor.redact("secret123"), "[REDACTED]");
+}
+
+#[tokio::test]
+async fn api_key_in_query_sets_query_param() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    manager
+        .set("api.key", SecretString::new("secret123".to_string().into()))
+        .unwrap();
+
+    let entry = base_entry(
+        Some(AuthTemplate::ApiKey {
+            location: ApiKeyLocation::Query,
+            name: "X-Token".to_string(),
+            secret: "api.key".to_string(),
+        }),
+        None,
+        vec!["api.key"],
+    );
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        empty_args(),
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let http_data = match &prepared.protocol_data {
+        PreparedProtocolData::Http(data) => data,
+        _ => panic!("expected Http protocol data"),
+    };
+    assert!(
+        http_data
+            .query
+            .iter()
+            .any(|(k, v)| k == "X-Token" && v == "secret123")
+    );
+}
+
+#[tokio::test]
+async fn api_key_in_cookie_sets_cookie() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    manager
+        .set("api.key", SecretString::new("secret123".to_string().into()))
+        .unwrap();
+
+    let entry = base_entry(
+        Some(AuthTemplate::ApiKey {
+            location: ApiKeyLocation::Cookie,
+            name: "X-Token".to_string(),
+            secret: "api.key".to_string(),
+        }),
+        None,
+        vec!["api.key"],
+    );
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        empty_args(),
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let http_data = match &prepared.protocol_data {
+        PreparedProtocolData::Http(data) => data,
+        _ => panic!("expected Http protocol data"),
+    };
+    assert!(
+        http_data
+            .cookies
+            .iter()
+            .any(|(k, v)| k == "X-Token" && v == "secret123")
+    );
+}
+
+#[tokio::test]
+async fn bearer_auth_sets_authorization_header() {
     let ws = common::temp_workspace();
     let manager =
         common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
@@ -170,6 +269,44 @@ async fn builds_bearer_basic_and_oauth_profile_auth() {
             SecretString::new("bearer-123".to_string().into()),
         )
         .unwrap();
+
+    let entry = base_entry(
+        Some(AuthTemplate::Bearer {
+            secret: "bearer.token".to_string(),
+        }),
+        None,
+        vec!["bearer.token"],
+    );
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        empty_args(),
+        &manager,
+        |_profile| async { Ok("oauth-token".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let http_data = match &prepared.protocol_data {
+        PreparedProtocolData::Http(data) => data,
+        _ => panic!("expected Http protocol data"),
+    };
+    assert!(
+        http_data
+            .headers
+            .iter()
+            .any(|(k, v)| k == "Authorization" && v == "Bearer bearer-123")
+    );
+}
+
+#[tokio::test]
+async fn basic_auth_sets_authorization_header() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
     manager
         .set(
             "basic.password",
@@ -177,37 +314,7 @@ async fn builds_bearer_basic_and_oauth_profile_auth() {
         )
         .unwrap();
 
-    let bearer_entry = base_entry(
-        Some(AuthTemplate::Bearer {
-            secret: "bearer.token".to_string(),
-        }),
-        None,
-        vec!["bearer.token"],
-    );
-    let bearer = build_prepared_request_with_token_provider(
-        &bearer_entry,
-        empty_args(),
-        &manager,
-        |_profile| async { Ok("oauth-token".to_string()) },
-        &default_allow_rules(),
-        &default_proxy_profiles(),
-        &SandboxConfig::default(),
-        None,
-    )
-    .await
-    .unwrap();
-    let bearer_http = match &bearer.protocol_data {
-        PreparedProtocolData::Http(data) => data,
-        _ => panic!("expected Http protocol data"),
-    };
-    assert!(
-        bearer_http
-            .headers
-            .iter()
-            .any(|(k, v)| k == "Authorization" && v == "Bearer bearer-123")
-    );
-
-    let basic_entry = base_entry(
+    let entry = base_entry(
         Some(AuthTemplate::Basic {
             username: "alice".to_string(),
             password_secret: "basic.password".to_string(),
@@ -215,8 +322,8 @@ async fn builds_bearer_basic_and_oauth_profile_auth() {
         None,
         vec!["basic.password"],
     );
-    let basic = build_prepared_request_with_token_provider(
-        &basic_entry,
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
         empty_args(),
         &manager,
         |_profile| async { Ok("oauth-token".to_string()) },
@@ -227,26 +334,34 @@ async fn builds_bearer_basic_and_oauth_profile_auth() {
     )
     .await
     .unwrap();
-    let basic_http = match &basic.protocol_data {
+
+    let http_data = match &prepared.protocol_data {
         PreparedProtocolData::Http(data) => data,
         _ => panic!("expected Http protocol data"),
     };
     assert!(
-        basic_http
+        http_data
             .headers
             .iter()
             .any(|(k, v)| k == "Authorization" && v.starts_with("Basic "))
     );
+}
 
-    let oauth_entry = base_entry(
+#[tokio::test]
+async fn oauth2_profile_auth_sets_bearer_token() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let entry = base_entry(
         Some(AuthTemplate::OAuth2Profile {
             profile: "github".to_string(),
         }),
         None,
         vec![],
     );
-    let oauth = build_prepared_request_with_token_provider(
-        &oauth_entry,
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
         empty_args(),
         &manager,
         |_profile| async { Ok("oauth-token".to_string()) },
@@ -257,12 +372,13 @@ async fn builds_bearer_basic_and_oauth_profile_auth() {
     )
     .await
     .unwrap();
-    let oauth_http = match &oauth.protocol_data {
+
+    let http_data = match &prepared.protocol_data {
         PreparedProtocolData::Http(data) => data,
         _ => panic!("expected Http protocol data"),
     };
     assert!(
-        oauth_http
+        http_data
             .headers
             .iter()
             .any(|(k, v)| k == "Authorization" && v == "Bearer oauth-token")
@@ -270,12 +386,12 @@ async fn builds_bearer_basic_and_oauth_profile_auth() {
 }
 
 #[tokio::test]
-async fn builds_json_form_and_raw_body_modes() {
+async fn json_body_renders_template_variables() {
     let ws = common::temp_workspace();
     let manager =
         common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
 
-    let json_entry = base_entry(
+    let entry = base_entry(
         None,
         Some(BodyTemplate::Json {
             value: json!({"a": "{{ args.a }}"}),
@@ -285,7 +401,7 @@ async fn builds_json_form_and_raw_body_modes() {
     let mut args = Map::new();
     args.insert("a".to_string(), json!("x"));
     let prepared = build_prepared_request_with_token_provider(
-        &json_entry,
+        &entry,
         args,
         &manager,
         |_profile| async { Ok("unused".to_string()) },
@@ -296,6 +412,7 @@ async fn builds_json_form_and_raw_body_modes() {
     )
     .await
     .unwrap();
+
     match &prepared.protocol_data {
         PreparedProtocolData::Http(data) => match &data.body {
             PreparedBody::Json(value) => assert_eq!(*value, json!({"a": "x"})),
@@ -303,8 +420,15 @@ async fn builds_json_form_and_raw_body_modes() {
         },
         _ => panic!("expected Http protocol data"),
     }
+}
 
-    let form_entry = base_entry(
+#[tokio::test]
+async fn form_urlencoded_body_includes_scalar_fields() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let entry = base_entry(
         None,
         Some(BodyTemplate::FormUrlencoded {
             fields: BTreeMap::from([
@@ -315,7 +439,7 @@ async fn builds_json_form_and_raw_body_modes() {
         vec![],
     );
     let prepared = build_prepared_request_with_token_provider(
-        &form_entry,
+        &entry,
         empty_args(),
         &manager,
         |_profile| async { Ok("unused".to_string()) },
@@ -326,18 +450,65 @@ async fn builds_json_form_and_raw_body_modes() {
     )
     .await
     .unwrap();
+
     match &prepared.protocol_data {
         PreparedProtocolData::Http(data) => match &data.body {
             PreparedBody::Form(values) => {
                 assert!(values.iter().any(|(k, v)| k == "q" && v == "test"));
+            }
+            _ => panic!("expected form body"),
+        },
+        _ => panic!("expected Http protocol data"),
+    }
+}
+
+#[tokio::test]
+async fn form_urlencoded_body_expands_array_to_repeated_pairs() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let entry = base_entry(
+        None,
+        Some(BodyTemplate::FormUrlencoded {
+            fields: BTreeMap::from([
+                ("q".to_string(), json!("test")),
+                ("tags".to_string(), json!(["a", "b"])),
+            ]),
+        }),
+        vec![],
+    );
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        empty_args(),
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    match &prepared.protocol_data {
+        PreparedProtocolData::Http(data) => match &data.body {
+            PreparedBody::Form(values) => {
                 assert_eq!(values.iter().filter(|(k, _)| k == "tags").count(), 2);
             }
             _ => panic!("expected form body"),
         },
         _ => panic!("expected Http protocol data"),
     }
+}
 
-    let raw_entry = base_entry(
+#[tokio::test]
+async fn raw_text_body_preserves_content_bytes() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let entry = base_entry(
         None,
         Some(BodyTemplate::RawText {
             value: "hello".to_string(),
@@ -346,7 +517,7 @@ async fn builds_json_form_and_raw_body_modes() {
         vec![],
     );
     let prepared = build_prepared_request_with_token_provider(
-        &raw_entry,
+        &entry,
         empty_args(),
         &manager,
         |_profile| async { Ok("unused".to_string()) },
@@ -357,13 +528,48 @@ async fn builds_json_form_and_raw_body_modes() {
     )
     .await
     .unwrap();
+
     match &prepared.protocol_data {
         PreparedProtocolData::Http(data) => match &data.body {
-            PreparedBody::RawBytes {
-                bytes,
-                content_type,
-            } => {
+            PreparedBody::RawBytes { bytes, .. } => {
                 assert_eq!(bytes, b"hello");
+            }
+            _ => panic!("expected raw body"),
+        },
+        _ => panic!("expected Http protocol data"),
+    }
+}
+
+#[tokio::test]
+async fn raw_text_body_defaults_content_type_to_text_plain() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let entry = base_entry(
+        None,
+        Some(BodyTemplate::RawText {
+            value: "hello".to_string(),
+            content_type: None,
+        }),
+        vec![],
+    );
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        empty_args(),
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    match &prepared.protocol_data {
+        PreparedProtocolData::Http(data) => match &data.body {
+            PreparedBody::RawBytes { content_type, .. } => {
                 assert_eq!(content_type.as_deref(), Some("text/plain"));
             }
             _ => panic!("expected raw body"),
@@ -373,7 +579,7 @@ async fn builds_json_form_and_raw_body_modes() {
 }
 
 #[tokio::test]
-async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
+async fn multipart_body_inline_part_reads_value() {
     let ws = common::temp_workspace();
     let manager =
         common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
@@ -381,7 +587,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
     let file_path = ws.root.path().join("payload.txt");
     std::fs::write(&file_path, b"file-data").unwrap();
 
-    let multipart_entry = base_entry(
+    let entry = base_entry(
         None,
         Some(BodyTemplate::Multipart {
             parts: vec![
@@ -406,7 +612,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
         vec![],
     );
     let prepared = build_prepared_request_with_token_provider(
-        &multipart_entry,
+        &entry,
         empty_args(),
         &manager,
         |_profile| async { Ok("unused".to_string()) },
@@ -417,19 +623,82 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
     )
     .await
     .unwrap();
+
     match &prepared.protocol_data {
         PreparedProtocolData::Http(data) => match &data.body {
             PreparedBody::Multipart(parts) => {
-                assert_eq!(parts.len(), 2);
                 assert_eq!(parts[0].bytes, b"hello");
+            }
+            _ => panic!("expected multipart body"),
+        },
+        _ => panic!("expected Http protocol data"),
+    }
+}
+
+#[tokio::test]
+async fn multipart_body_file_part_reads_file_content() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let file_path = ws.root.path().join("payload.txt");
+    std::fs::write(&file_path, b"file-data").unwrap();
+
+    let entry = base_entry(
+        None,
+        Some(BodyTemplate::Multipart {
+            parts: vec![
+                MultipartPartTemplate {
+                    name: "inline".to_string(),
+                    value: Some("hello".to_string()),
+                    bytes_base64: None,
+                    file_path: None,
+                    content_type: Some("text/plain".to_string()),
+                    filename: Some("inline.txt".to_string()),
+                },
+                MultipartPartTemplate {
+                    name: "from_file".to_string(),
+                    value: None,
+                    bytes_base64: None,
+                    file_path: Some(file_path.to_string_lossy().to_string()),
+                    content_type: None,
+                    filename: None,
+                },
+            ],
+        }),
+        vec![],
+    );
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        empty_args(),
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    match &prepared.protocol_data {
+        PreparedProtocolData::Http(data) => match &data.body {
+            PreparedBody::Multipart(parts) => {
                 assert_eq!(parts[1].bytes, b"file-data");
             }
             _ => panic!("expected multipart body"),
         },
         _ => panic!("expected Http protocol data"),
     }
+}
 
-    let raw_bytes_entry = base_entry(
+#[tokio::test]
+async fn raw_bytes_base64_body_decodes_to_bytes() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let entry = base_entry(
         None,
         Some(BodyTemplate::RawBytesBase64 {
             value: "aGVsbG8=".to_string(),
@@ -438,7 +707,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
         vec![],
     );
     let prepared = build_prepared_request_with_token_provider(
-        &raw_bytes_entry,
+        &entry,
         empty_args(),
         &manager,
         |_profile| async { Ok("unused".to_string()) },
@@ -449,6 +718,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
     )
     .await
     .unwrap();
+
     match &prepared.protocol_data {
         PreparedProtocolData::Http(data) => match &data.body {
             PreparedBody::RawBytes { bytes, .. } => assert_eq!(bytes, b"hello"),
@@ -456,8 +726,18 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
         },
         _ => panic!("expected Http protocol data"),
     }
+}
 
-    let file_stream_entry = base_entry(
+#[tokio::test]
+async fn file_stream_body_reads_file_content() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let file_path = ws.root.path().join("payload.txt");
+    std::fs::write(&file_path, b"file-data").unwrap();
+
+    let entry = base_entry(
         None,
         Some(BodyTemplate::FileStream {
             path: file_path.to_string_lossy().to_string(),
@@ -466,7 +746,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
         vec![],
     );
     let prepared = build_prepared_request_with_token_provider(
-        &file_stream_entry,
+        &entry,
         empty_args(),
         &manager,
         |_profile| async { Ok("unused".to_string()) },
@@ -477,6 +757,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
     )
     .await
     .unwrap();
+
     match &prepared.protocol_data {
         PreparedProtocolData::Http(data) => match &data.body {
             PreparedBody::RawBytes { bytes, .. } => assert_eq!(bytes, b"file-data"),
@@ -488,7 +769,7 @@ async fn builds_multipart_raw_bytes_and_file_stream_bodies() {
 
 #[tokio::test]
 #[cfg(feature = "graphql")]
-async fn builds_graphql_payload_and_headers() {
+async fn graphql_request_uses_post_method() {
     let ws = common::temp_workspace();
     let manager =
         common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
@@ -532,7 +813,53 @@ async fn builds_graphql_payload_and_headers() {
         _ => panic!("expected Graphql protocol data"),
     };
     assert_eq!(graphql_data.method, reqwest::Method::POST);
+}
 
+#[tokio::test]
+#[cfg(feature = "graphql")]
+async fn graphql_body_renders_variables() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let mut entry = base_entry(None, None, vec![]);
+    entry.template.operation = OperationTemplate::Graphql(GraphqlOperationTemplate {
+        method: String::new(),
+        url: "https://api.example.com/resource".to_string(),
+        path: None,
+        query: Some(BTreeMap::new()),
+        headers: Some(BTreeMap::new()),
+        cookies: Some(BTreeMap::new()),
+        auth: None,
+        graphql: GraphqlTemplate {
+            query: "query User($id: ID!) { user(id: $id) { login } }".to_string(),
+            operation_name: Some("User".to_string()),
+            variables: Some(json!({ "id": "{{ args.user_id }}" })),
+        },
+        stream: false,
+        transport: None,
+    });
+
+    let mut args = Map::new();
+    args.insert("user_id".to_string(), json!(42));
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        args,
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let graphql_data = match &prepared.protocol_data {
+        PreparedProtocolData::Graphql(data) => data,
+        _ => panic!("expected Graphql protocol data"),
+    };
     match &graphql_data.body {
         PreparedBody::Json(payload) => {
             assert_eq!(
@@ -546,13 +873,106 @@ async fn builds_graphql_payload_and_headers() {
         }
         _ => panic!("expected graphql payload in JSON body"),
     }
+}
 
+#[tokio::test]
+#[cfg(feature = "graphql")]
+async fn graphql_request_sets_content_type_header() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let mut entry = base_entry(None, None, vec![]);
+    entry.template.operation = OperationTemplate::Graphql(GraphqlOperationTemplate {
+        method: String::new(),
+        url: "https://api.example.com/resource".to_string(),
+        path: None,
+        query: Some(BTreeMap::new()),
+        headers: Some(BTreeMap::new()),
+        cookies: Some(BTreeMap::new()),
+        auth: None,
+        graphql: GraphqlTemplate {
+            query: "query User($id: ID!) { user(id: $id) { login } }".to_string(),
+            operation_name: Some("User".to_string()),
+            variables: Some(json!({ "id": "{{ args.user_id }}" })),
+        },
+        stream: false,
+        transport: None,
+    });
+
+    let mut args = Map::new();
+    args.insert("user_id".to_string(), json!(42));
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        args,
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let graphql_data = match &prepared.protocol_data {
+        PreparedProtocolData::Graphql(data) => data,
+        _ => panic!("expected Graphql protocol data"),
+    };
     assert!(
         graphql_data
             .headers
             .iter()
             .any(|(k, v)| k.eq_ignore_ascii_case("Content-Type") && v == "application/json")
     );
+}
+
+#[tokio::test]
+#[cfg(feature = "graphql")]
+async fn graphql_request_sets_accept_header() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let mut entry = base_entry(None, None, vec![]);
+    entry.template.operation = OperationTemplate::Graphql(GraphqlOperationTemplate {
+        method: String::new(),
+        url: "https://api.example.com/resource".to_string(),
+        path: None,
+        query: Some(BTreeMap::new()),
+        headers: Some(BTreeMap::new()),
+        cookies: Some(BTreeMap::new()),
+        auth: None,
+        graphql: GraphqlTemplate {
+            query: "query User($id: ID!) { user(id: $id) { login } }".to_string(),
+            operation_name: Some("User".to_string()),
+            variables: Some(json!({ "id": "{{ args.user_id }}" })),
+        },
+        stream: false,
+        transport: None,
+    });
+
+    let mut args = Map::new();
+    args.insert("user_id".to_string(), json!(42));
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        args,
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let graphql_data = match &prepared.protocol_data {
+        PreparedProtocolData::Graphql(data) => data,
+        _ => panic!("expected Graphql protocol data"),
+    };
     assert!(
         graphql_data
             .headers
@@ -563,7 +983,7 @@ async fn builds_graphql_payload_and_headers() {
 
 #[tokio::test]
 #[cfg(feature = "grpc")]
-async fn builds_grpc_payload_and_headers() {
+async fn grpc_bearer_auth_sets_authorization_header() {
     let ws = common::temp_workspace();
     let manager =
         common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
@@ -623,22 +1043,364 @@ async fn builds_grpc_payload_and_headers() {
             .iter()
             .any(|(k, v)| k == "Authorization" && v == "Bearer grpc-token")
     );
+}
+
+#[tokio::test]
+#[cfg(feature = "grpc")]
+async fn grpc_template_header_renders_arg() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    manager
+        .set(
+            "grpc.token",
+            SecretString::new("grpc-token".to_string().into()),
+        )
+        .unwrap();
+
+    let mut entry = base_entry(None, None, vec!["grpc.token"]);
+    entry.template.operation = OperationTemplate::Grpc(GrpcOperationTemplate {
+        url: "http://127.0.0.1:50051".to_string(),
+        headers: Some(BTreeMap::from([(
+            "x-trace-id".to_string(),
+            json!("{{ args.trace }}"),
+        )])),
+        auth: Some(AuthTemplate::Bearer {
+            secret: "grpc.token".to_string(),
+        }),
+        grpc: GrpcTemplate {
+            service: "grpc.health.v1.Health".to_string(),
+            method: "Check".to_string(),
+            body: Some(json!({
+                "service": "{{ args.service }}"
+            })),
+            descriptor_set_file: None,
+        },
+        stream: false,
+        transport: None,
+    });
+
+    let mut args = Map::new();
+    args.insert("service".to_string(), json!(""));
+    args.insert("trace".to_string(), json!("trace-123"));
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        args,
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let grpc_data = match &prepared.protocol_data {
+        PreparedProtocolData::Grpc(data) => data,
+        _ => panic!("expected Grpc protocol data"),
+    };
     assert!(
         grpc_data
             .headers
             .iter()
             .any(|(k, v)| k == "x-trace-id" && v == "trace-123")
     );
-    assert_eq!(prepared.redactor.redact("grpc-token"), "[REDACTED]");
+}
 
+#[tokio::test]
+#[cfg(feature = "grpc")]
+async fn grpc_secret_is_registered_in_redactor() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    manager
+        .set(
+            "grpc.token",
+            SecretString::new("grpc-token".to_string().into()),
+        )
+        .unwrap();
+
+    let mut entry = base_entry(None, None, vec!["grpc.token"]);
+    entry.template.operation = OperationTemplate::Grpc(GrpcOperationTemplate {
+        url: "http://127.0.0.1:50051".to_string(),
+        headers: Some(BTreeMap::from([(
+            "x-trace-id".to_string(),
+            json!("{{ args.trace }}"),
+        )])),
+        auth: Some(AuthTemplate::Bearer {
+            secret: "grpc.token".to_string(),
+        }),
+        grpc: GrpcTemplate {
+            service: "grpc.health.v1.Health".to_string(),
+            method: "Check".to_string(),
+            body: Some(json!({
+                "service": "{{ args.service }}"
+            })),
+            descriptor_set_file: None,
+        },
+        stream: false,
+        transport: None,
+    });
+
+    let mut args = Map::new();
+    args.insert("service".to_string(), json!(""));
+    args.insert("trace".to_string(), json!("trace-123"));
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        args,
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(prepared.redactor.redact("grpc-token"), "[REDACTED]");
+}
+
+#[tokio::test]
+#[cfg(feature = "grpc")]
+async fn grpc_body_renders_template_variables() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    manager
+        .set(
+            "grpc.token",
+            SecretString::new("grpc-token".to_string().into()),
+        )
+        .unwrap();
+
+    let mut entry = base_entry(None, None, vec!["grpc.token"]);
+    entry.template.operation = OperationTemplate::Grpc(GrpcOperationTemplate {
+        url: "http://127.0.0.1:50051".to_string(),
+        headers: Some(BTreeMap::from([(
+            "x-trace-id".to_string(),
+            json!("{{ args.trace }}"),
+        )])),
+        auth: Some(AuthTemplate::Bearer {
+            secret: "grpc.token".to_string(),
+        }),
+        grpc: GrpcTemplate {
+            service: "grpc.health.v1.Health".to_string(),
+            method: "Check".to_string(),
+            body: Some(json!({
+                "service": "{{ args.service }}"
+            })),
+            descriptor_set_file: None,
+        },
+        stream: false,
+        transport: None,
+    });
+
+    let mut args = Map::new();
+    args.insert("service".to_string(), json!(""));
+    args.insert("trace".to_string(), json!("trace-123"));
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        args,
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let grpc_data = match &prepared.protocol_data {
+        PreparedProtocolData::Grpc(data) => data,
+        _ => panic!("expected Grpc protocol data"),
+    };
     match &grpc_data.body {
         PreparedBody::Json(value) => {
             assert_eq!(*value, json!({"service": ""}));
         }
         _ => panic!("expected grpc payload in JSON body"),
     }
+}
 
+#[tokio::test]
+#[cfg(feature = "grpc")]
+async fn grpc_service_is_preserved() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    manager
+        .set(
+            "grpc.token",
+            SecretString::new("grpc-token".to_string().into()),
+        )
+        .unwrap();
+
+    let mut entry = base_entry(None, None, vec!["grpc.token"]);
+    entry.template.operation = OperationTemplate::Grpc(GrpcOperationTemplate {
+        url: "http://127.0.0.1:50051".to_string(),
+        headers: Some(BTreeMap::from([(
+            "x-trace-id".to_string(),
+            json!("{{ args.trace }}"),
+        )])),
+        auth: Some(AuthTemplate::Bearer {
+            secret: "grpc.token".to_string(),
+        }),
+        grpc: GrpcTemplate {
+            service: "grpc.health.v1.Health".to_string(),
+            method: "Check".to_string(),
+            body: Some(json!({
+                "service": "{{ args.service }}"
+            })),
+            descriptor_set_file: None,
+        },
+        stream: false,
+        transport: None,
+    });
+
+    let mut args = Map::new();
+    args.insert("service".to_string(), json!(""));
+    args.insert("trace".to_string(), json!("trace-123"));
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        args,
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let grpc_data = match &prepared.protocol_data {
+        PreparedProtocolData::Grpc(data) => data,
+        _ => panic!("expected Grpc protocol data"),
+    };
     assert_eq!(grpc_data.service, "grpc.health.v1.Health");
+}
+
+#[tokio::test]
+#[cfg(feature = "grpc")]
+async fn grpc_method_is_preserved() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    manager
+        .set(
+            "grpc.token",
+            SecretString::new("grpc-token".to_string().into()),
+        )
+        .unwrap();
+
+    let mut entry = base_entry(None, None, vec!["grpc.token"]);
+    entry.template.operation = OperationTemplate::Grpc(GrpcOperationTemplate {
+        url: "http://127.0.0.1:50051".to_string(),
+        headers: Some(BTreeMap::from([(
+            "x-trace-id".to_string(),
+            json!("{{ args.trace }}"),
+        )])),
+        auth: Some(AuthTemplate::Bearer {
+            secret: "grpc.token".to_string(),
+        }),
+        grpc: GrpcTemplate {
+            service: "grpc.health.v1.Health".to_string(),
+            method: "Check".to_string(),
+            body: Some(json!({
+                "service": "{{ args.service }}"
+            })),
+            descriptor_set_file: None,
+        },
+        stream: false,
+        transport: None,
+    });
+
+    let mut args = Map::new();
+    args.insert("service".to_string(), json!(""));
+    args.insert("trace".to_string(), json!("trace-123"));
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        args,
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let grpc_data = match &prepared.protocol_data {
+        PreparedProtocolData::Grpc(data) => data,
+        _ => panic!("expected Grpc protocol data"),
+    };
     assert_eq!(grpc_data.method, "Check");
+}
+
+#[tokio::test]
+#[cfg(feature = "grpc")]
+async fn grpc_descriptor_set_is_none_when_not_specified() {
+    let ws = common::temp_workspace();
+    let manager =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    manager
+        .set(
+            "grpc.token",
+            SecretString::new("grpc-token".to_string().into()),
+        )
+        .unwrap();
+
+    let mut entry = base_entry(None, None, vec!["grpc.token"]);
+    entry.template.operation = OperationTemplate::Grpc(GrpcOperationTemplate {
+        url: "http://127.0.0.1:50051".to_string(),
+        headers: Some(BTreeMap::from([(
+            "x-trace-id".to_string(),
+            json!("{{ args.trace }}"),
+        )])),
+        auth: Some(AuthTemplate::Bearer {
+            secret: "grpc.token".to_string(),
+        }),
+        grpc: GrpcTemplate {
+            service: "grpc.health.v1.Health".to_string(),
+            method: "Check".to_string(),
+            body: Some(json!({
+                "service": "{{ args.service }}"
+            })),
+            descriptor_set_file: None,
+        },
+        stream: false,
+        transport: None,
+    });
+
+    let mut args = Map::new();
+    args.insert("service".to_string(), json!(""));
+    args.insert("trace".to_string(), json!("trace-123"));
+
+    let prepared = build_prepared_request_with_token_provider(
+        &entry,
+        args,
+        &manager,
+        |_profile| async { Ok("unused".to_string()) },
+        &default_allow_rules(),
+        &default_proxy_profiles(),
+        &SandboxConfig::default(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let grpc_data = match &prepared.protocol_data {
+        PreparedProtocolData::Grpc(data) => data,
+        _ => panic!("expected Grpc protocol data"),
+    };
     assert!(grpc_data.descriptor_set.is_none());
 }

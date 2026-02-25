@@ -112,8 +112,7 @@ async fn prefers_remote_results_when_remote_search_succeeds() {
 
     embeddings_mock.assert_async().await;
     rerank_mock.assert_async().await;
-    assert!(!hits.is_empty());
-    assert!(hits.iter().any(|hit| hit.key == "github.create_issue"));
+    assert_eq!(hits[0].key, "github.create_issue");
 }
 
 #[tokio::test]

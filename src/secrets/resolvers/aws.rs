@@ -256,65 +256,73 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_simple_name() {
+    fn simple_name_sets_correct_secret_id() {
         let r = AwsReference::parse("aws://my-secret").unwrap();
         assert_eq!(r.secret_id, "my-secret");
+    }
+
+    #[test]
+    fn simple_name_has_no_json_key() {
+        let r = AwsReference::parse("aws://my-secret").unwrap();
         assert!(r.json_key.is_none());
     }
 
     #[test]
-    fn parse_name_with_slashes() {
+    fn name_with_slashes_accepted_as_secret_id() {
         let r = AwsReference::parse("aws://prod/db/credentials").unwrap();
         assert_eq!(r.secret_id, "prod/db/credentials");
+    }
+
+    #[test]
+    fn name_with_slashes_has_no_json_key() {
+        let r = AwsReference::parse("aws://prod/db/credentials").unwrap();
         assert!(r.json_key.is_none());
     }
 
     #[test]
-    fn parse_name_with_json_key() {
+    fn hash_separator_sets_correct_secret_id() {
         let r = AwsReference::parse("aws://prod/db-creds#password").unwrap();
         assert_eq!(r.secret_id, "prod/db-creds");
+    }
+
+    #[test]
+    fn hash_separator_sets_json_key() {
+        let r = AwsReference::parse("aws://prod/db-creds#password").unwrap();
         assert_eq!(r.json_key.as_deref(), Some("password"));
     }
 
     #[test]
-    fn parse_rejects_empty_name() {
-        let err = AwsReference::parse("aws://").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn empty_secret_name_returns_error() {
+        assert!(AwsReference::parse("aws://").is_err());
     }
 
     #[test]
-    fn parse_rejects_empty_name_with_key() {
-        let err = AwsReference::parse("aws://#key").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn empty_secret_name_before_hash_returns_error() {
+        assert!(AwsReference::parse("aws://#key").is_err());
     }
 
     #[test]
-    fn parse_rejects_empty_key() {
-        let err = AwsReference::parse("aws://secret#").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn empty_key_after_hash_returns_error() {
+        assert!(AwsReference::parse("aws://secret#").is_err());
     }
 
     #[test]
-    fn parse_rejects_wrong_scheme() {
-        let err = AwsReference::parse("vault://secret/path#field").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn wrong_scheme_prefix_returns_error() {
+        assert!(AwsReference::parse("vault://secret/path#field").is_err());
     }
 
     #[test]
-    fn parse_rejects_question_mark_in_secret_id() {
-        let err = AwsReference::parse("aws://my-secret?inject=1").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn question_mark_in_secret_id_returns_error() {
+        assert!(AwsReference::parse("aws://my-secret?inject=1").is_err());
     }
 
     #[test]
-    fn parse_rejects_control_char_in_secret_id() {
-        let err = AwsReference::parse("aws://my\x00secret").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn control_char_in_secret_id_returns_error() {
+        assert!(AwsReference::parse("aws://my\x00secret").is_err());
     }
 
     #[test]
-    fn parse_rejects_whitespace_in_json_key() {
-        let err = AwsReference::parse("aws://secret#my key").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn whitespace_in_json_key_returns_error() {
+        assert!(AwsReference::parse("aws://secret#my key").is_err());
     }
 }

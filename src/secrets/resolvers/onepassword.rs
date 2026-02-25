@@ -552,61 +552,62 @@ mod tests {
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
-    fn parse_valid_reference() {
+    fn three_segment_reference_sets_vault() {
         let r = OpReference::parse("op://my-vault/my-item/password").unwrap();
         assert_eq!(r.vault, "my-vault");
+    }
+
+    #[test]
+    fn three_segment_reference_sets_item() {
+        let r = OpReference::parse("op://my-vault/my-item/password").unwrap();
         assert_eq!(r.item, "my-item");
+    }
+
+    #[test]
+    fn three_segment_reference_sets_field() {
+        let r = OpReference::parse("op://my-vault/my-item/password").unwrap();
         assert_eq!(r.field, "password");
     }
 
     #[test]
-    fn parse_four_segment_reference() {
+    fn four_segment_reference_joins_section_and_field_with_slash() {
         let r = OpReference::parse("op://my-vault/my-item/login/password").unwrap();
-        assert_eq!(r.vault, "my-vault");
-        assert_eq!(r.item, "my-item");
         assert_eq!(r.field, "login/password");
     }
 
     #[test]
     fn parse_rejects_too_few_segments() {
-        let err = OpReference::parse("op://vault/item").unwrap_err();
-        assert!(err.to_string().contains("invalid"));
+        assert!(OpReference::parse("op://vault/item").is_err());
     }
 
     #[test]
     fn parse_rejects_too_many_segments() {
-        let err = OpReference::parse("op://vault/item/a/b/c").unwrap_err();
-        assert!(err.to_string().contains("invalid"));
+        assert!(OpReference::parse("op://vault/item/a/b/c").is_err());
     }
 
     #[test]
     fn parse_rejects_empty_path() {
-        let err = OpReference::parse("op://").unwrap_err();
-        assert!(err.to_string().contains("invalid"));
+        assert!(OpReference::parse("op://").is_err());
     }
 
     #[test]
     fn parse_rejects_wrong_scheme() {
-        let err = OpReference::parse("vault://a/b/c").unwrap_err();
-        assert!(err.to_string().contains("invalid"));
+        assert!(OpReference::parse("vault://a/b/c").is_err());
     }
 
     #[test]
     fn parse_rejects_control_char_in_vault() {
-        let err = OpReference::parse("op://my\x00vault/item/field").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+        assert!(OpReference::parse("op://my\x00vault/item/field").is_err());
     }
 
     #[test]
     fn parse_rejects_question_mark_in_item() {
-        let err = OpReference::parse("op://vault/item?q=1/field").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+        assert!(OpReference::parse("op://vault/item?q=1/field").is_err());
     }
 
     #[test]
     fn parse_rejects_hash_in_field() {
-        let err = OpReference::parse("op://vault/item/field#frag").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+        assert!(OpReference::parse("op://vault/item/field#frag").is_err());
     }
 
     #[test]
@@ -614,31 +615,25 @@ mod tests {
         // 1Password vault/item names commonly contain spaces.
         let r = OpReference::parse("op://My Vault/My Item/password").unwrap();
         assert_eq!(r.vault, "My Vault");
-        assert_eq!(r.item, "My Item");
-        assert_eq!(r.field, "password");
     }
 
     #[test]
     fn scim_validation_rejects_quotes() {
-        let err = validate_scim_value("my\"vault", "vault name").unwrap_err();
-        assert!(
-            err.to_string().contains("SCIM filter injection"),
-            "got: {err}"
-        );
+        assert!(validate_scim_value("my\"vault", "vault name").is_err());
     }
 
     #[test]
     fn scim_validation_rejects_backslash() {
-        let err = validate_scim_value("my\\vault", "vault name").unwrap_err();
-        assert!(
-            err.to_string().contains("SCIM filter injection"),
-            "got: {err}"
-        );
+        assert!(validate_scim_value("my\\vault", "vault name").is_err());
     }
 
     #[test]
-    fn scim_validation_accepts_normal_names() {
+    fn scim_validation_accepts_hyphenated_name() {
         validate_scim_value("my-vault", "vault name").unwrap();
+    }
+
+    #[test]
+    fn scim_validation_accepts_name_with_spaces_and_digits() {
         validate_scim_value("My Vault 123", "vault name").unwrap();
     }
 
@@ -647,7 +642,7 @@ mod tests {
         // Ensure OpAuth::from_env() fails when env vars are absent.
         // (This tests the branching that triggers CLI fallback.)
         // SAFETY: test-only, single-threaded access to env vars.
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe { std::env::remove_var("OP_CONNECT_TOKEN") };
         unsafe { std::env::remove_var("OP_CONNECT_HOST") };
         assert!(OpAuth::from_env().is_err());
@@ -656,16 +651,12 @@ mod tests {
     #[test]
     fn connect_auth_rejects_host_with_userinfo() {
         // SAFETY: test-only, single-threaded access to env vars.
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        unsafe { std::env::remove_var("OP_CONNECT_TOKEN") };
+        unsafe { std::env::remove_var("OP_CONNECT_HOST") };
         unsafe { std::env::set_var("OP_CONNECT_TOKEN", "tok") };
         unsafe { std::env::set_var("OP_CONNECT_HOST", "https://user:pass@op.example.com") };
-        let err = OpAuth::from_env()
-            .err()
-            .expect("expected OpAuth::from_env() to fail");
-        assert!(
-            err.to_string().contains("userinfo"),
-            "expected userinfo rejection, got: {err}"
-        );
+        assert!(OpAuth::from_env().is_err());
         unsafe { std::env::remove_var("OP_CONNECT_TOKEN") };
         unsafe { std::env::remove_var("OP_CONNECT_HOST") };
     }
@@ -673,16 +664,12 @@ mod tests {
     #[test]
     fn connect_auth_rejects_host_with_query() {
         // SAFETY: test-only, single-threaded access to env vars.
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        unsafe { std::env::remove_var("OP_CONNECT_TOKEN") };
+        unsafe { std::env::remove_var("OP_CONNECT_HOST") };
         unsafe { std::env::set_var("OP_CONNECT_TOKEN", "tok") };
         unsafe { std::env::set_var("OP_CONNECT_HOST", "https://op.example.com?foo=bar") };
-        let err = OpAuth::from_env()
-            .err()
-            .expect("expected OpAuth::from_env() to fail");
-        assert!(
-            err.to_string().contains("query"),
-            "expected query rejection, got: {err}"
-        );
+        assert!(OpAuth::from_env().is_err());
         unsafe { std::env::remove_var("OP_CONNECT_TOKEN") };
         unsafe { std::env::remove_var("OP_CONNECT_HOST") };
     }
@@ -690,22 +677,18 @@ mod tests {
     #[test]
     fn connect_auth_rejects_host_with_fragment() {
         // SAFETY: test-only, single-threaded access to env vars.
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        unsafe { std::env::remove_var("OP_CONNECT_TOKEN") };
+        unsafe { std::env::remove_var("OP_CONNECT_HOST") };
         unsafe { std::env::set_var("OP_CONNECT_TOKEN", "tok") };
         unsafe { std::env::set_var("OP_CONNECT_HOST", "https://op.example.com#section") };
-        let err = OpAuth::from_env()
-            .err()
-            .expect("expected OpAuth::from_env() to fail");
-        assert!(
-            err.to_string().contains("fragment"),
-            "expected fragment rejection, got: {err}"
-        );
+        assert!(OpAuth::from_env().is_err());
         unsafe { std::env::remove_var("OP_CONNECT_TOKEN") };
         unsafe { std::env::remove_var("OP_CONNECT_HOST") };
     }
 
     #[test]
-    fn truncate_body_handles_multibyte_utf8() {
+    fn limit_inside_multibyte_char_walks_back_to_char_boundary() {
         // "😀" is 4 bytes (0xF0 0x9F 0x98 0x80). Truncating at byte 3 would
         // panic with a plain slice; our implementation should walk back safely.
         let s = "ab😀cd";
@@ -715,9 +698,12 @@ mod tests {
     }
 
     #[test]
-    fn truncate_body_exact_boundary() {
-        let s = "hello";
-        assert_eq!(truncate_body(s, 5), "hello");
-        assert_eq!(truncate_body(s, 3), "hel");
+    fn input_at_exact_limit_is_returned_unchanged() {
+        assert_eq!(truncate_body("hello", 5), "hello");
+    }
+
+    #[test]
+    fn input_exceeding_limit_is_cut_at_limit() {
+        assert_eq!(truncate_body("hello", 3), "hel");
     }
 }

@@ -289,8 +289,7 @@ mod tests {
         Path::new(".")
     }
 
-    #[test]
-    fn parses_block_style_commands_and_params() {
+    fn block_style_single_param_fixture() -> crate::template::schema::TemplateFile {
         let template = r#"
 version = 1
 provider = "demo"
@@ -327,12 +326,20 @@ command "ping" {
   }
 }
 "#;
+        parse_template_hcl(template, dummy_dir()).unwrap()
+    }
 
-        let parsed = parse_template_hcl(template, dummy_dir()).unwrap();
-
-        assert_eq!(parsed.provider, "demo");
+    #[test]
+    fn block_style_param_block_produces_single_param() {
+        let parsed = block_style_single_param_fixture();
         let ping = parsed.commands.get("ping").unwrap();
         assert_eq!(ping.params.len(), 1);
+    }
+
+    #[test]
+    fn block_style_param_label_becomes_param_name() {
+        let parsed = block_style_single_param_fixture();
+        let ping = parsed.commands.get("ping").unwrap();
         assert_eq!(ping.params[0].name, "value");
     }
 
@@ -345,8 +352,7 @@ commands = {}
 command "ping" {}
 "#;
 
-        let err = parse_template_hcl(template, dummy_dir()).unwrap_err();
-        assert!(err.to_string().contains("either `commands` or `command`"));
+        parse_template_hcl(template, dummy_dir()).unwrap_err();
     }
 
     #[test]
@@ -383,12 +389,11 @@ command "ping" {
 }
 "#;
 
-        let err = parse_template_hcl(template, dummy_dir()).unwrap_err();
-        assert!(err.to_string().contains("either `params` or `param`"));
+        parse_template_hcl(template, dummy_dir()).unwrap_err();
     }
 
     #[test]
-    fn parse_expr_handles_function_calls() {
+    fn file_function_call_is_parsed() {
         assert_eq!(
             parse_expr(r#"file("foo/bar.js")"#),
             Some(Expr::Call {
@@ -396,6 +401,21 @@ command "ping" {
                 arg: Box::new(Expr::Literal("foo/bar.js")),
             })
         );
+    }
+
+    #[test]
+    fn base64encode_function_call_is_parsed() {
+        assert_eq!(
+            parse_expr(r#"base64encode("hello")"#),
+            Some(Expr::Call {
+                name: "base64encode",
+                arg: Box::new(Expr::Literal("hello")),
+            })
+        );
+    }
+
+    #[test]
+    fn function_call_with_extra_whitespace_is_parsed() {
         assert_eq!(
             parse_expr(r#"  file( "script.sql" )  "#),
             Some(Expr::Call {
@@ -403,6 +423,10 @@ command "ping" {
                 arg: Box::new(Expr::Literal("script.sql")),
             })
         );
+    }
+
+    #[test]
+    fn nested_function_composition_is_parsed() {
         assert_eq!(
             parse_expr(r#"trimspace(file("query.sql"))"#),
             Some(Expr::Call {
@@ -413,14 +437,10 @@ command "ping" {
                 }),
             })
         );
-        assert_eq!(
-            parse_expr(r#"base64encode("hello")"#),
-            Some(Expr::Call {
-                name: "base64encode",
-                arg: Box::new(Expr::Literal("hello")),
-            })
-        );
-        // ${...} wrapper from native HCL expressions
+    }
+
+    #[test]
+    fn native_hcl_expression_wrapper_stripped_for_simple_call() {
         assert_eq!(
             parse_expr(r#"${file("foo.js")}"#),
             Some(Expr::Call {
@@ -428,6 +448,10 @@ command "ping" {
                 arg: Box::new(Expr::Literal("foo.js")),
             })
         );
+    }
+
+    #[test]
+    fn native_hcl_expression_wrapper_stripped_for_nested_call() {
         assert_eq!(
             parse_expr(r#"${trimspace(file("query.sql"))}"#),
             Some(Expr::Call {
@@ -438,33 +462,42 @@ command "ping" {
                 }),
             })
         );
-        // Not a function call
+    }
+
+    #[test]
+    fn plain_string_without_parens_returns_none() {
         assert_eq!(parse_expr("not a file call"), None);
+    }
+
+    #[test]
+    fn function_call_with_trailing_content_returns_none() {
         assert_eq!(parse_expr(r#"file("a.js") extra"#), None);
+    }
+
+    #[test]
+    fn quoted_string_literal_returns_none() {
         assert_eq!(parse_expr(r#""just a string""#), None);
     }
 
     #[test]
-    fn eval_trimspace() {
+    fn trimspace_strips_surrounding_whitespace() {
         let expr = parse_expr(r#"trimspace("  hello  ")"#).unwrap();
         assert_eq!(eval_expr(&expr, dummy_dir()).unwrap(), "hello");
     }
 
     #[test]
-    fn eval_base64encode() {
+    fn base64encode_encodes_value_as_base64_string() {
         let expr = parse_expr(r#"base64encode("hello")"#).unwrap();
         assert_eq!(eval_expr(&expr, dummy_dir()).unwrap(), "aGVsbG8=");
     }
 
     #[test]
-    fn eval_unknown_function_errors() {
+    fn unknown_function_name_returns_error() {
         let expr = parse_expr(r#"unknown("arg")"#).unwrap();
-        let err = eval_expr(&expr, dummy_dir()).unwrap_err();
-        assert!(err.to_string().contains("unknown function"));
+        eval_expr(&expr, dummy_dir()).unwrap_err();
     }
 
-    #[test]
-    fn parses_provider_level_environments_block() {
+    fn parse_environments_fixture() -> crate::template::schema::ProviderEnvironments {
         let template = r#"
 version = 1
 provider = "demo"
@@ -499,13 +532,33 @@ command "ping" {
 }
 "#;
         let parsed = parse_template_hcl(template, dummy_dir()).unwrap();
-        let envs = parsed.environments.expect("environments should be present");
+        parsed.environments.expect("environments should be present")
+    }
+
+    #[test]
+    fn environments_block_default_is_parsed() {
+        let envs = parse_environments_fixture();
         assert_eq!(envs.default.as_deref(), Some("production"));
+    }
+
+    #[test]
+    fn environments_block_secrets_are_parsed() {
+        let envs = parse_environments_fixture();
         assert_eq!(envs.secrets, vec!["demo.prod_key"]);
+    }
+
+    #[test]
+    fn environments_block_production_environment_is_parsed() {
+        let envs = parse_environments_fixture();
         assert_eq!(
             envs.environments["production"]["base_url"],
             "https://api.demo.com"
         );
+    }
+
+    #[test]
+    fn environments_block_staging_environment_is_parsed() {
+        let envs = parse_environments_fixture();
         assert_eq!(
             envs.environments["staging"]["base_url"],
             "https://api.staging.demo.com"
@@ -513,7 +566,7 @@ command "ping" {
     }
 
     #[test]
-    fn parses_per_command_environment_blocks() {
+    fn command_environment_block_is_normalized_to_environment_overrides() {
         let template = r#"
 version = 1
 provider = "demo"

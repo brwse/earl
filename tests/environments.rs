@@ -10,28 +10,51 @@ fn load_fixture() -> earl::template::schema::TemplateFile {
 }
 
 #[test]
-fn fixture_parses_and_validates() {
+fn fixture_parses_without_error() {
+    load_fixture();
+}
+
+#[test]
+fn fixture_validates_without_error() {
     let file = load_fixture();
     validate_template_file(&file).unwrap();
 }
 
 #[test]
-fn fixture_has_two_environments() {
+fn production_environment_is_present() {
     let file = load_fixture();
     let envs = file.environments.as_ref().unwrap();
     assert!(envs.environments.contains_key("production"));
+}
+
+#[test]
+fn staging_environment_is_present() {
+    let file = load_fixture();
+    let envs = file.environments.as_ref().unwrap();
     assert!(envs.environments.contains_key("staging"));
+}
+
+#[test]
+fn fixture_default_environment_is_production() {
+    let file = load_fixture();
+    let envs = file.environments.as_ref().unwrap();
     assert_eq!(envs.default.as_deref(), Some("production"));
 }
 
 #[test]
-fn fixture_environment_vars_accessible() {
+fn production_base_url_is_https_prod_example_com() {
     let file = load_fixture();
     let envs = file.environments.as_ref().unwrap();
     assert_eq!(
         envs.environments["production"]["base_url"],
         "https://prod.example.com"
     );
+}
+
+#[test]
+fn staging_base_url_is_https_staging_example_com() {
+    let file = load_fixture();
+    let envs = file.environments.as_ref().unwrap();
     assert_eq!(
         envs.environments["staging"]["base_url"],
         "https://staging.example.com"
@@ -61,8 +84,15 @@ fn select_uses_override_for_matching_env() {
         op,
         earl::template::schema::OperationTemplate::Bash(_)
     ));
-    // The staging override's script is "echo staging_override"
-    assert!(op.bash_script().unwrap().contains("staging_override"));
+}
+
+#[test]
+#[cfg(feature = "bash")]
+fn staging_override_script_is_echo_staging_override() {
+    let file = load_fixture();
+    let cmd = file.commands.get("override_in_staging").unwrap();
+    let (op, _) = select_for_env(cmd, Some("staging"));
+    assert_eq!(op.bash_script().unwrap(), "echo staging_override");
 }
 
 #[test]
@@ -79,60 +109,48 @@ fn select_falls_back_to_default_for_unrecognized_env() {
 }
 
 #[test]
-fn resolve_active_env_priority() {
+fn cli_arg_takes_priority_over_config_and_template_default() {
     assert_eq!(
         resolve_active_env(Some("cli"), Some("config"), Some("template")),
         Some("cli")
     );
+}
+
+#[test]
+fn config_used_when_no_cli_arg() {
     assert_eq!(
         resolve_active_env(None, Some("config"), Some("template")),
         Some("config")
     );
+}
+
+#[test]
+fn template_default_used_when_no_cli_or_config() {
     assert_eq!(
         resolve_active_env(None, None, Some("template")),
         Some("template")
     );
+}
+
+#[test]
+fn resolve_returns_none_when_all_sources_absent() {
     assert_eq!(resolve_active_env(None::<&str>, None, None), None);
 }
 
 #[test]
 #[cfg(feature = "bash")]
-fn command_with_no_overrides_always_uses_default() {
+fn command_without_overrides_returns_default_for_production_env() {
     let file = load_fixture();
     let cmd = file.commands.get("echo_env").unwrap();
-    let (op_none, _) = select_for_env(cmd, None);
     let (op_prod, _) = select_for_env(cmd, Some("production"));
-    let (op_stg, _) = select_for_env(cmd, Some("staging"));
-    // echo_env has no per-command overrides, so all three should return the same operation
-    assert_eq!(
-        op_none.bash_script().unwrap(),
-        op_prod.bash_script().unwrap()
-    );
-    assert_eq!(
-        op_none.bash_script().unwrap(),
-        op_stg.bash_script().unwrap()
-    );
+    assert_eq!(op_prod.bash_script().unwrap(), "echo {{ vars.label }}");
 }
 
-// ── ProviderEnvironments struct construction ──────────────────────────────
-
 #[test]
-fn provider_environments_struct_constructed_correctly() {
-    // Verify ProviderEnvironments fields are accessible as expected.
-    // Actual redaction behaviour (that resolve_vars tracks values) is
-    // covered by the builder unit test `resolve_vars_resolves_and_tracks_values`.
-    use earl::template::schema::ProviderEnvironments;
-    use std::collections::BTreeMap;
-
-    let mut staging_vars: BTreeMap<String, String> = BTreeMap::new();
-    staging_vars.insert("token".to_string(), "super_secret_value".to_string());
-
-    let pe = ProviderEnvironments {
-        default: None,
-        secrets: vec![],
-        environments: BTreeMap::from([("staging".to_string(), staging_vars)]),
-    };
-
-    assert!(pe.environments.contains_key("staging"));
-    assert_eq!(pe.environments["staging"]["token"], "super_secret_value");
+#[cfg(feature = "bash")]
+fn command_without_overrides_returns_default_for_staging_env() {
+    let file = load_fixture();
+    let cmd = file.commands.get("echo_env").unwrap();
+    let (op_stg, _) = select_for_env(cmd, Some("staging"));
+    assert_eq!(op_stg.bash_script().unwrap(), "echo {{ vars.label }}");
 }

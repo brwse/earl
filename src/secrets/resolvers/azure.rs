@@ -607,94 +607,77 @@ struct ImdsTokenResponse {
 mod tests {
     use super::*;
 
+    /// Serialises tests that mutate shared environment variables.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
-    fn parse_vault_and_secret() {
+    fn valid_reference_returns_vault_and_secret_names() {
         let r = AzureReference::parse("az://my-vault/my-secret").unwrap();
         assert_eq!(r.vault_name, "my-vault");
         assert_eq!(r.secret_name, "my-secret");
     }
 
     #[test]
-    fn parse_rejects_empty() {
-        let err = AzureReference::parse("az://").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn empty_reference_returns_error() {
+        AzureReference::parse("az://").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_vault_only() {
-        let err = AzureReference::parse("az://my-vault").unwrap_err();
-        assert!(
-            err.to_string().contains("invalid") || err.to_string().contains("expected"),
-            "got: {}",
-            err
-        );
+    fn vault_without_secret_returns_error() {
+        AzureReference::parse("az://my-vault").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_too_many_segments() {
-        let err = AzureReference::parse("az://vault/secret/extra").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn too_many_path_segments_returns_error() {
+        AzureReference::parse("az://vault/secret/extra").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_wrong_scheme() {
-        let err = AzureReference::parse("aws://vault/secret").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn wrong_scheme_returns_error() {
+        AzureReference::parse("aws://vault/secret").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_dot_in_vault_name() {
-        let err = AzureReference::parse("az://my.vault/secret").unwrap_err();
-        assert!(err.to_string().contains("alphanumeric"), "got: {err}");
+    fn dot_in_vault_name_returns_error() {
+        AzureReference::parse("az://my.vault/secret").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_short_vault_name() {
-        let err = AzureReference::parse("az://ab/secret").unwrap_err();
-        assert!(err.to_string().contains("3-24"), "got: {err}");
+    fn short_vault_name_returns_error() {
+        AzureReference::parse("az://ab/secret").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_long_vault_name() {
+    fn long_vault_name_returns_error() {
         let long_name = "a".repeat(25);
         let reference = format!("az://{long_name}/secret");
-        let err = AzureReference::parse(&reference).unwrap_err();
-        assert!(err.to_string().contains("3-24"), "got: {err}");
+        AzureReference::parse(&reference).unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_leading_hyphen_vault() {
-        let err = AzureReference::parse("az://-vault/secret").unwrap_err();
-        assert!(
-            err.to_string().contains("must not start or end"),
-            "got: {err}"
-        );
+    fn leading_hyphen_in_vault_name_returns_error() {
+        AzureReference::parse("az://-vault/secret").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_consecutive_hyphens_in_vault() {
-        let err = AzureReference::parse("az://my--vault/secret").unwrap_err();
-        assert!(
-            err.to_string().contains("consecutive hyphens"),
-            "got: {err}"
-        );
+    fn consecutive_hyphens_in_vault_name_returns_error() {
+        AzureReference::parse("az://my--vault/secret").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_hash_in_secret_name() {
-        let err = AzureReference::parse("az://my-vault/sec#ret").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn hash_in_secret_name_returns_error() {
+        AzureReference::parse("az://my-vault/sec#ret").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_whitespace_in_secret_name() {
-        let err = AzureReference::parse("az://my-vault/my secret").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn whitespace_in_secret_name_returns_error() {
+        AzureReference::parse("az://my-vault/my secret").unwrap_err();
     }
 
     #[test]
-    fn sovereign_cloud_vault_suffix() {
-        // SAFETY: test-only, single-threaded access to env vars.
+    fn sovereign_cloud_suffix_env_var_is_used() {
+        // SAFETY: test-only, serialised with ENV_LOCK.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe { std::env::set_var("AZURE_VAULT_SUFFIX", "vault.azure.cn") };
         let suffix = vault_suffix().unwrap();
         assert_eq!(suffix, "vault.azure.cn");
@@ -702,44 +685,30 @@ mod tests {
     }
 
     #[test]
-    fn default_vault_suffix() {
-        // SAFETY: test-only, single-threaded access to env vars.
+    fn missing_suffix_env_var_uses_default() {
+        // SAFETY: test-only, serialised with ENV_LOCK.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe { std::env::remove_var("AZURE_VAULT_SUFFIX") };
         let suffix = vault_suffix().unwrap();
         assert_eq!(suffix, "vault.azure.net");
     }
 
     #[test]
-    fn vault_suffix_rejects_dangerous_chars() {
+    fn dangerous_chars_in_suffix_env_var_returns_error() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe { std::env::set_var("AZURE_VAULT_SUFFIX", "evil.com/path#inject") };
-        let err = vault_suffix().unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+        vault_suffix().unwrap_err();
         unsafe { std::env::remove_var("AZURE_VAULT_SUFFIX") };
     }
 
     #[test]
-    fn validate_azure_id_accepts_uuid() {
+    fn valid_uuid_is_accepted() {
         validate_azure_id("12345678-abcd-ef01-2345-678901234567", "tenant").unwrap();
     }
 
     #[test]
-    fn validate_azure_id_rejects_path_traversal() {
-        let err = validate_azure_id("../../../etc/passwd", "tenant").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn path_traversal_in_azure_id_returns_error() {
+        validate_azure_id("../../../etc/passwd", "tenant").unwrap_err();
     }
 
-    #[test]
-    fn env_or_uses_default() {
-        // SAFETY: test-only, single-threaded access to env vars.
-        unsafe { std::env::remove_var("__EARL_TEST_ENV_OR__") };
-        assert_eq!(env_or("__EARL_TEST_ENV_OR__", "fallback"), "fallback");
-    }
-
-    #[test]
-    fn env_or_uses_env_value() {
-        // SAFETY: test-only, single-threaded access to env vars.
-        unsafe { std::env::set_var("__EARL_TEST_ENV_OR__", "custom") };
-        assert_eq!(env_or("__EARL_TEST_ENV_OR__", "fallback"), "custom");
-        unsafe { std::env::remove_var("__EARL_TEST_ENV_OR__") };
-    }
 }

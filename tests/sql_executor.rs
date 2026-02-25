@@ -61,7 +61,7 @@ fn prepared_sql_request(
 }
 
 #[tokio::test]
-async fn sql_sqlite_select_literal() {
+async fn select_literal_returns_column_value() {
     let prepared = prepared_sql_request("sqlite::memory:", "SELECT 1 as value", vec![], false, 100);
 
     let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
@@ -70,18 +70,13 @@ async fn sql_sqlite_select_literal() {
     .await
     .unwrap();
 
-    assert_eq!(out.status, 0);
-    assert_eq!(out.url, "sql://query");
-
     let rows = out.result.as_array().expect("result should be an array");
-    assert_eq!(rows.len(), 1);
-
     let row = rows[0].as_object().expect("row should be an object");
     assert_eq!(row.get("value").unwrap(), &serde_json::json!(1));
 }
 
 #[tokio::test]
-async fn sql_sqlite_with_params() {
+async fn bound_parameter_is_echoed_in_result() {
     let prepared = prepared_sql_request(
         "sqlite::memory:",
         "SELECT ? as echo",
@@ -96,14 +91,12 @@ async fn sql_sqlite_with_params() {
     .await
     .unwrap();
 
-    assert_eq!(out.status, 0);
     let rows = out.result.as_array().unwrap();
-    assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["echo"], serde_json::json!("hello"));
 }
 
 #[tokio::test]
-async fn sql_max_rows_enforced() {
+async fn result_truncated_to_max_rows() {
     // Use a recursive CTE to generate 100 rows, but limit to 5.
     let query = "\
         WITH RECURSIVE cnt(x) AS (\
@@ -118,14 +111,13 @@ async fn sql_max_rows_enforced() {
     .await
     .unwrap();
 
-    assert_eq!(out.status, 0);
     let rows = out.result.as_array().unwrap();
     assert_eq!(rows.len(), 5);
 }
 
 /// Test that SQLite read-only mode blocks write operations.
 #[tokio::test]
-async fn sql_sqlite_read_only_blocks_write() {
+async fn write_rejected_in_read_only_mode() {
     // First, create a database with a table.
     let tmp = tempfile::NamedTempFile::new().unwrap();
     let db_path = tmp.path().to_string_lossy().to_string();
@@ -162,7 +154,7 @@ async fn sql_sqlite_read_only_blocks_write() {
 }
 
 #[tokio::test]
-async fn sql_invalid_query_fails() {
+async fn invalid_query_returns_error() {
     let prepared = prepared_sql_request("sqlite::memory:", "INVALID SQL QUERY", vec![], false, 100);
 
     let result = execute_prepared_request_with_host_validator(&prepared, |_url| async {

@@ -5,7 +5,7 @@ use earl::template::schema::{ResultDecode, ResultTemplate};
 use serde_json::{Map, json};
 
 #[test]
-fn renders_human_output_with_alias() {
+fn result_alias_exposes_result_to_template_context() {
     let template = ResultTemplate {
         decode: ResultDecode::Json,
         extract: None,
@@ -21,18 +21,43 @@ fn renders_human_output_with_alias() {
     assert_eq!(out, "id=123 q=hello");
 }
 
-#[test]
-fn renders_structured_json_output_shape() {
-    let execution = ExecutionResult {
+fn default_execution() -> ExecutionResult {
+    ExecutionResult {
         status: 200,
         url: "https://api.example.com".to_string(),
-        result: json!({"ok": true}),
-        decoded: json!({"raw": "value"}),
-    };
+        result: json!({}),
+        decoded: json!({}),
+    }
+}
 
-    let out = render_json_output(&execution);
+#[test]
+fn json_output_includes_status_code() {
+    let out = render_json_output(&default_execution());
     assert_eq!(out["status"], json!(200));
+}
+
+#[test]
+fn json_output_includes_url() {
+    let out = render_json_output(&default_execution());
     assert_eq!(out["url"], json!("https://api.example.com"));
+}
+
+#[test]
+fn json_output_includes_result() {
+    let execution = ExecutionResult {
+        result: json!({"ok": true}),
+        ..default_execution()
+    };
+    let out = render_json_output(&execution);
     assert_eq!(out["result"]["ok"], json!(true));
+}
+
+#[test]
+fn json_output_includes_decoded() {
+    let execution = ExecutionResult {
+        decoded: json!({"raw": "value"}),
+        ..default_execution()
+    };
+    let out = render_json_output(&execution);
     assert_eq!(out["decoded"]["raw"], json!("value"));
 }

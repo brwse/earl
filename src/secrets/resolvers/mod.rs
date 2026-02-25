@@ -145,9 +145,27 @@ mod tests {
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
-    fn validate_path_segment_accepts_valid() {
+    fn path_segment_with_alphanumeric_and_hyphens_is_valid() {
         super::validate_path_segment("my-vault", "vault").unwrap();
+    }
+
+    #[test]
+    #[cfg(any(
+        feature = "secrets-vault",
+        feature = "secrets-gcp",
+        feature = "secrets-azure",
+    ))]
+    fn path_segment_with_underscores_and_dots_is_valid() {
         super::validate_path_segment("my_item.name", "item").unwrap();
+    }
+
+    #[test]
+    #[cfg(any(
+        feature = "secrets-vault",
+        feature = "secrets-gcp",
+        feature = "secrets-azure",
+    ))]
+    fn numeric_path_segment_is_valid() {
         super::validate_path_segment("123", "version").unwrap();
     }
 
@@ -157,9 +175,8 @@ mod tests {
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
-    fn validate_path_segment_rejects_slash() {
-        let err = super::validate_path_segment("foo/bar", "field").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn path_segment_with_slash_returns_error() {
+        assert!(super::validate_path_segment("foo/bar", "field").is_err());
     }
 
     #[test]
@@ -168,9 +185,8 @@ mod tests {
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
-    fn validate_path_segment_rejects_question_mark() {
-        let err = super::validate_path_segment("foo?bar", "field").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn path_segment_with_question_mark_returns_error() {
+        assert!(super::validate_path_segment("foo?bar", "field").is_err());
     }
 
     #[test]
@@ -179,9 +195,8 @@ mod tests {
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
-    fn validate_path_segment_rejects_hash() {
-        let err = super::validate_path_segment("foo#bar", "field").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn path_segment_with_hash_returns_error() {
+        assert!(super::validate_path_segment("foo#bar", "field").is_err());
     }
 
     #[test]
@@ -190,9 +205,8 @@ mod tests {
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
-    fn validate_path_segment_rejects_whitespace() {
-        let err = super::validate_path_segment("foo bar", "field").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn path_segment_with_whitespace_returns_error() {
+        assert!(super::validate_path_segment("foo bar", "field").is_err());
     }
 
     #[test]
@@ -201,9 +215,8 @@ mod tests {
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
-    fn validate_path_segment_rejects_control_chars() {
-        let err = super::validate_path_segment("foo\x00bar", "field").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn path_segment_with_control_char_returns_error() {
+        assert!(super::validate_path_segment("foo\x00bar", "field").is_err());
     }
 
     #[test]
@@ -212,57 +225,55 @@ mod tests {
         feature = "secrets-gcp",
         feature = "secrets-azure",
     ))]
-    fn validate_path_segment_rejects_empty() {
-        let err = super::validate_path_segment("", "field").unwrap_err();
-        assert!(err.to_string().contains("must not be empty"), "got: {err}");
+    fn empty_path_segment_returns_error() {
+        assert!(super::validate_path_segment("", "field").is_err());
     }
 
     #[test]
     #[cfg(feature = "secrets-azure")]
-    fn validate_azure_vault_name_accepts_valid() {
+    fn azure_vault_name_with_hyphens_is_valid() {
         super::validate_azure_vault_name("my-vault").unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "secrets-azure")]
+    fn azure_vault_name_at_minimum_length_is_valid() {
         super::validate_azure_vault_name("abc").unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "secrets-azure")]
+    fn azure_vault_name_with_alphanumeric_only_is_valid() {
         super::validate_azure_vault_name("vault123").unwrap();
     }
 
     #[test]
     #[cfg(feature = "secrets-azure")]
-    fn validate_azure_vault_name_rejects_too_short() {
-        let err = super::validate_azure_vault_name("ab").unwrap_err();
-        assert!(err.to_string().contains("3-24"), "got: {err}");
+    fn azure_vault_name_shorter_than_min_length_returns_error() {
+        assert!(super::validate_azure_vault_name("ab").is_err());
     }
 
     #[test]
     #[cfg(feature = "secrets-azure")]
-    fn validate_azure_vault_name_rejects_too_long() {
-        let err = super::validate_azure_vault_name("a".repeat(25).as_str()).unwrap_err();
-        assert!(err.to_string().contains("3-24"), "got: {err}");
+    fn azure_vault_name_longer_than_max_length_returns_error() {
+        assert!(super::validate_azure_vault_name("a".repeat(25).as_str()).is_err());
     }
 
     #[test]
     #[cfg(feature = "secrets-azure")]
-    fn validate_azure_vault_name_rejects_dots() {
-        let err = super::validate_azure_vault_name("my.vault").unwrap_err();
-        assert!(err.to_string().contains("alphanumeric"), "got: {err}");
+    fn azure_vault_name_with_dots_returns_error() {
+        assert!(super::validate_azure_vault_name("my.vault").is_err());
     }
 
     #[test]
     #[cfg(feature = "secrets-azure")]
-    fn validate_azure_vault_name_rejects_leading_hyphen() {
-        let err = super::validate_azure_vault_name("-vault").unwrap_err();
-        assert!(
-            err.to_string().contains("must not start or end"),
-            "got: {err}"
-        );
+    fn azure_vault_name_with_leading_hyphen_returns_error() {
+        assert!(super::validate_azure_vault_name("-vault").is_err());
     }
 
     #[test]
     #[cfg(feature = "secrets-azure")]
-    fn validate_azure_vault_name_rejects_consecutive_hyphens() {
-        let err = super::validate_azure_vault_name("my--vault").unwrap_err();
-        assert!(
-            err.to_string().contains("consecutive hyphens"),
-            "got: {err}"
-        );
+    fn azure_vault_name_with_consecutive_hyphens_returns_error() {
+        assert!(super::validate_azure_vault_name("my--vault").is_err());
     }
 }

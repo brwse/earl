@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 // ── render_streaming_output tests ───────────────────────────
 
 #[tokio::test]
-async fn render_streaming_output_processes_json_chunks() {
+async fn json_chunks_are_processed_without_error() {
     let (tx, rx) = mpsc::channel::<StreamChunk>(16);
 
     tokio::spawn(async move {
@@ -39,7 +39,7 @@ async fn render_streaming_output_processes_json_chunks() {
 }
 
 #[tokio::test]
-async fn render_streaming_output_skips_malformed_json_chunks() {
+async fn malformed_json_chunk_is_skipped_and_processing_continues() {
     let (tx, rx) = mpsc::channel::<StreamChunk>(16);
 
     tokio::spawn(async move {
@@ -71,7 +71,7 @@ async fn render_streaming_output_skips_malformed_json_chunks() {
 }
 
 #[tokio::test]
-async fn render_streaming_output_handles_empty_channel() {
+async fn empty_channel_returns_ok() {
     let (_tx, rx) = mpsc::channel::<StreamChunk>(1);
     drop(_tx);
 

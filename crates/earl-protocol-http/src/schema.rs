@@ -54,37 +54,3 @@ pub struct GraphqlTemplate {
     #[rkyv(with = AsJson)]
     pub variables: Option<Value>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn http_operation_defaults_stream_false() {
-        let json = r#"{"method":"GET","url":"https://example.com"}"#;
-        let op: HttpOperationTemplate = serde_json::from_str(json).unwrap();
-        assert!(!op.stream);
-    }
-
-    #[test]
-    fn http_operation_accepts_stream_true() {
-        let json = r#"{"method":"GET","url":"https://example.com","stream":true}"#;
-        let op: HttpOperationTemplate = serde_json::from_str(json).unwrap();
-        assert!(op.stream);
-    }
-
-    #[test]
-    fn graphql_operation_defaults_stream_false() {
-        let json = r#"{"url":"https://example.com","graphql":{"query":"{ users { id } }"}}"#;
-        let op: GraphqlOperationTemplate = serde_json::from_str(json).unwrap();
-        assert!(!op.stream);
-    }
-
-    #[test]
-    fn graphql_operation_accepts_stream_true() {
-        let json =
-            r#"{"url":"https://example.com","stream":true,"graphql":{"query":"{ users { id } }"}}"#;
-        let op: GraphqlOperationTemplate = serde_json::from_str(json).unwrap();
-        assert!(op.stream);
-    }
-}

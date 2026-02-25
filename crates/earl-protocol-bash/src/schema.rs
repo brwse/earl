@@ -37,22 +37,3 @@ pub struct BashSandboxTemplate {
     pub max_memory_bytes: Option<u64>,
     pub max_cpu_time_ms: Option<u64>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bash_operation_defaults_stream_false() {
-        let json = r#"{"bash":{"script":"echo hello"}}"#;
-        let op: BashOperationTemplate = serde_json::from_str(json).unwrap();
-        assert!(!op.stream);
-    }
-
-    #[test]
-    fn bash_operation_accepts_stream_true() {
-        let json = r#"{"stream":true,"bash":{"script":"echo hello"}}"#;
-        let op: BashOperationTemplate = serde_json::from_str(json).unwrap();
-        assert!(op.stream);
-    }
-}

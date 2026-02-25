@@ -44,7 +44,7 @@ fn make_config(profile_name: &str, profile: OAuthProfile) -> Config {
 }
 
 #[tokio::test]
-async fn client_credentials_login_and_access_token_work() {
+async fn client_credentials_returns_access_token() {
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
@@ -68,14 +68,110 @@ async fn client_credentials_login_and_access_token_work() {
     let oauth = OAuthManager::new(cfg, secrets).unwrap();
     let token = oauth.access_token_for_profile("github").await.unwrap();
     assert_eq!(token, "access-cc");
+}
+
+#[tokio::test]
+async fn client_credentials_sets_logged_in_status() {
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/token");
+            then.status(200).json_body_obj(&serde_json::json!({
+                "access_token": "access-cc",
+                "token_type": "Bearer",
+                "expires_in": 3600
+            }));
+        })
+        .await;
+
+    let ws = common::temp_workspace();
+    let secrets =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    let cfg = make_config(
+        "github",
+        make_profile(OAuthFlow::ClientCredentials, &server.base_url()),
+    );
+
+    let oauth = OAuthManager::new(cfg, secrets).unwrap();
+    oauth.access_token_for_profile("github").await.unwrap();
 
     let status = oauth.status("github").unwrap();
     assert!(status.logged_in);
+}
+
+#[tokio::test]
+async fn client_credentials_records_scopes_in_status() {
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/token");
+            then.status(200).json_body_obj(&serde_json::json!({
+                "access_token": "access-cc",
+                "token_type": "Bearer",
+                "expires_in": 3600
+            }));
+        })
+        .await;
+
+    let ws = common::temp_workspace();
+    let secrets =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    let cfg = make_config(
+        "github",
+        make_profile(OAuthFlow::ClientCredentials, &server.base_url()),
+    );
+
+    let oauth = OAuthManager::new(cfg, secrets).unwrap();
+    oauth.access_token_for_profile("github").await.unwrap();
+
+    let status = oauth.status("github").unwrap();
     assert_eq!(status.scopes, vec!["repo".to_string()]);
 }
 
 #[tokio::test]
-async fn refresh_flow_rotates_tokens() {
+async fn refresh_flow_returns_new_access_token() {
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/token");
+            then.status(200).json_body_obj(&serde_json::json!({
+                "access_token": "new-access",
+                "refresh_token": "new-refresh",
+                "token_type": "Bearer",
+                "expires_in": 3600
+            }));
+        })
+        .await;
+
+    let ws = common::temp_workspace();
+    let secrets =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    let cfg = make_config(
+        "github",
+        make_profile(OAuthFlow::AuthCodePkce, &server.base_url()),
+    );
+
+    let store = OAuthTokenStore::new(&secrets);
+    store
+        .save(
+            "github",
+            &StoredOAuthToken {
+                access_token: "old-access".to_string(),
+                refresh_token: Some("old-refresh".to_string()),
+                token_type: Some("Bearer".to_string()),
+                expires_at: Some(Utc::now() - Duration::minutes(5)),
+                scopes: vec!["repo".to_string()],
+            },
+        )
+        .unwrap();
+
+    let oauth = OAuthManager::new(cfg, secrets).unwrap();
+    let token = oauth.access_token_for_profile("github").await.unwrap();
+    assert_eq!(token, "new-access");
+}
+
+#[tokio::test]
+async fn refresh_flow_persists_rotated_refresh_token() {
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
@@ -115,11 +211,8 @@ async fn refresh_flow_rotates_tokens() {
         .unwrap();
 
     let oauth = OAuthManager::new(cfg, secrets).unwrap();
-    let token = oauth.access_token_for_profile("github").await.unwrap();
-    assert_eq!(token, "new-access");
+    oauth.access_token_for_profile("github").await.unwrap();
 
-    let updated = oauth.status("github").unwrap();
-    assert!(updated.logged_in);
     let raw = mem_store
         .get_secret("oauth2.github.token")
         .unwrap()
@@ -216,5 +309,52 @@ async fn auth_code_falls_back_to_device_flow_when_callback_fails() {
 
     let status = oauth.status("hybrid").unwrap();
     assert!(status.logged_in);
+}
+
+#[tokio::test]
+async fn auth_code_fallback_to_device_flow_records_scopes() {
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/device");
+            then.status(200).json_body_obj(&serde_json::json!({
+                "device_code": "device-2",
+                "user_code": "IJKL-MNOP",
+                "verification_uri": "https://example.com/activate",
+                "expires_in": 600,
+                "interval": 1
+            }));
+        })
+        .await;
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/token");
+            then.status(200).json_body_obj(&serde_json::json!({
+                "access_token": "fallback-access",
+                "token_type": "Bearer",
+                "expires_in": 3600
+            }));
+        })
+        .await;
+
+    let ws = common::temp_workspace();
+    let secrets =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+    let cfg = make_config(
+        "hybrid",
+        make_profile(OAuthFlow::AuthCodePkce, &server.base_url()),
+    );
+
+    let browser_opener: BrowserOpener = Arc::new(|_| Ok(()));
+    let callback_waiter: CallbackWaiter = Arc::new(|_redirect_url| {
+        let fut: CallbackFuture =
+            Box::pin(async { Ok(("code-123".to_string(), "wrong-state".to_string())) });
+        fut
+    });
+
+    let oauth = OAuthManager::with_hooks(cfg, secrets, browser_opener, callback_waiter).unwrap();
+    oauth.login("hybrid").await.unwrap();
+
+    let status = oauth.status("hybrid").unwrap();
     assert_eq!(status.scopes, vec!["repo".to_string()]);
 }

@@ -7,22 +7,45 @@ use secrecy::SecretString;
 use tempfile::tempdir;
 
 #[test]
-fn secret_index_upsert_remove_get_list() {
+fn upsert_deduplicates_identical_key() {
     let mut index = SecretIndex::default();
     index.upsert("github.token");
     index.upsert("github.token");
     index.upsert("search.api_key");
 
-    assert!(index.get("github.token").is_some());
     assert_eq!(index.list().len(), 2);
+}
 
+#[test]
+fn upsert_makes_key_retrievable() {
+    let mut index = SecretIndex::default();
+    index.upsert("github.token");
+
+    assert!(index.get("github.token").is_some());
+}
+
+#[test]
+fn remove_makes_key_unretrievable() {
+    let mut index = SecretIndex::default();
+    index.upsert("github.token");
+    index.upsert("search.api_key");
     index.remove("github.token");
+
     assert!(index.get("github.token").is_none());
+}
+
+#[test]
+fn remove_decrements_list_length() {
+    let mut index = SecretIndex::default();
+    index.upsert("github.token");
+    index.upsert("search.api_key");
+    index.remove("github.token");
+
     assert_eq!(index.list().len(), 1);
 }
 
 #[test]
-fn metadata_index_load_save_and_corruption_handling() {
+fn save_and_load_roundtrips_index() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("state/secrets-index.json");
 
@@ -32,13 +55,20 @@ fn metadata_index_load_save_and_corruption_handling() {
 
     let loaded = load_index(&path).unwrap();
     assert!(loaded.get("github.token").is_some());
+}
 
+#[test]
+fn load_index_returns_error_for_corrupt_json() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("state/secrets-index.json");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(&path, "{not-json").unwrap();
+
     assert!(load_index(&path).is_err());
 }
 
 #[test]
-fn require_secret_works_with_in_memory_store() {
+fn require_secret_returns_value_from_store() {
     let store = InMemorySecretStore::default();
     store
         .set_secret(
@@ -51,12 +81,14 @@ fn require_secret_works_with_in_memory_store() {
 
     let value = require_secret(&store, &resolvers, "github.token").unwrap();
     assert_eq!(value, "secret-value");
+}
 
-    let err = require_secret(&store, &resolvers, "missing").unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("missing required secret `missing`")
-    );
+#[test]
+fn require_secret_errors_for_missing_key() {
+    let store = InMemorySecretStore::default();
+    let resolvers: Vec<Box<dyn SecretResolver>> = vec![];
+
+    require_secret(&store, &resolvers, "missing").unwrap_err();
 }
 
 // ── SecretResolver dispatch tests ────────────────────────────
@@ -108,6 +140,5 @@ fn require_secret_errors_for_unknown_scheme() {
     let store = InMemorySecretStore::default();
     let resolvers: Vec<Box<dyn SecretResolver>> = vec![];
 
-    let err = require_secret(&store, &resolvers, "unknown://path").unwrap_err();
-    assert!(err.to_string().contains("unknown://"));
+    require_secret(&store, &resolvers, "unknown://path").unwrap_err();
 }

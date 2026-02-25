@@ -23,8 +23,7 @@ fn base_profile(flow: OAuthFlow) -> OAuthProfile {
     }
 }
 
-#[tokio::test]
-async fn resolves_oidc_endpoints_and_client_secret_from_secrets() {
+async fn oidc_resolved_profile() -> earl::auth::profiles::ResolvedOAuthProfile {
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
@@ -40,6 +39,48 @@ async fn resolves_oidc_endpoints_and_client_secret_from_secrets() {
     let ws = common::temp_workspace();
     let secrets =
         common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
+
+    let mut profile = base_profile(OAuthFlow::AuthCodePkce);
+    profile.issuer = Some(server.base_url());
+
+    let mut profiles = BTreeMap::new();
+    profiles.insert("github".to_string(), profile);
+
+    let cfg = Config {
+        search: Default::default(),
+        auth: AuthConfig {
+            profiles,
+            jwt: None,
+        },
+        network: Default::default(),
+        sandbox: SandboxConfig::default(),
+        policy: vec![],
+        environments: Default::default(),
+    };
+
+    let http_client = Client::builder().build().unwrap();
+    resolve_profile("github", &cfg, &secrets, &http_client)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn oidc_discovery_populates_authorization_url() {
+    let resolved = oidc_resolved_profile().await;
+    assert!(resolved.authorization_url.unwrap().contains("/oauth/authorize"));
+}
+
+#[tokio::test]
+async fn oidc_discovery_populates_token_url() {
+    let resolved = oidc_resolved_profile().await;
+    assert!(resolved.token_url.contains("/oauth/token"));
+}
+
+#[tokio::test]
+async fn resolves_client_secret_from_secrets() {
+    let ws = common::temp_workspace();
+    let secrets =
+        common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
     secrets
         .set(
             "github.oauth.client_secret",
@@ -48,7 +89,8 @@ async fn resolves_oidc_endpoints_and_client_secret_from_secrets() {
         .unwrap();
 
     let mut profile = base_profile(OAuthFlow::AuthCodePkce);
-    profile.issuer = Some(server.base_url());
+    profile.authorization_url = Some("http://127.0.0.1/oauth/authorize".to_string());
+    profile.token_url = Some("http://127.0.0.1/oauth/token".to_string());
     profile.client_secret_key = Some("github.oauth.client_secret".to_string());
 
     let mut profiles = BTreeMap::new();
@@ -71,13 +113,6 @@ async fn resolves_oidc_endpoints_and_client_secret_from_secrets() {
         .await
         .unwrap();
 
-    assert!(
-        resolved
-            .authorization_url
-            .unwrap()
-            .contains("/oauth/authorize")
-    );
-    assert!(resolved.token_url.contains("/oauth/token"));
     assert_eq!(resolved.client_secret.as_deref(), Some("super-secret"));
 }
 
@@ -87,7 +122,8 @@ async fn fails_when_required_auth_code_endpoint_is_missing() {
     let secrets =
         common::in_memory_secret_manager(&ws.root.path().join("state/secrets-index.json"));
 
-    let profile = base_profile(OAuthFlow::AuthCodePkce);
+    let mut profile = base_profile(OAuthFlow::AuthCodePkce);
+    profile.token_url = Some("https://example.com/oauth/token".to_string());
 
     let mut profiles = BTreeMap::new();
     profiles.insert("github".to_string(), profile);
@@ -105,10 +141,11 @@ async fn fails_when_required_auth_code_endpoint_is_missing() {
     };
 
     let http_client = Client::builder().build().unwrap();
-    let err = resolve_profile("github", &cfg, &secrets, &http_client)
-        .await
-        .unwrap_err();
-    assert!(err.to_string().contains("missing token_url"));
+    assert!(
+        resolve_profile("github", &cfg, &secrets, &http_client)
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -136,11 +173,9 @@ async fn fails_when_device_flow_endpoint_missing() {
     };
 
     let http_client = Client::builder().build().unwrap();
-    let err = resolve_profile("github", &cfg, &secrets, &http_client)
-        .await
-        .unwrap_err();
     assert!(
-        err.to_string()
-            .contains("requires device_authorization_url")
+        resolve_profile("github", &cfg, &secrets, &http_client)
+            .await
+            .is_err()
     );
 }

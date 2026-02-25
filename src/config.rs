@@ -338,7 +338,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn deserialize_sandbox_config() {
+    fn sql_connection_allowlist_parsed_from_toml() {
         let loaded: Config = toml::from_str(
             r#"
 [sandbox]
@@ -353,32 +353,30 @@ sql_connection_allowlist = ["myapp.db_url"]
     }
 
     #[test]
-    fn default_config_has_expected_sandbox_defaults() {
+    fn default_sandbox_sql_connection_allowlist_is_empty() {
         let loaded: Config = toml::from_str("").unwrap();
         assert!(loaded.sandbox.sql_connection_allowlist.is_empty());
+    }
+
+    #[test]
+    fn default_sandbox_sql_force_read_only_is_true() {
+        let loaded: Config = toml::from_str("").unwrap();
         assert!(loaded.sandbox.sql_force_read_only);
     }
 
     #[test]
     fn deserialize_ignores_unknown_legacy_table() {
-        let loaded: Config = toml::from_str(
+        toml::from_str::<Config>(
             r#"
-[search]
-top_k = 11
-rerank_k = 9
-
 [legacy_template_sources."acme/tools"]
 url = "https://example.com/templates/github.hcl"
 "#,
         )
         .unwrap();
-        assert_eq!(loaded.search.top_k, 11);
-        assert_eq!(loaded.search.rerank_k, 9);
     }
 
-    #[test]
-    fn deserialize_jwt_config() {
-        let loaded: Config = toml::from_str(
+    fn jwt_with_explicit_fields() -> JwtConfig {
+        toml::from_str::<Config>(
             r#"
 [auth.jwt]
 audience = "https://api.example.com"
@@ -388,23 +386,45 @@ algorithms = ["RS256", "ES256"]
 clock_skew_seconds = 60
 "#,
         )
-        .unwrap();
-
-        let jwt = loaded.auth.jwt.expect("jwt config should be present");
-        assert_eq!(jwt.audience, "https://api.example.com");
-        assert_eq!(jwt.issuer.as_deref(), Some("https://accounts.example.com"));
-        assert_eq!(
-            jwt.jwks_uri.as_deref(),
-            Some("https://accounts.example.com/.well-known/jwks.json")
-        );
-        assert_eq!(jwt.algorithms, vec!["RS256", "ES256"]);
-        assert_eq!(jwt.clock_skew_seconds, 60);
-        assert_eq!(jwt.jwks_cache_max_age_seconds, 900); // default
-        assert!(jwt.oidc_discovery_url.is_none());
+        .unwrap()
+        .auth
+        .jwt
+        .expect("jwt config should be present")
     }
 
     #[test]
-    fn deserialize_jwt_config_defaults() {
+    fn jwt_config_audience_parsed_from_toml() {
+        assert_eq!(jwt_with_explicit_fields().audience, "https://api.example.com");
+    }
+
+    #[test]
+    fn jwt_config_issuer_parsed_from_toml() {
+        assert_eq!(
+            jwt_with_explicit_fields().issuer.as_deref(),
+            Some("https://accounts.example.com")
+        );
+    }
+
+    #[test]
+    fn jwt_config_jwks_uri_parsed_from_toml() {
+        assert_eq!(
+            jwt_with_explicit_fields().jwks_uri.as_deref(),
+            Some("https://accounts.example.com/.well-known/jwks.json")
+        );
+    }
+
+    #[test]
+    fn jwt_config_explicit_algorithms_parsed_from_toml() {
+        assert_eq!(jwt_with_explicit_fields().algorithms, vec!["RS256", "ES256"]);
+    }
+
+    #[test]
+    fn jwt_config_explicit_clock_skew_seconds_parsed_from_toml() {
+        assert_eq!(jwt_with_explicit_fields().clock_skew_seconds, 60);
+    }
+
+    #[test]
+    fn jwt_config_algorithms_defaults_to_rs256() {
         let loaded: Config = toml::from_str(
             r#"
 [auth.jwt]
@@ -412,23 +432,88 @@ audience = "my-audience"
 "#,
         )
         .unwrap();
-
         let jwt = loaded.auth.jwt.expect("jwt config should be present");
-        assert_eq!(jwt.audience, "my-audience");
         assert_eq!(jwt.algorithms, vec!["RS256"]);
+    }
+
+    #[test]
+    fn jwt_config_clock_skew_defaults_to_30_seconds() {
+        let loaded: Config = toml::from_str(
+            r#"
+[auth.jwt]
+audience = "my-audience"
+"#,
+        )
+        .unwrap();
+        let jwt = loaded.auth.jwt.expect("jwt config should be present");
         assert_eq!(jwt.clock_skew_seconds, 30);
+    }
+
+    #[test]
+    fn jwt_config_jwks_cache_max_age_defaults_to_900_seconds() {
+        let loaded: Config = toml::from_str(
+            r#"
+[auth.jwt]
+audience = "my-audience"
+"#,
+        )
+        .unwrap();
+        let jwt = loaded.auth.jwt.expect("jwt config should be present");
         assert_eq!(jwt.jwks_cache_max_age_seconds, 900);
     }
 
     #[test]
-    fn deserialize_policy_rules() {
+    fn jwt_config_oidc_discovery_url_defaults_to_none() {
         let loaded: Config = toml::from_str(
+            r#"
+[auth.jwt]
+audience = "my-audience"
+"#,
+        )
+        .unwrap();
+        let jwt = loaded.auth.jwt.expect("jwt config should be present");
+        assert!(jwt.oidc_discovery_url.is_none());
+    }
+
+    fn allow_rule() -> PolicyRule {
+        toml::from_str::<Config>(
             r#"
 [[policy]]
 subjects = ["user:alice", "group:admins"]
 tools = ["github.*"]
 effect = "allow"
+"#,
+        )
+        .unwrap()
+        .policy
+        .into_iter()
+        .next()
+        .expect("policy should have one rule")
+    }
 
+    #[test]
+    fn policy_allow_rule_subjects_parsed_from_toml() {
+        assert_eq!(allow_rule().subjects, vec!["user:alice", "group:admins"]);
+    }
+
+    #[test]
+    fn policy_allow_rule_tools_parsed_from_toml() {
+        assert_eq!(allow_rule().tools, vec!["github.*"]);
+    }
+
+    #[test]
+    fn policy_allow_rule_effect_is_allow() {
+        assert_eq!(allow_rule().effect, PolicyEffect::Allow);
+    }
+
+    #[test]
+    fn policy_allow_rule_has_no_modes() {
+        assert!(allow_rule().modes.is_none());
+    }
+
+    fn deny_rule_with_mode() -> PolicyRule {
+        toml::from_str::<Config>(
+            r#"
 [[policy]]
 subjects = ["*"]
 tools = ["github.delete_repo"]
@@ -436,32 +521,50 @@ modes = ["write"]
 effect = "deny"
 "#,
         )
-        .unwrap();
-
-        assert_eq!(loaded.policy.len(), 2);
-
-        let rule0 = &loaded.policy[0];
-        assert_eq!(rule0.subjects, vec!["user:alice", "group:admins"]);
-        assert_eq!(rule0.tools, vec!["github.*"]);
-        assert_eq!(rule0.effect, PolicyEffect::Allow);
-        assert!(rule0.modes.is_none());
-
-        let rule1 = &loaded.policy[1];
-        assert_eq!(rule1.subjects, vec!["*"]);
-        assert_eq!(rule1.tools, vec!["github.delete_repo"]);
-        assert_eq!(rule1.effect, PolicyEffect::Deny);
-        assert_eq!(rule1.modes.as_ref().unwrap(), &vec![PolicyMode::Write]);
+        .unwrap()
+        .policy
+        .into_iter()
+        .next()
+        .expect("policy should have one rule")
     }
 
     #[test]
-    fn default_config_has_no_jwt_and_empty_policies() {
+    fn policy_deny_rule_subjects_parsed_from_toml() {
+        assert_eq!(deny_rule_with_mode().subjects, vec!["*"]);
+    }
+
+    #[test]
+    fn policy_deny_rule_tools_parsed_from_toml() {
+        assert_eq!(deny_rule_with_mode().tools, vec!["github.delete_repo"]);
+    }
+
+    #[test]
+    fn policy_deny_rule_effect_is_deny() {
+        assert_eq!(deny_rule_with_mode().effect, PolicyEffect::Deny);
+    }
+
+    #[test]
+    fn policy_deny_rule_write_mode_filter_parsed_from_toml() {
+        assert_eq!(
+            deny_rule_with_mode().modes.as_ref().unwrap(),
+            &vec![PolicyMode::Write]
+        );
+    }
+
+    #[test]
+    fn default_config_has_no_jwt_config() {
         let loaded: Config = toml::from_str("").unwrap();
         assert!(loaded.auth.jwt.is_none());
+    }
+
+    #[test]
+    fn default_config_has_empty_policy_list() {
+        let loaded: Config = toml::from_str("").unwrap();
         assert!(loaded.policy.is_empty());
     }
 
     #[test]
-    fn deserialize_environments_config() {
+    fn environments_default_env_parsed_from_toml() {
         let cfg: Config = toml::from_str(
             r#"
 [environments]

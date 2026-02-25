@@ -56,7 +56,7 @@ fn write_source_template(cwd: &Path, rel_path: &str, template: &str) -> std::pat
 }
 
 #[test]
-fn templates_list_filters_mode_and_category() {
+fn templates_list_write_mode_filter_shows_write_commands() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
 
@@ -74,8 +74,68 @@ fn templates_list_filters_mode_and_category() {
     let out = cmd.assert().success().get_output().stdout.clone();
     let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("github.create_issue"));
+}
+
+#[test]
+fn templates_list_write_mode_filter_hides_read_commands() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "list",
+        "--mode",
+        "write",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(!stdout.contains("github.search_issues"));
+}
+
+#[test]
+fn templates_list_shows_input_schema_section_header() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "list",
+        "--mode",
+        "write",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("Input Schema"));
+}
+
+#[test]
+fn templates_list_write_mode_input_schema_includes_required_field() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "list",
+        "--mode",
+        "write",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("- owner: string (required"));
 }
 
@@ -96,16 +156,142 @@ fn templates_list_discovers_nested_local_templates() {
 
     let out = cmd.assert().success().get_output().stdout.clone();
     let parsed: Value = serde_json::from_slice(&out).unwrap();
-    let rows = parsed.as_array().unwrap();
-    assert!(!rows.is_empty());
-    assert!(
-        rows.iter()
-            .any(|row| row["command"] == "github.create_issue")
-    );
+    let json_str = serde_json::to_string(&parsed).unwrap();
+    assert!(json_str.contains("github.create_issue"));
 }
 
 #[test]
-fn templates_generate_sends_prompt_to_coding_cli() {
+fn templates_generate_shows_wizard_header() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
+        .env("HOME", home.path())
+        .args([
+            "templates",
+            "generate",
+            "--",
+            "sh",
+            "-c",
+            "cat > /dev/null",
+        ])
+        .write_stdin(
+            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
+        );
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
+    assert!(stdout.contains("Template generation wizard"));
+}
+
+#[test]
+fn templates_generate_shows_description_prompt() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
+        .env("HOME", home.path())
+        .args([
+            "templates",
+            "generate",
+            "--",
+            "sh",
+            "-c",
+            "cat > /dev/null",
+        ])
+        .write_stdin(
+            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
+        );
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
+    assert!(stdout.contains("Describe the template you want"));
+}
+
+#[test]
+fn templates_generate_shows_coding_cli_progress_message() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
+        .env("HOME", home.path())
+        .args([
+            "templates",
+            "generate",
+            "--",
+            "sh",
+            "-c",
+            "cat > /dev/null",
+        ])
+        .write_stdin(
+            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
+        );
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
+    assert!(stdout.contains("Sending prompt to coding CLI"));
+}
+
+#[test]
+fn templates_generate_does_not_show_deprecated_command_mode_prompt() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
+        .env("HOME", home.path())
+        .args([
+            "templates",
+            "generate",
+            "--",
+            "sh",
+            "-c",
+            "cat > /dev/null",
+        ])
+        .write_stdin(
+            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
+        );
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
+    assert!(!stdout.contains("Command mode (read/write)"));
+}
+
+#[test]
+fn templates_generate_does_not_show_deprecated_file_path_prompt() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
+        .env("HOME", home.path())
+        .args([
+            "templates",
+            "generate",
+            "--",
+            "sh",
+            "-c",
+            "cat > /dev/null",
+        ])
+        .write_stdin(
+            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
+        );
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
+    assert!(!stdout.contains("Template file path"));
+}
+
+#[test]
+fn templates_generate_prompt_includes_user_request_label() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
     write_config(home.path());
@@ -128,19 +314,129 @@ fn templates_generate_sends_prompt_to_coding_cli() {
             "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
         );
 
-    let out = cmd.assert().success().get_output().stdout.clone();
-    let stdout = String::from_utf8(out).unwrap();
-    assert!(stdout.contains("Template generation wizard"));
-    assert!(stdout.contains("Describe the template you want"));
-    assert!(stdout.contains("Sending prompt to coding CLI"));
-    assert!(!stdout.contains("Command mode (read/write)"));
-    assert!(!stdout.contains("Template file path"));
+    cmd.assert().success();
 
     let prompt = fs::read_to_string(capture_file).unwrap();
     assert!(prompt.contains("User request:"));
+}
+
+#[test]
+fn templates_generate_prompt_includes_user_request_text() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let capture_file = cwd.path().join("prompt.txt");
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
+        .env("HOME", home.path())
+        .env("EARL_CAPTURE_FILE", &capture_file)
+        .args([
+            "templates",
+            "generate",
+            "--",
+            "sh",
+            "-c",
+            "cat > \"$EARL_CAPTURE_FILE\"",
+        ])
+        .write_stdin(
+            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
+        );
+
+    cmd.assert().success();
+
+    let prompt = fs::read_to_string(capture_file).unwrap();
     assert!(prompt.contains("Please create github.create_issue"));
+}
+
+#[test]
+fn templates_generate_prompt_includes_likely_command_key() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let capture_file = cwd.path().join("prompt.txt");
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
+        .env("HOME", home.path())
+        .env("EARL_CAPTURE_FILE", &capture_file)
+        .args([
+            "templates",
+            "generate",
+            "--",
+            "sh",
+            "-c",
+            "cat > \"$EARL_CAPTURE_FILE\"",
+        ])
+        .write_stdin(
+            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
+        );
+
+    cmd.assert().success();
+
+    let prompt = fs::read_to_string(capture_file).unwrap();
     assert!(prompt.contains("- likely command key: `github.create_issue`"));
+}
+
+#[test]
+fn templates_generate_prompt_includes_likely_file_path() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let capture_file = cwd.path().join("prompt.txt");
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
+        .env("HOME", home.path())
+        .env("EARL_CAPTURE_FILE", &capture_file)
+        .args([
+            "templates",
+            "generate",
+            "--",
+            "sh",
+            "-c",
+            "cat > \"$EARL_CAPTURE_FILE\"",
+        ])
+        .write_stdin(
+            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
+        );
+
+    cmd.assert().success();
+
+    let prompt = fs::read_to_string(capture_file).unwrap();
     assert!(prompt.contains("- likely file: `templates/github.hcl`"));
+}
+
+#[test]
+fn templates_generate_prompt_includes_validation_hint() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let capture_file = cwd.path().join("prompt.txt");
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
+        .env("HOME", home.path())
+        .env("EARL_CAPTURE_FILE", &capture_file)
+        .args([
+            "templates",
+            "generate",
+            "--",
+            "sh",
+            "-c",
+            "cat > \"$EARL_CAPTURE_FILE\"",
+        ])
+        .write_stdin(
+            "Please create github.create_issue to open a GitHub issue using owner/repo/title/body and github.token.\n",
+        );
+
+    cmd.assert().success();
+
+    let prompt = fs::read_to_string(capture_file).unwrap();
     assert!(prompt.contains("Run `earl templates validate`"));
 }
 
@@ -184,7 +480,7 @@ fn templates_import_rejects_unsupported_url_scheme() {
 }
 
 #[test]
-fn templates_import_from_local_path_imports_template() {
+fn templates_import_from_local_path_shows_success_message() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
 
@@ -204,7 +500,50 @@ fn templates_import_from_local_path_imports_template() {
     let out = cmd.assert().success().get_output().stdout.clone();
     let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("Imported template"));
+}
+
+#[test]
+fn templates_import_with_no_required_secrets_reports_none_declared() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let source_path = write_source_template(
+        cwd.path(),
+        "source/github.hcl",
+        include_str!("fixtures/templates/valid_minimal.hcl"),
+    );
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_path.to_str().unwrap(),
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("No required secrets were declared"));
+}
+
+#[test]
+fn templates_import_from_local_path_writes_source_file_contents() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let source_path = write_source_template(
+        cwd.path(),
+        "source/github.hcl",
+        include_str!("fixtures/templates/valid_minimal.hcl"),
+    );
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_path.to_str().unwrap(),
+    ]);
+
+    cmd.assert().success();
 
     let imported_path = cwd.path().join("templates/github.hcl");
     let imported = fs::read_to_string(imported_path).unwrap();
@@ -214,7 +553,7 @@ fn templates_import_from_local_path_imports_template() {
 }
 
 #[test]
-fn templates_import_with_global_scope_imports_template() {
+fn templates_import_with_global_scope_stores_file_in_global_config_dir() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
 
@@ -233,12 +572,35 @@ fn templates_import_with_global_scope_imports_template() {
         "global",
     ]);
 
-    let out = cmd.assert().success().get_output().stdout.clone();
-    let stdout = String::from_utf8(out).unwrap();
-    assert!(stdout.contains("Imported template"));
+    cmd.assert().success();
 
     let imported_path = home.path().join(".config/earl/templates/github.hcl");
     assert!(imported_path.exists());
+}
+
+#[test]
+fn templates_import_with_global_scope_writes_correct_file_content() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let source_path = write_source_template(
+        cwd.path(),
+        "source/github.hcl",
+        include_str!("fixtures/templates/valid_minimal.hcl"),
+    );
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_path.to_str().unwrap(),
+        "--scope",
+        "global",
+    ]);
+
+    cmd.assert().success();
+
+    let imported_path = home.path().join(".config/earl/templates/github.hcl");
     let imported = fs::read_to_string(imported_path).unwrap();
     assert!(imported.contains("provider"));
     assert!(imported.contains("\"demo\""));
@@ -246,7 +608,57 @@ fn templates_import_with_global_scope_imports_template() {
 }
 
 #[test]
-fn templates_import_from_http_url_imports_template() {
+fn templates_import_from_http_url_shows_success_message() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let server = MockServer::start();
+    let template = include_str!("fixtures/templates/valid_minimal.hcl");
+    server.mock(|when, then| {
+        when.method(GET).path("/github.hcl");
+        then.status(200).body(template);
+    });
+    let source_url = format!("{}/github.hcl", server.base_url());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_url.as_str(),
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
+    assert!(stdout.contains("Imported template"));
+}
+
+#[test]
+fn templates_import_from_http_url_shows_destination_path_in_output() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let server = MockServer::start();
+    let template = include_str!("fixtures/templates/valid_minimal.hcl");
+    server.mock(|when, then| {
+        when.method(GET).path("/github.hcl");
+        then.status(200).body(template);
+    });
+    let source_url = format!("{}/github.hcl", server.base_url());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_url.as_str(),
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
+    assert!(stdout.contains("templates/github.hcl"));
+}
+
+#[test]
+fn templates_import_from_http_url_requests_the_template_url() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
 
@@ -265,10 +677,7 @@ fn templates_import_from_http_url_imports_template() {
         source_url.as_str(),
     ]);
 
-    let out = cmd.assert().success().get_output().stdout.clone();
-    let stdout = String::from_utf8(out).unwrap();
-    assert!(stdout.contains("Imported template"));
-    assert!(stdout.contains("templates/github.hcl"));
+    cmd.assert().success();
     template_mock.assert();
 }
 
@@ -290,7 +699,7 @@ fn templates_import_fails_when_local_source_is_missing() {
 }
 
 #[test]
-fn templates_import_reports_required_secrets_to_user() {
+fn templates_import_shows_required_secrets_section_header() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
 
@@ -307,13 +716,70 @@ fn templates_import_reports_required_secrets_to_user() {
     let out = cmd.assert().success().get_output().stdout.clone();
     let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("Required secrets:"));
+}
+
+#[test]
+fn templates_import_lists_required_secret_names_in_output() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let source_path =
+        write_source_template(cwd.path(), "source/github.hcl", GITHUB_SAMPLE_TEMPLATE);
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_path.to_str().unwrap(),
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("- github.token"));
+}
+
+#[test]
+fn templates_import_shows_secret_setup_section_header() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let source_path =
+        write_source_template(cwd.path(), "source/github.hcl", GITHUB_SAMPLE_TEMPLATE);
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_path.to_str().unwrap(),
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("Set up with:"));
+}
+
+#[test]
+fn templates_import_shows_secrets_set_command_in_setup_instructions() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let source_path =
+        write_source_template(cwd.path(), "source/github.hcl", GITHUB_SAMPLE_TEMPLATE);
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_path.to_str().unwrap(),
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("earl secrets set github.token"));
 }
 
 #[test]
-fn templates_import_json_includes_required_secrets() {
+fn templates_import_json_output_source_ref_reflects_input_path() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
 
@@ -334,11 +800,71 @@ fn templates_import_json_includes_required_secrets() {
         parsed["source_ref"],
         source_path.to_string_lossy().to_string()
     );
+}
+
+#[test]
+fn templates_import_json_output_source_reflects_input_path() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let source_path =
+        write_source_template(cwd.path(), "source/github.hcl", GITHUB_SAMPLE_TEMPLATE);
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_path.to_str().unwrap(),
+        "--json",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&out).unwrap();
     assert_eq!(parsed["source"], source_path.to_string_lossy().to_string());
+}
+
+#[test]
+fn templates_import_json_output_lists_required_secrets() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let source_path =
+        write_source_template(cwd.path(), "source/github.hcl", GITHUB_SAMPLE_TEMPLATE);
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_path.to_str().unwrap(),
+        "--json",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&out).unwrap();
     assert_eq!(
         parsed["required_secrets"].as_array().unwrap(),
         &vec![Value::String("github.token".to_string())]
     );
+}
+
+#[test]
+fn templates_import_json_output_destination_path_uses_filename() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    let source_path =
+        write_source_template(cwd.path(), "source/github.hcl", GITHUB_SAMPLE_TEMPLATE);
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "import",
+        source_path.to_str().unwrap(),
+        "--json",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&out).unwrap();
     let destination = parsed["destination"].as_str().unwrap();
     assert!(Path::new(destination).ends_with(Path::new("templates/github.hcl")));
 }
@@ -428,11 +954,10 @@ fn templates_list_works_with_empty_global_allowlist() {
     let out = cmd.assert().success().get_output().stdout.clone();
     let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("github.create_issue"));
-    assert!(stdout.contains("- owner: string (required"));
 }
 
 #[test]
-fn templates_list_supports_json_output() {
+fn templates_list_json_write_mode_output_includes_expected_command() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
 
@@ -452,23 +977,89 @@ fn templates_list_supports_json_output() {
     let parsed: Value = serde_json::from_slice(&out).unwrap();
     let rows = parsed.as_array().unwrap();
     assert!(!rows.is_empty());
-    let create_issue = rows
-        .iter()
-        .find(|row| row["command"] == "github.create_issue")
-        .expect("github.create_issue should be present in write-mode listings");
-    assert_eq!(create_issue["mode"], "write");
-    assert_eq!(create_issue["source"]["scope"], "local");
-    assert!(
-        create_issue["input_schema"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|param| param["name"] == "owner")
+    assert_eq!(
+        rows[0]["command"],
+        "github.create_issue",
+        "github.create_issue should be present in write-mode listings"
     );
 }
 
 #[test]
-fn templates_validate_reports_success_and_failure() {
+fn templates_list_json_write_mode_output_has_write_mode_field() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "list",
+        "--mode",
+        "write",
+        "--json",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&out).unwrap();
+    let rows = parsed.as_array().unwrap();
+    assert!(!rows.is_empty());
+    assert_eq!(rows[0]["mode"], "write");
+}
+
+#[test]
+fn templates_list_json_write_mode_output_has_local_scope() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "list",
+        "--mode",
+        "write",
+        "--json",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&out).unwrap();
+    let rows = parsed.as_array().unwrap();
+    assert!(!rows.is_empty());
+    assert_eq!(rows[0]["source"]["scope"], "local");
+}
+
+#[test]
+fn templates_list_json_output_includes_input_schema() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "list",
+        "--mode",
+        "write",
+        "--json",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&out).unwrap();
+    let rows = parsed.as_array().unwrap();
+    assert!(!rows.is_empty());
+    let create_issue = &rows[0];
+    let schema = serde_json::to_string(&create_issue["input_schema"]).unwrap();
+    assert!(schema.contains(r#""owner""#));
+}
+
+#[test]
+fn templates_validate_succeeds_with_valid_template() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
     write_config(home.path());
@@ -481,26 +1072,32 @@ fn templates_validate_reports_success_and_failure() {
     )
     .unwrap();
 
-    let mut ok_cmd = cargo_bin_cmd!("earl");
-    ok_cmd
-        .current_dir(cwd.path())
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
         .env("HOME", home.path())
         .args(["templates", "validate"]);
-    ok_cmd.assert().success();
+    cmd.assert().success();
+}
 
+#[test]
+fn templates_validate_fails_with_invalid_template() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    write_config(home.path());
+
+    let templates_dir = cwd.path().join("templates");
+    fs::create_dir_all(&templates_dir).unwrap();
     fs::write(
         templates_dir.join("bad.hcl"),
         include_str!("fixtures/templates/invalid_secret_ref.hcl"),
     )
     .unwrap();
 
-    let mut bad_cmd = cargo_bin_cmd!("earl");
-    bad_cmd
-        .current_dir(cwd.path())
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path())
         .env("HOME", home.path())
         .args(["templates", "validate"]);
-
-    bad_cmd.assert().failure();
+    cmd.assert().failure();
 }
 
 #[test]
@@ -561,7 +1158,7 @@ fn templates_validate_supports_nested_template_paths() {
 }
 
 #[test]
-fn templates_search_uses_deterministic_fallback() {
+fn templates_search_fallback_shows_command_name() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
 
@@ -580,14 +1177,98 @@ fn templates_search_uses_deterministic_fallback() {
     let out = cmd.assert().success().get_output().stdout.clone();
     let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("github.create_issue"));
+}
+
+#[test]
+fn templates_search_fallback_shows_summary_label() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "search",
+        "Bug: login fails",
+        "--limit",
+        "5",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("Summary"));
+}
+
+#[test]
+fn templates_search_fallback_hides_description_field() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "search",
+        "Bug: login fails",
+        "--limit",
+        "5",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(!stdout.contains("Description"));
+}
+
+#[test]
+fn templates_search_fallback_hides_input_schema_field() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "search",
+        "Bug: login fails",
+        "--limit",
+        "5",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(!stdout.contains("Input Schema"));
+}
+
+#[test]
+fn templates_search_fallback_hides_agent_guidance_field() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "search",
+        "Bug: login fails",
+        "--limit",
+        "5",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(!stdout.contains("Guidance for AI agents"));
 }
 
 #[test]
-fn templates_search_supports_json_output() {
+fn templates_search_json_output_includes_matching_command() {
     let cwd = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
 
@@ -608,6 +1289,31 @@ fn templates_search_supports_json_output() {
     let parsed: Value = serde_json::from_slice(&out).unwrap();
     let hits = parsed.as_array().unwrap();
     assert!(!hits.is_empty());
-    assert!(hits.iter().any(|hit| hit["key"] == "github.create_issue"));
+    let json_str = serde_json::to_string(&parsed).unwrap();
+    assert!(json_str.contains("github.create_issue"));
+}
+
+#[test]
+fn templates_search_json_output_results_include_score_field() {
+    let cwd = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+
+    write_template(cwd.path());
+    write_config(home.path());
+
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
+        "templates",
+        "search",
+        "Bug: login fails",
+        "--limit",
+        "5",
+        "--json",
+    ]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&out).unwrap();
+    let hits = parsed.as_array().unwrap();
+    assert!(!hits.is_empty());
     assert!(hits[0]["score"].as_f64().is_some());
 }

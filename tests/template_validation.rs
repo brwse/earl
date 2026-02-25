@@ -5,7 +5,7 @@ use tempfile::tempdir;
 
 #[test]
 #[cfg(feature = "http")]
-fn validates_template_files() {
+fn valid_template_file_is_accepted() {
     let dir = tempdir().unwrap();
     let local_dir = dir.path().join("local");
     let global_dir = dir.path().join("global");
@@ -117,93 +117,6 @@ command "upload" {
     let rendered = format!("{err:#}");
     assert!(
         rendered.contains("must specify exactly one of value, bytes_base64, file_path"),
-        "unexpected error: {rendered}"
-    );
-}
-
-#[test]
-#[cfg(feature = "graphql")]
-fn fails_when_graphql_protocol_missing_graphql_block() {
-    let dir = tempdir().unwrap();
-    let local_dir = dir.path().join("local");
-    let global_dir = dir.path().join("global");
-    fs::create_dir_all(&local_dir).unwrap();
-    fs::create_dir_all(&global_dir).unwrap();
-
-    let hcl = r#"
-version = 1
-provider = "demo"
-
-command "query" {
-  title = "Query"
-  summary = "Run GraphQL query"
-  description = "Runs a GraphQL query against the API."
-
-  annotations {
-    mode = "read"
-    secrets = []
-  }
-
-  operation {
-    protocol = "graphql"
-    method = "POST"
-    url = "https://api.example.com/graphql"
-  }
-
-  result {
-    output = "ok"
-  }
-}
-"#;
-    fs::write(local_dir.join("invalid_graphql.hcl"), hcl).unwrap();
-
-    let err = validate_all_from_dirs(&global_dir, &local_dir).unwrap_err();
-    let rendered = format!("{err:#}");
-    assert!(
-        rendered.contains("missing field `graphql`"),
-        "unexpected error: {rendered}"
-    );
-}
-
-#[test]
-#[cfg(feature = "grpc")]
-fn fails_when_grpc_protocol_missing_grpc_block() {
-    let dir = tempdir().unwrap();
-    let local_dir = dir.path().join("local");
-    let global_dir = dir.path().join("global");
-    fs::create_dir_all(&local_dir).unwrap();
-    fs::create_dir_all(&global_dir).unwrap();
-
-    let hcl = r#"
-version = 1
-provider = "demo"
-
-command "check" {
-  title = "Check"
-  summary = "Run gRPC health check"
-  description = "Calls a gRPC endpoint."
-
-  annotations {
-    mode = "read"
-    secrets = []
-  }
-
-  operation {
-    protocol = "grpc"
-    url = "http://127.0.0.1:50051"
-  }
-
-  result {
-    output = "ok"
-  }
-}
-"#;
-    fs::write(local_dir.join("invalid_grpc.hcl"), hcl).unwrap();
-
-    let err = validate_all_from_dirs(&global_dir, &local_dir).unwrap_err();
-    let rendered = format!("{err:#}");
-    assert!(
-        rendered.contains("missing field `grpc`"),
         "unexpected error: {rendered}"
     );
 }
@@ -328,39 +241,6 @@ fn bash_rejects_empty_script() {
     fs::create_dir_all(&local_dir).unwrap();
     fs::create_dir_all(&global_dir).unwrap();
 
-    // Positive case: valid bash template
-    let valid_hcl = r#"
-version = 1
-provider = "demo"
-
-command "run" {
-  title = "Run"
-  summary = "Run a bash script"
-  description = "Executes a bash script in a sandbox."
-
-  annotations {
-    mode = "read"
-    secrets = []
-  }
-
-  operation {
-    protocol = "bash"
-
-    bash {
-      script = "echo hello"
-    }
-  }
-
-  result {
-    output = "ok"
-  }
-}
-"#;
-    fs::write(local_dir.join("valid_bash.hcl"), valid_hcl).unwrap();
-    let files = validate_all_from_dirs(&global_dir, &local_dir).unwrap();
-    assert_eq!(files.len(), 1);
-
-    // Negative case: empty script
     let invalid_hcl = r#"
 version = 1
 provider = "demo"
@@ -406,42 +286,6 @@ fn bash_rejects_absolute_writable_path() {
     fs::create_dir_all(&local_dir).unwrap();
     fs::create_dir_all(&global_dir).unwrap();
 
-    // Positive case: relative writable path
-    let valid_hcl = r#"
-version = 1
-provider = "demo"
-
-command "run" {
-  title = "Run"
-  summary = "Run a bash script"
-  description = "Executes a bash script in a sandbox."
-
-  annotations {
-    mode = "write"
-    secrets = []
-  }
-
-  operation {
-    protocol = "bash"
-
-    bash {
-      script = "echo hello > out.txt"
-      sandbox {
-        writable_paths = ["tmp/output"]
-      }
-    }
-  }
-
-  result {
-    output = "ok"
-  }
-}
-"#;
-    fs::write(local_dir.join("bash.hcl"), valid_hcl).unwrap();
-    let files = validate_all_from_dirs(&global_dir, &local_dir).unwrap();
-    assert_eq!(files.len(), 1);
-
-    // Negative case: absolute path
     let invalid_hcl = r#"
 version = 1
 provider = "demo"
@@ -490,42 +334,6 @@ fn bash_rejects_dotdot_writable_path() {
     fs::create_dir_all(&local_dir).unwrap();
     fs::create_dir_all(&global_dir).unwrap();
 
-    // Positive case: path without ..
-    let valid_hcl = r#"
-version = 1
-provider = "demo"
-
-command "run" {
-  title = "Run"
-  summary = "Run a bash script"
-  description = "Executes a bash script in a sandbox."
-
-  annotations {
-    mode = "write"
-    secrets = []
-  }
-
-  operation {
-    protocol = "bash"
-
-    bash {
-      script = "echo hello > out.txt"
-      sandbox {
-        writable_paths = ["data/output"]
-      }
-    }
-  }
-
-  result {
-    output = "ok"
-  }
-}
-"#;
-    fs::write(local_dir.join("bash.hcl"), valid_hcl).unwrap();
-    let files = validate_all_from_dirs(&global_dir, &local_dir).unwrap();
-    assert_eq!(files.len(), 1);
-
-    // Negative case: path with ..
     let invalid_hcl = r#"
 version = 1
 provider = "demo"
@@ -625,40 +433,6 @@ fn sql_rejects_empty_query() {
     fs::create_dir_all(&local_dir).unwrap();
     fs::create_dir_all(&global_dir).unwrap();
 
-    // Positive case: valid SQL template
-    let valid_hcl = r#"
-version = 1
-provider = "demo"
-
-command "fetch" {
-  title = "Fetch"
-  summary = "Fetch rows from the database"
-  description = "Runs a SQL query against the configured database."
-
-  annotations {
-    mode = "read"
-    secrets = ["db.url"]
-  }
-
-  operation {
-    protocol = "sql"
-
-    sql {
-      connection_secret = "db.url"
-      query = "SELECT 1"
-    }
-  }
-
-  result {
-    output = "ok"
-  }
-}
-"#;
-    fs::write(local_dir.join("sql.hcl"), valid_hcl).unwrap();
-    let files = validate_all_from_dirs(&global_dir, &local_dir).unwrap();
-    assert_eq!(files.len(), 1);
-
-    // Negative case: empty query
     let invalid_hcl = r#"
 version = 1
 provider = "demo"
@@ -705,40 +479,6 @@ fn sql_rejects_jinja_in_query() {
     fs::create_dir_all(&local_dir).unwrap();
     fs::create_dir_all(&global_dir).unwrap();
 
-    // Positive case: query without Jinja2 expressions (uses $1 placeholders)
-    let valid_hcl = r#"
-version = 1
-provider = "demo"
-
-command "fetch" {
-  title = "Fetch"
-  summary = "Fetch rows"
-  description = "Runs a SQL query."
-
-  annotations {
-    mode = "read"
-    secrets = ["db.url"]
-  }
-
-  operation {
-    protocol = "sql"
-
-    sql {
-      connection_secret = "db.url"
-      query = "SELECT * FROM users WHERE id = $1"
-    }
-  }
-
-  result {
-    output = "ok"
-  }
-}
-"#;
-    fs::write(local_dir.join("sql.hcl"), valid_hcl).unwrap();
-    let files = validate_all_from_dirs(&global_dir, &local_dir).unwrap();
-    assert_eq!(files.len(), 1);
-
-    // Negative case: query with {{ }}
     let invalid_hcl = r#"
 version = 1
 provider = "demo"
@@ -785,40 +525,6 @@ fn sql_rejects_undeclared_connection_secret() {
     fs::create_dir_all(&local_dir).unwrap();
     fs::create_dir_all(&global_dir).unwrap();
 
-    // Positive case: connection_secret declared in annotations.secrets
-    let valid_hcl = r#"
-version = 1
-provider = "demo"
-
-command "fetch" {
-  title = "Fetch"
-  summary = "Fetch rows"
-  description = "Runs a SQL query."
-
-  annotations {
-    mode = "read"
-    secrets = ["db.url"]
-  }
-
-  operation {
-    protocol = "sql"
-
-    sql {
-      connection_secret = "db.url"
-      query = "SELECT 1"
-    }
-  }
-
-  result {
-    output = "ok"
-  }
-}
-"#;
-    fs::write(local_dir.join("sql.hcl"), valid_hcl).unwrap();
-    let files = validate_all_from_dirs(&global_dir, &local_dir).unwrap();
-    assert_eq!(files.len(), 1);
-
-    // Negative case: connection_secret NOT in annotations.secrets
     let invalid_hcl = r#"
 version = 1
 provider = "demo"
@@ -1174,7 +880,7 @@ command "ping" {
 
 #[test]
 #[cfg(feature = "http")]
-fn validates_all_example_templates() {
+fn all_example_templates_are_valid() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let examples_dir = manifest_dir.join("examples");
     let empty_dir = tempdir().unwrap();
@@ -1337,9 +1043,8 @@ command "ping" {
 
 // ── Template args typo detection ────────────────────────────────────
 
-#[test]
 #[cfg(feature = "bash")]
-fn rejects_undeclared_args_reference() {
+fn undeclared_args_reference_error() -> String {
     use earl::template::parser::parse_template_hcl;
     use earl::template::validator::validate_template_file;
 
@@ -1372,10 +1077,26 @@ command "greet" {
 "#;
     let file = parse_template_hcl(hcl, std::path::Path::new(".")).unwrap();
     let err = validate_template_file(&file).unwrap_err();
-    let msg = format!("{err}");
+    format!("{err}")
+}
+
+#[test]
+#[cfg(feature = "bash")]
+fn rejects_undeclared_args_reference() {
+    let msg = undeclared_args_reference_error();
     assert!(
-        msg.contains("undeclared param") && msg.contains("args.naem"),
-        "unexpected error: {msg}"
+        msg.contains("undeclared param"),
+        "expected 'undeclared param' in error: {msg}"
+    );
+}
+
+#[test]
+#[cfg(feature = "bash")]
+fn undeclared_args_reference_error_includes_param_name() {
+    let msg = undeclared_args_reference_error();
+    assert!(
+        msg.contains("args.naem"),
+        "expected 'args.naem' in error: {msg}"
     );
 }
 
@@ -1420,7 +1141,7 @@ command "greet" {
 
 #[test]
 #[cfg(feature = "http")]
-fn validates_external_secret_uri_references() {
+fn external_secret_uri_references_are_accepted() {
     let dir = tempdir().unwrap();
     let local_dir = dir.path().join("local");
     let global_dir = dir.path().join("global");

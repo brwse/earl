@@ -16,27 +16,63 @@ fn rule() -> AllowRule {
 }
 
 #[test]
-fn allowlist_matches_scheme_host_port_and_path_prefix() {
-    let allowed = Url::parse("https://api.github.com/search/issues?q=abc").unwrap();
-    let allowed_exact = Url::parse("https://api.github.com/search/issues").unwrap();
-    let disallowed_scheme = Url::parse("http://api.github.com/search/issues").unwrap();
-    let disallowed_host = Url::parse("https://example.com/search/issues").unwrap();
-    let disallowed_port = Url::parse("https://api.github.com:8443/search/issues").unwrap();
-    let disallowed_path = Url::parse("https://api.github.com/repos/owner/repo").unwrap();
-    let disallowed_prefix_boundary =
-        Url::parse("https://api.github.com/search/issues-archive").unwrap();
+fn url_matching_all_fields_satisfies_allow_rule() {
+    let url = Url::parse("https://api.github.com/search/issues?q=abc").unwrap();
+    assert!(matches_rule(&url, &rule()));
+}
 
-    assert!(matches_rule(&allowed, &rule()));
-    assert!(matches_rule(&allowed_exact, &rule()));
-    assert!(!matches_rule(&disallowed_scheme, &rule()));
-    assert!(!matches_rule(&disallowed_host, &rule()));
-    assert!(!matches_rule(&disallowed_port, &rule()));
-    assert!(!matches_rule(&disallowed_path, &rule()));
-    assert!(!matches_rule(&disallowed_prefix_boundary, &rule()));
+#[test]
+fn url_with_exact_path_prefix_satisfies_allow_rule() {
+    let url = Url::parse("https://api.github.com/search/issues").unwrap();
+    assert!(matches_rule(&url, &rule()));
+}
 
-    ensure_url_allowed(&allowed, &[rule()]).unwrap();
-    assert!(ensure_url_allowed(&disallowed_path, &[rule()]).is_err());
-    assert!(ensure_url_allowed(&disallowed_prefix_boundary, &[rule()]).is_err());
+#[test]
+fn url_with_different_scheme_does_not_satisfy_allow_rule() {
+    let url = Url::parse("http://api.github.com/search/issues").unwrap();
+    assert!(!matches_rule(&url, &rule()));
+}
+
+#[test]
+fn url_with_different_host_does_not_satisfy_allow_rule() {
+    let url = Url::parse("https://example.com/search/issues").unwrap();
+    assert!(!matches_rule(&url, &rule()));
+}
+
+#[test]
+fn url_with_different_port_does_not_satisfy_allow_rule() {
+    let url = Url::parse("https://api.github.com:8443/search/issues").unwrap();
+    assert!(!matches_rule(&url, &rule()));
+}
+
+#[test]
+fn url_with_unmatched_path_does_not_satisfy_allow_rule() {
+    let url = Url::parse("https://api.github.com/repos/owner/repo").unwrap();
+    assert!(!matches_rule(&url, &rule()));
+}
+
+#[test]
+fn url_extending_path_prefix_without_separator_does_not_satisfy_allow_rule() {
+    let url = Url::parse("https://api.github.com/search/issues-archive").unwrap();
+    assert!(!matches_rule(&url, &rule()));
+}
+
+#[test]
+fn url_matching_allowlist_rule_is_permitted() {
+    let url = Url::parse("https://api.github.com/search/issues?q=abc").unwrap();
+    ensure_url_allowed(&url, &[rule()]).unwrap();
+}
+
+#[test]
+fn url_with_non_matching_path_is_rejected() {
+    let url = Url::parse("https://api.github.com/repos/owner/repo").unwrap();
+    assert!(ensure_url_allowed(&url, &[rule()]).is_err());
+}
+
+#[test]
+fn url_extending_path_prefix_without_separator_is_rejected() {
+    let url = Url::parse("https://api.github.com/search/issues-archive").unwrap();
+    assert!(ensure_url_allowed(&url, &[rule()]).is_err());
 }
 
 #[test]
@@ -46,28 +82,145 @@ fn empty_allowlist_allows_all_urls() {
 }
 
 #[test]
-fn ssrf_blocks_unsafe_ranges_and_allows_public_ip() {
-    let blocked = [
-        "127.0.0.1",
-        "10.0.0.1",
-        "169.254.169.254",
-        "100.64.0.1",
-        "198.18.0.1",
-        "240.0.0.1",
-        "0.0.0.0",
-        "::1",
-        "fe80::1",
-        "fd00::1",
-        "::ffff:10.0.0.1",
-    ];
+fn loopback_ipv4_is_blocked() {
+    let ip = IpAddr::from_str("127.0.0.1").unwrap();
+    assert!(is_blocked_ip(ip));
+}
 
-    for ip in blocked {
-        let parsed = IpAddr::from_str(ip).unwrap();
-        assert!(is_blocked_ip(parsed), "expected blocked IP: {ip}");
-        assert!(ensure_safe_ip(parsed).is_err());
-    }
+#[test]
+fn loopback_ipv4_is_rejected() {
+    let ip = IpAddr::from_str("127.0.0.1").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
 
+#[test]
+fn private_class_a_ip_is_blocked() {
+    let ip = IpAddr::from_str("10.0.0.1").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn private_class_a_ip_is_rejected() {
+    let ip = IpAddr::from_str("10.0.0.1").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn link_local_ipv4_is_blocked() {
+    let ip = IpAddr::from_str("169.254.169.254").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn link_local_ipv4_is_rejected() {
+    let ip = IpAddr::from_str("169.254.169.254").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn shared_address_space_ip_is_blocked() {
+    let ip = IpAddr::from_str("100.64.0.1").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn shared_address_space_ip_is_rejected() {
+    let ip = IpAddr::from_str("100.64.0.1").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn benchmarking_ip_is_blocked() {
+    let ip = IpAddr::from_str("198.18.0.1").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn benchmarking_ip_is_rejected() {
+    let ip = IpAddr::from_str("198.18.0.1").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn reserved_ipv4_is_blocked() {
+    let ip = IpAddr::from_str("240.0.0.1").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn reserved_ipv4_is_rejected() {
+    let ip = IpAddr::from_str("240.0.0.1").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn unspecified_ipv4_is_blocked() {
+    let ip = IpAddr::from_str("0.0.0.0").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn unspecified_ipv4_is_rejected() {
+    let ip = IpAddr::from_str("0.0.0.0").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn loopback_ipv6_is_blocked() {
+    let ip = IpAddr::from_str("::1").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn loopback_ipv6_is_rejected() {
+    let ip = IpAddr::from_str("::1").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn link_local_ipv6_is_blocked() {
+    let ip = IpAddr::from_str("fe80::1").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn link_local_ipv6_is_rejected() {
+    let ip = IpAddr::from_str("fe80::1").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn unique_local_ipv6_is_blocked() {
+    let ip = IpAddr::from_str("fd00::1").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn unique_local_ipv6_is_rejected() {
+    let ip = IpAddr::from_str("fd00::1").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn ipv4_mapped_ipv6_is_blocked() {
+    let ip = IpAddr::from_str("::ffff:10.0.0.1").unwrap();
+    assert!(is_blocked_ip(ip));
+}
+
+#[test]
+fn ipv4_mapped_ipv6_is_rejected() {
+    let ip = IpAddr::from_str("::ffff:10.0.0.1").unwrap();
+    assert!(ensure_safe_ip(ip).is_err());
+}
+
+#[test]
+fn public_ip_is_not_blocked() {
     let public = IpAddr::from_str("8.8.8.8").unwrap();
     assert!(!is_blocked_ip(public));
+}
+
+#[test]
+fn public_ip_is_permitted() {
+    let public = IpAddr::from_str("8.8.8.8").unwrap();
     ensure_safe_ip(public).unwrap();
 }

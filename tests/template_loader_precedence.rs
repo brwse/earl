@@ -3,11 +3,7 @@ mod common;
 use earl::template::catalog::TemplateScope;
 use earl::template::loader::load_catalog_from_dirs;
 
-#[test]
-fn local_overrides_global_for_same_command_key() {
-    let ws = common::temp_workspace();
-
-    let global_hcl = r#"
+const GLOBAL_OVERRIDE_HCL: &str = r#"
 version = 1
 provider = "github"
 categories = ["global_cat"]
@@ -35,53 +31,7 @@ command "search_issues" {
 }
 "#;
 
-    let local_hcl = r#"
-version = 1
-provider = "github"
-categories = ["local_cat"]
-
-command "search_issues" {
-  title = "Local Search"
-  summary = "Local search command"
-  description = "local version"
-  categories = ["local_cmd"]
-
-  annotations {
-    mode = "read"
-    secrets = []
-  }
-
-  operation {
-    protocol = "http"
-    method = "GET"
-    url = "https://api.github.com/search/issues"
-  }
-
-  result {
-    output = "local"
-  }
-}
-"#;
-
-    common::write_template(&ws.global_templates, "github.hcl", global_hcl);
-    common::write_template(&ws.local_templates, "github.hcl", local_hcl);
-
-    let catalog = load_catalog_from_dirs(&ws.global_templates, &ws.local_templates).unwrap();
-    let entry = catalog.get("github.search_issues").unwrap();
-
-    assert_eq!(entry.title, "Local Search");
-    assert_eq!(entry.summary, "Local search command");
-    assert_eq!(entry.description, "local version");
-    assert_eq!(entry.source.scope, TemplateScope::Local);
-    assert!(entry.categories.contains(&"local_cat".to_string()));
-    assert!(entry.categories.contains(&"local_cmd".to_string()));
-}
-
-#[test]
-fn loads_multiple_commands_from_single_provider_file() {
-    let ws = common::temp_workspace();
-
-    let hcl = r#"
+const MULTI_COMMAND_HCL: &str = r#"
 version = 1
 provider = "github"
 categories = ["scm"]
@@ -129,9 +79,120 @@ command "create_issue" {
 }
 "#;
 
-    common::write_template(&ws.local_templates, "github.hcl", hcl);
+const LOCAL_OVERRIDE_HCL: &str = r#"
+version = 1
+provider = "github"
+categories = ["local_cat"]
+
+command "search_issues" {
+  title = "Local Search"
+  summary = "Local search command"
+  description = "local version"
+  categories = ["local_cmd"]
+
+  annotations {
+    mode = "read"
+    secrets = []
+  }
+
+  operation {
+    protocol = "http"
+    method = "GET"
+    url = "https://api.github.com/search/issues"
+  }
+
+  result {
+    output = "local"
+  }
+}
+"#;
+
+#[test]
+fn local_title_overrides_global_for_same_command_key() {
+    let ws = common::temp_workspace();
+    common::write_template(&ws.global_templates, "github.hcl", GLOBAL_OVERRIDE_HCL);
+    common::write_template(&ws.local_templates, "github.hcl", LOCAL_OVERRIDE_HCL);
+
+    let catalog = load_catalog_from_dirs(&ws.global_templates, &ws.local_templates).unwrap();
+    let entry = catalog.get("github.search_issues").unwrap();
+
+    assert_eq!(entry.title, "Local Search");
+}
+
+#[test]
+fn local_summary_overrides_global_for_same_command_key() {
+    let ws = common::temp_workspace();
+    common::write_template(&ws.global_templates, "github.hcl", GLOBAL_OVERRIDE_HCL);
+    common::write_template(&ws.local_templates, "github.hcl", LOCAL_OVERRIDE_HCL);
+
+    let catalog = load_catalog_from_dirs(&ws.global_templates, &ws.local_templates).unwrap();
+    let entry = catalog.get("github.search_issues").unwrap();
+
+    assert_eq!(entry.summary, "Local search command");
+}
+
+#[test]
+fn local_description_overrides_global_for_same_command_key() {
+    let ws = common::temp_workspace();
+    common::write_template(&ws.global_templates, "github.hcl", GLOBAL_OVERRIDE_HCL);
+    common::write_template(&ws.local_templates, "github.hcl", LOCAL_OVERRIDE_HCL);
+
+    let catalog = load_catalog_from_dirs(&ws.global_templates, &ws.local_templates).unwrap();
+    let entry = catalog.get("github.search_issues").unwrap();
+
+    assert_eq!(entry.description, "local version");
+}
+
+#[test]
+fn local_scope_reported_when_local_overrides_global() {
+    let ws = common::temp_workspace();
+    common::write_template(&ws.global_templates, "github.hcl", GLOBAL_OVERRIDE_HCL);
+    common::write_template(&ws.local_templates, "github.hcl", LOCAL_OVERRIDE_HCL);
+
+    let catalog = load_catalog_from_dirs(&ws.global_templates, &ws.local_templates).unwrap();
+    let entry = catalog.get("github.search_issues").unwrap();
+
+    assert_eq!(entry.source.scope, TemplateScope::Local);
+}
+
+#[test]
+fn local_provider_categories_override_global_for_same_command_key() {
+    let ws = common::temp_workspace();
+    common::write_template(&ws.global_templates, "github.hcl", GLOBAL_OVERRIDE_HCL);
+    common::write_template(&ws.local_templates, "github.hcl", LOCAL_OVERRIDE_HCL);
+
+    let catalog = load_catalog_from_dirs(&ws.global_templates, &ws.local_templates).unwrap();
+    let entry = catalog.get("github.search_issues").unwrap();
+
+    assert!(entry.categories.contains(&"local_cat".to_string()));
+}
+
+#[test]
+fn local_command_categories_override_global_for_same_command_key() {
+    let ws = common::temp_workspace();
+    common::write_template(&ws.global_templates, "github.hcl", GLOBAL_OVERRIDE_HCL);
+    common::write_template(&ws.local_templates, "github.hcl", LOCAL_OVERRIDE_HCL);
+
+    let catalog = load_catalog_from_dirs(&ws.global_templates, &ws.local_templates).unwrap();
+    let entry = catalog.get("github.search_issues").unwrap();
+
+    assert!(entry.categories.contains(&"local_cmd".to_string()));
+}
+
+#[test]
+fn first_command_loaded_from_multi_command_file() {
+    let ws = common::temp_workspace();
+    common::write_template(&ws.local_templates, "github.hcl", MULTI_COMMAND_HCL);
 
     let catalog = load_catalog_from_dirs(&ws.global_templates, &ws.local_templates).unwrap();
     assert!(catalog.get("github.search_issues").is_some());
+}
+
+#[test]
+fn second_command_loaded_from_multi_command_file() {
+    let ws = common::temp_workspace();
+    common::write_template(&ws.local_templates, "github.hcl", MULTI_COMMAND_HCL);
+
+    let catalog = load_catalog_from_dirs(&ws.global_templates, &ws.local_templates).unwrap();
     assert!(catalog.get("github.create_issue").is_some());
 }

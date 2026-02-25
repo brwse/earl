@@ -654,7 +654,7 @@ command "write_echo" {
 
     #[tokio::test]
     #[allow(clippy::await_holding_lock)] // intentional: env_lock serialises HOME mutations across the async test
-    async fn api_tools_returns_expected_schema() {
+    async fn registered_command_appears_in_tools_list() {
         let _guard = env_lock();
         let cwd = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
@@ -685,9 +685,110 @@ command "write_echo" {
             let tools = parsed.as_array().unwrap();
             assert_eq!(tools.len(), 1);
             assert_eq!(tools[0]["key"], "demo.echo");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // intentional: env_lock serialises HOME mutations across the async test
+    async fn registered_command_has_correct_protocol_label() {
+        let _guard = env_lock();
+        let cwd = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        write_template(cwd.path(), "demo.hcl", READ_TEMPLATE);
+        write_config(home.path(), "");
+
+        with_home(home.path(), || async {
+            let app = build_router(WebState {
+                cwd: cwd.path().to_path_buf(),
+                bearer_token: TEST_TOKEN.to_string(),
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/tools")
+                        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), 200);
+
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: Value = serde_json::from_slice(&body).unwrap();
+            let tools = parsed.as_array().unwrap();
             assert_eq!(tools[0]["protocol"], "bash");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // intentional: env_lock serialises HOME mutations across the async test
+    async fn example_cli_includes_command_key() {
+        let _guard = env_lock();
+        let cwd = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        write_template(cwd.path(), "demo.hcl", READ_TEMPLATE);
+        write_config(home.path(), "");
+
+        with_home(home.path(), || async {
+            let app = build_router(WebState {
+                cwd: cwd.path().to_path_buf(),
+                bearer_token: TEST_TOKEN.to_string(),
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/tools")
+                        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: Value = serde_json::from_slice(&body).unwrap();
+            let tools = parsed.as_array().unwrap();
             let example = tools[0]["example_cli"].as_str().unwrap();
             assert!(example.contains("earl call demo.echo"));
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // intentional: env_lock serialises HOME mutations across the async test
+    async fn example_cli_includes_required_param_flag() {
+        let _guard = env_lock();
+        let cwd = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        write_template(cwd.path(), "demo.hcl", READ_TEMPLATE);
+        write_config(home.path(), "");
+
+        with_home(home.path(), || async {
+            let app = build_router(WebState {
+                cwd: cwd.path().to_path_buf(),
+                bearer_token: TEST_TOKEN.to_string(),
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/tools")
+                        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), 200);
+
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: Value = serde_json::from_slice(&body).unwrap();
+            let tools = parsed.as_array().unwrap();
+            let example = tools[0]["example_cli"].as_str().unwrap();
             assert!(example.contains("--value"));
         })
         .await;
@@ -736,7 +837,7 @@ command "write_echo" {
 
     #[tokio::test]
     #[allow(clippy::await_holding_lock)] // intentional: env_lock serialises HOME mutations across the async test
-    async fn execute_returns_human_output_for_read_command() {
+    async fn execute_response_includes_command_key() {
         let _guard = env_lock();
         let cwd = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
@@ -774,8 +875,135 @@ command "write_echo" {
             let parsed: Value = serde_json::from_slice(&body).unwrap();
 
             assert_eq!(parsed["key"], "demo.echo");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // intentional: env_lock serialises HOME mutations across the async test
+    async fn execute_response_mode_matches_template_annotation() {
+        let _guard = env_lock();
+        let cwd = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        write_template(cwd.path(), "demo.hcl", READ_TEMPLATE);
+        write_config(home.path(), "");
+
+        with_home(home.path(), || async {
+            let app = build_router(WebState {
+                cwd: cwd.path().to_path_buf(),
+                bearer_token: TEST_TOKEN.to_string(),
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/execute")
+                        .header("content-type", "application/json")
+                        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+                        .body(Body::from(
+                            serde_json::json!({
+                                "command": "demo.echo",
+                                "args": {"value": "hello"},
+                                "confirm_write": false
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: Value = serde_json::from_slice(&body).unwrap();
             assert_eq!(parsed["mode"], "read");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // intentional: env_lock serialises HOME mutations across the async test
+    async fn read_command_returns_human_output() {
+        let _guard = env_lock();
+        let cwd = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        write_template(cwd.path(), "demo.hcl", READ_TEMPLATE);
+        write_config(home.path(), "");
+
+        with_home(home.path(), || async {
+            let app = build_router(WebState {
+                cwd: cwd.path().to_path_buf(),
+                bearer_token: TEST_TOKEN.to_string(),
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/execute")
+                        .header("content-type", "application/json")
+                        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+                        .body(Body::from(
+                            serde_json::json!({
+                                "command": "demo.echo",
+                                "args": {"value": "hello"},
+                                "confirm_write": false
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: Value = serde_json::from_slice(&body).unwrap();
+
             assert_eq!(parsed["human_output"], "hello");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // intentional: env_lock serialises HOME mutations across the async test
+    async fn execute_response_includes_decoded_output() {
+        let _guard = env_lock();
+        let cwd = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        write_template(cwd.path(), "demo.hcl", READ_TEMPLATE);
+        write_config(home.path(), "");
+
+        with_home(home.path(), || async {
+            let app = build_router(WebState {
+                cwd: cwd.path().to_path_buf(),
+                bearer_token: TEST_TOKEN.to_string(),
+            });
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/execute")
+                        .header("content-type", "application/json")
+                        .header("authorization", format!("Bearer {TEST_TOKEN}"))
+                        .body(Body::from(
+                            serde_json::json!({
+                                "command": "demo.echo",
+                                "args": {"value": "hello"},
+                                "confirm_write": false
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), 200);
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: Value = serde_json::from_slice(&body).unwrap();
             assert_eq!(parsed["decoded"], "hello");
         })
         .await;

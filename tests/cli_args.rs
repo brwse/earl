@@ -1,4 +1,4 @@
-use earl::expression::cli_args::parse_cli_args;
+use earl::expression::cli_args::{parse_cli_args, CliArgsError};
 use earl::template::schema::{ParamSpec, ParamType};
 
 fn s(v: &str) -> String {
@@ -36,7 +36,7 @@ fn search_params() -> Vec<ParamSpec> {
 }
 
 #[test]
-fn parses_basic_key_value_pairs() {
+fn string_param_is_parsed_as_string_value() {
     let params = search_params();
     let expr = parse_cli_args(
         "github.search_issues",
@@ -45,10 +45,6 @@ fn parses_basic_key_value_pairs() {
     )
     .unwrap();
 
-    assert_eq!(expr.provider, "github");
-    assert_eq!(expr.command, "search_issues");
-    assert!(expr.positional_args.is_empty());
-    assert_eq!(expr.named_args.len(), 2);
     assert_eq!(
         expr.named_args[0],
         (
@@ -56,10 +52,35 @@ fn parses_basic_key_value_pairs() {
             serde_json::json!("repo:rust-lang/rust")
         )
     );
+}
+
+#[test]
+fn integer_param_is_coerced_from_string_input() {
+    let params = search_params();
+    let expr = parse_cli_args(
+        "github.search_issues",
+        &args(&["--query", "repo:rust-lang/rust", "--per_page", "5"]),
+        &params,
+    )
+    .unwrap();
+
     assert_eq!(
         expr.named_args[1],
         ("per_page".to_string(), serde_json::json!(5))
     );
+}
+
+#[test]
+fn key_value_args_produce_no_positional_args() {
+    let params = search_params();
+    let expr = parse_cli_args(
+        "github.search_issues",
+        &args(&["--query", "repo:rust-lang/rust", "--per_page", "5"]),
+        &params,
+    )
+    .unwrap();
+
+    assert!(expr.positional_args.is_empty());
 }
 
 #[test]
@@ -72,14 +93,7 @@ fn parses_boolean_flag_without_value() {
     )
     .unwrap();
 
-    assert_eq!(
-        expr.named_args
-            .iter()
-            .find(|(k, _)| k == "verbose")
-            .unwrap()
-            .1,
-        serde_json::json!(true)
-    );
+    assert_eq!(expr.named_args[1], ("verbose".to_string(), serde_json::json!(true)));
 }
 
 #[test]
@@ -92,14 +106,7 @@ fn parses_boolean_flag_with_explicit_false() {
     )
     .unwrap();
 
-    assert_eq!(
-        expr.named_args
-            .iter()
-            .find(|(k, _)| k == "verbose")
-            .unwrap()
-            .1,
-        serde_json::json!(false)
-    );
+    assert_eq!(expr.named_args[1], ("verbose".to_string(), serde_json::json!(false)));
 }
 
 #[test]
@@ -158,7 +165,7 @@ fn error_on_unknown_param() {
     )
     .unwrap_err();
 
-    assert!(err.to_string().contains("unknown parameter `--unknown`"));
+    assert!(matches!(err, CliArgsError::UnknownParam(..)));
 }
 
 #[test]
@@ -171,8 +178,7 @@ fn error_on_invalid_integer() {
     )
     .unwrap_err();
 
-    assert!(err.to_string().contains("--per_page"));
-    assert!(err.to_string().contains("expected integer"));
+    assert!(matches!(err, CliArgsError::InvalidValue { .. }));
 }
 
 #[test]
@@ -180,24 +186,24 @@ fn error_on_missing_value() {
     let params = search_params();
     let err = parse_cli_args("github.search_issues", &args(&["--query"]), &params).unwrap_err();
 
-    assert!(err.to_string().contains("missing value"));
+    assert!(matches!(err, CliArgsError::MissingValue(..)));
 }
 
 #[test]
 fn error_on_invalid_command_format() {
     let err = parse_cli_args("noperiod", &[], &[]).unwrap_err();
-    assert!(err.to_string().contains("expected provider.command"));
+    assert!(matches!(err, CliArgsError::InvalidCommand(..)));
 }
 
 #[test]
 fn error_on_bare_argument() {
     let params = search_params();
     let err = parse_cli_args("github.search_issues", &args(&["test"]), &params).unwrap_err();
-    assert!(err.to_string().contains("unexpected bare argument"));
+    assert!(matches!(err, CliArgsError::BareArgument(..)));
 }
 
 #[test]
-fn command_splitting() {
+fn dot_notation_splits_into_provider_and_command() {
     let expr = parse_cli_args("system.disk_usage", &[], &[]).unwrap();
     assert_eq!(expr.provider, "system");
     assert_eq!(expr.command, "disk_usage");

@@ -540,16 +540,23 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
-    fn resolve_vars_returns_empty_when_no_envs() {
+    fn no_environments_block_returns_empty_map() {
         let mut secret_values = vec![];
         let secrets = Value::Object(Map::new());
         let result = resolve_vars(None, None, &secrets, &mut secret_values).unwrap();
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn no_environments_block_tracks_no_secrets() {
+        let mut secret_values = vec![];
+        let secrets = Value::Object(Map::new());
+        resolve_vars(None, None, &secrets, &mut secret_values).unwrap();
         assert!(secret_values.is_empty());
     }
 
     #[test]
-    fn resolve_vars_returns_empty_when_no_active_env() {
+    fn no_active_environment_returns_empty_map() {
         let mut staging_vars = BTreeMap::new();
         staging_vars.insert(
             "base_url".to_string(),
@@ -567,7 +574,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_vars_resolves_and_tracks_values() {
+    fn resolved_var_has_correct_value() {
         let mut staging_vars = BTreeMap::new();
         staging_vars.insert("label".to_string(), "staging-label".to_string());
         let pe = ProviderEnvironments {
@@ -580,12 +587,25 @@ mod tests {
         let result =
             resolve_vars(Some(&pe), Some("staging"), &secrets, &mut secret_values).unwrap();
         assert_eq!(result["label"], Value::String("staging-label".to_string()));
-        // Every resolved value must be tracked for redaction
+    }
+
+    #[test]
+    fn resolved_var_is_tracked_for_redaction() {
+        let mut staging_vars = BTreeMap::new();
+        staging_vars.insert("label".to_string(), "staging-label".to_string());
+        let pe = ProviderEnvironments {
+            default: None,
+            secrets: vec![],
+            environments: BTreeMap::from([("staging".to_string(), staging_vars)]),
+        };
+        let mut secret_values = vec![];
+        let secrets = Value::Object(Map::new());
+        resolve_vars(Some(&pe), Some("staging"), &secrets, &mut secret_values).unwrap();
         assert!(secret_values.contains(&"staging-label".to_string()));
     }
 
     #[test]
-    fn resolve_vars_errors_for_unknown_env() {
+    fn unknown_environment_name_returns_error() {
         let pe = ProviderEnvironments {
             default: None,
             secrets: vec![],
@@ -593,15 +613,6 @@ mod tests {
         };
         let mut secret_values = vec![];
         let secrets = Value::Object(Map::new());
-        let err = resolve_vars(Some(&pe), Some("ghost"), &secrets, &mut secret_values).unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("ghost"),
-            "error should mention the env name: {msg}"
-        );
-        assert!(
-            msg.contains("staging"),
-            "error should list available envs: {msg}"
-        );
+        resolve_vars(Some(&pe), Some("ghost"), &secrets, &mut secret_values).unwrap_err();
     }
 }

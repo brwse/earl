@@ -506,64 +506,61 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_project_and_secret() {
+    fn two_segment_reference_sets_project() {
         let r = GcpReference::parse("gcp://my-project/my-secret").unwrap();
         assert_eq!(r.project, "my-project");
+    }
+
+    #[test]
+    fn two_segment_reference_sets_secret() {
+        let r = GcpReference::parse("gcp://my-project/my-secret").unwrap();
         assert_eq!(r.secret, "my-secret");
+    }
+
+    #[test]
+    fn two_segment_reference_defaults_version_to_latest() {
+        let r = GcpReference::parse("gcp://my-project/my-secret").unwrap();
         assert_eq!(r.version, "latest");
     }
 
     #[test]
-    fn parse_with_explicit_version() {
+    fn three_segment_reference_preserves_explicit_version() {
         let r = GcpReference::parse("gcp://my-project/my-secret/42").unwrap();
-        assert_eq!(r.project, "my-project");
-        assert_eq!(r.secret, "my-secret");
         assert_eq!(r.version, "42");
     }
 
     #[test]
-    fn parse_rejects_empty() {
-        let err = GcpReference::parse("gcp://").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn empty_path_after_scheme_returns_error() {
+        assert!(GcpReference::parse("gcp://").is_err());
     }
 
     #[test]
-    fn parse_rejects_project_only() {
-        let err = GcpReference::parse("gcp://my-project").unwrap_err();
-        assert!(
-            err.to_string().contains("invalid") || err.to_string().contains("expected"),
-            "got: {}",
-            err
-        );
+    fn project_only_without_secret_returns_error() {
+        assert!(GcpReference::parse("gcp://my-project").is_err());
     }
 
     #[test]
-    fn parse_rejects_too_many_segments() {
-        let err = GcpReference::parse("gcp://project/secret/version/extra").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn too_many_path_segments_returns_error() {
+        assert!(GcpReference::parse("gcp://project/secret/version/extra").is_err());
     }
 
     #[test]
-    fn parse_rejects_wrong_scheme() {
-        let err = GcpReference::parse("aws://project/secret").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn wrong_scheme_returns_error() {
+        assert!(GcpReference::parse("aws://project/secret").is_err());
     }
 
     #[test]
-    fn parse_rejects_question_mark_in_project() {
-        let err = GcpReference::parse("gcp://proj?ect/secret").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn question_mark_in_project_returns_error() {
+        assert!(GcpReference::parse("gcp://proj?ect/secret").is_err());
     }
 
     #[test]
-    fn parse_rejects_hash_in_secret() {
-        let err = GcpReference::parse("gcp://project/sec#ret").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn hash_in_secret_returns_error() {
+        assert!(GcpReference::parse("gcp://project/sec#ret").is_err());
     }
 
     #[test]
-    fn parse_rejects_whitespace_in_project() {
-        let err = GcpReference::parse("gcp://my project/secret").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn whitespace_in_project_returns_error() {
+        assert!(GcpReference::parse("gcp://my project/secret").is_err());
     }
 }

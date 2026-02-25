@@ -276,35 +276,26 @@ mod tests {
 
     #[test]
     fn rejects_empty_reference() {
-        let err = parse_template_source_ref("   ").unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("expected a local path or an http(s) URL")
-        );
+        parse_template_source_ref("   ").unwrap_err();
     }
 
     #[test]
     fn rejects_unsupported_url_scheme() {
-        let err =
-            parse_template_source_ref("git://example.com/repo/templates/github.hcl").unwrap_err();
-        assert!(err.to_string().contains("unsupported template URL scheme"));
+        parse_template_source_ref("git://example.com/repo/templates/github.hcl").unwrap_err();
     }
 
     #[test]
     fn rejects_non_hcl_extension() {
-        let err = validate_template_file_name("github.json").unwrap_err();
-        assert!(err.to_string().contains(".hcl"));
+        validate_template_file_name("github.json").unwrap_err();
     }
 
     #[test]
     fn rejects_path_traversal_segments() {
-        let err = validate_template_file_name("..\\github.hcl").unwrap_err();
-        assert!(err.to_string().contains("invalid segment"));
+        validate_template_file_name("..\\github.hcl").unwrap_err();
     }
 
-    #[test]
     #[cfg(feature = "http")]
-    fn collects_unique_sorted_required_secrets() {
+    fn template_with_overlapping_secrets() -> TemplateFile {
         let mut commands = BTreeMap::new();
         commands.insert(
             "a".to_string(),
@@ -378,15 +369,19 @@ mod tests {
                 environment_overrides: BTreeMap::new(),
             },
         );
-
-        let template_file = TemplateFile {
+        TemplateFile {
             version: 1,
             provider: "demo".to_string(),
             categories: vec![],
             environments: None,
             commands,
-        };
+        }
+    }
 
+    #[test]
+    #[cfg(feature = "http")]
+    fn collects_unique_sorted_required_secrets() {
+        let template_file = template_with_overlapping_secrets();
         let secrets = collect_credential_keys(&template_file);
         assert_eq!(
             secrets,

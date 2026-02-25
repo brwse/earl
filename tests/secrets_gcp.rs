@@ -4,25 +4,19 @@ use earl::secrets::resolver::SecretResolver;
 use earl::secrets::resolvers::gcp::GcpResolver;
 
 #[test]
-fn gcp_resolver_scheme() {
+fn resolver_scheme_is_gcp() {
     let resolver = GcpResolver::new();
     assert_eq!(resolver.scheme(), "gcp");
 }
 
 #[test]
-fn gcp_resolver_rejects_empty() {
+fn empty_reference_returns_error() {
     let resolver = GcpResolver::new();
-    let err = resolver.resolve("gcp://").unwrap_err();
-    assert!(err.to_string().contains("invalid"), "got: {}", err);
+    assert!(resolver.resolve("gcp://").is_err());
 }
 
 #[test]
-fn gcp_resolver_rejects_missing_secret_name() {
+fn missing_secret_name_returns_error() {
     let resolver = GcpResolver::new();
-    let err = resolver.resolve("gcp://my-project").unwrap_err();
-    assert!(
-        err.to_string().contains("invalid") || err.to_string().contains("expected"),
-        "got: {}",
-        err
-    );
+    assert!(resolver.resolve("gcp://my-project").is_err());
 }

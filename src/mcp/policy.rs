@@ -148,36 +148,62 @@ mod tests {
     // --- Glob matching tests ---
 
     #[test]
-    fn glob_exact_match() {
+    fn exact_pattern_matches_identical_string() {
         assert!(glob_matches("github.create_issue", "github.create_issue"));
+    }
+
+    #[test]
+    fn exact_pattern_does_not_match_different_string() {
         assert!(!glob_matches("github.create_issue", "github.delete_issue"));
     }
 
     #[test]
-    fn glob_star_matches_single_segment() {
+    fn star_matches_within_single_segment() {
         assert!(glob_matches("github.*", "github.create_issue"));
+    }
+
+    #[test]
+    fn star_matches_different_suffix_within_single_segment() {
         assert!(glob_matches("github.*", "github.delete_repo"));
-        // Star does NOT match across dots
+    }
+
+    #[test]
+    fn star_does_not_match_across_dots() {
         assert!(!glob_matches("github.*", "github.admin.delete"));
     }
 
     #[test]
-    fn glob_star_in_second_segment() {
+    fn star_in_pattern_matches_within_segment() {
         assert!(glob_matches("*.delete_*", "github.delete_repo"));
+    }
+
+    #[test]
+    fn star_in_pattern_matches_different_provider_prefix() {
         assert!(glob_matches("*.delete_*", "slack.delete_message"));
-        // Does not match three-segment keys
+    }
+
+    #[test]
+    fn star_does_not_match_three_segment_key() {
         assert!(!glob_matches("*.delete_*", "github.admin.delete_repo"));
     }
 
     #[test]
-    fn glob_lone_star_matches_everything() {
+    fn lone_star_matches_dotted_key() {
         assert!(glob_matches("*", "github.create_issue"));
+    }
+
+    #[test]
+    fn lone_star_matches_undotted_value() {
         assert!(glob_matches("*", "anything"));
     }
 
     #[test]
-    fn glob_case_insensitive() {
+    fn uppercase_pattern_matches_lowercase_value() {
         assert!(glob_matches("GitHub.*", "github.create_issue"));
+    }
+
+    #[test]
+    fn lowercase_pattern_matches_uppercase_value() {
         assert!(glob_matches("github.*", "GitHub.Create_Issue"));
     }
 
@@ -233,12 +259,17 @@ mod tests {
     }
 
     #[test]
-    fn mode_filter_restricts_to_read() {
+    fn read_mode_is_allowed_when_policy_restricts_to_read() {
         let policies = vec![allow_rule_with_modes(&["*"], &["*"], &[PolicyMode::Read])];
         assert_eq!(
             evaluate(&policies, "alice", "github.search", CommandMode::Read),
             PolicyDecision::Allow
         );
+    }
+
+    #[test]
+    fn write_mode_is_denied_when_policy_restricts_to_read() {
+        let policies = vec![allow_rule_with_modes(&["*"], &["*"], &[PolicyMode::Read])];
         assert_eq!(
             evaluate(&policies, "alice", "github.create", CommandMode::Write),
             PolicyDecision::Deny
@@ -246,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_allowed_returns_permitted_tools() {
+    fn filter_allowed_returns_only_explicitly_allowed_tools() {
         let policies = vec![
             allow_rule(&["alice"], &["github.*"]),
             deny_rule(&["alice"], &["github.delete_*"]),

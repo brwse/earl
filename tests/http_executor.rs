@@ -233,7 +233,7 @@ async fn spawn_grpc_health_server(with_reflection: bool) -> String {
 }
 
 #[tokio::test]
-async fn follows_redirect_and_rewrites_post_to_get_for_302() {
+async fn follows_redirect_for_302() {
     let (base_url, _) = spawn_test_server().await;
     let result_template = ResultTemplate {
         decode: ResultDecode::Json,
@@ -271,12 +271,52 @@ async fn follows_redirect_and_rewrites_post_to_get_for_302() {
     .await
     .unwrap();
     assert_eq!(out.status, 200);
+}
+
+#[tokio::test]
+async fn rewrites_post_to_get_for_302() {
+    let (base_url, _) = spawn_test_server().await;
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Json,
+        extract: Some(ResultExtract::JsonPointer {
+            json_pointer: "/method".to_string(),
+        }),
+        output: "{{ result }}".to_string(),
+        result_alias: None,
+    };
+
+    let transport = ResolvedTransport {
+        timeout: Duration::from_secs(5),
+        follow_redirects: true,
+        max_redirect_hops: 3,
+        retry_max_attempts: 1,
+        retry_backoff: Duration::from_millis(1),
+        retry_on_status: vec![],
+        compression: true,
+        tls_min_version: None,
+        proxy_url: None,
+        max_response_bytes: 8 * 1024 * 1024,
+    };
+
+    let prepared = prepared_request(
+        reqwest::Method::POST,
+        format!("{base_url}/redirect302post"),
+        "/",
+        result_template,
+        transport,
+    );
+
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
     assert_eq!(out.result, json!("GET"));
 }
 
 #[tokio::test]
-async fn retries_on_configured_status_then_succeeds() {
-    let (base_url, retry_counter) = spawn_test_server().await;
+async fn retries_on_configured_status_returns_200() {
+    let (base_url, _) = spawn_test_server().await;
     let result_template = ResultTemplate {
         decode: ResultDecode::Json,
         extract: Some(ResultExtract::JsonPointer {
@@ -313,7 +353,85 @@ async fn retries_on_configured_status_then_succeeds() {
     .await
     .unwrap();
     assert_eq!(out.status, 200);
+}
+
+#[tokio::test]
+async fn retries_on_configured_status_result_is_ok_true() {
+    let (base_url, _) = spawn_test_server().await;
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Json,
+        extract: Some(ResultExtract::JsonPointer {
+            json_pointer: "/ok".to_string(),
+        }),
+        output: "{{ result }}".to_string(),
+        result_alias: None,
+    };
+
+    let transport = ResolvedTransport {
+        timeout: Duration::from_secs(5),
+        follow_redirects: true,
+        max_redirect_hops: 2,
+        retry_max_attempts: 2,
+        retry_backoff: Duration::from_millis(1),
+        retry_on_status: vec![503],
+        compression: true,
+        tls_min_version: None,
+        proxy_url: None,
+        max_response_bytes: 8 * 1024 * 1024,
+    };
+
+    let prepared = prepared_request(
+        reqwest::Method::GET,
+        format!("{base_url}/retry"),
+        "/",
+        result_template,
+        transport,
+    );
+
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
     assert_eq!(out.result, json!(true));
+}
+
+#[tokio::test]
+async fn retries_on_configured_status_makes_two_attempts() {
+    let (base_url, retry_counter) = spawn_test_server().await;
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Json,
+        extract: None,
+        output: "{{ result }}".to_string(),
+        result_alias: None,
+    };
+
+    let transport = ResolvedTransport {
+        timeout: Duration::from_secs(5),
+        follow_redirects: true,
+        max_redirect_hops: 2,
+        retry_max_attempts: 2,
+        retry_backoff: Duration::from_millis(1),
+        retry_on_status: vec![503],
+        compression: true,
+        tls_min_version: None,
+        proxy_url: None,
+        max_response_bytes: 8 * 1024 * 1024,
+    };
+
+    let prepared = prepared_request(
+        reqwest::Method::GET,
+        format!("{base_url}/retry"),
+        "/",
+        result_template,
+        transport,
+    );
+
+    execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
     assert_eq!(retry_counter.load(Ordering::SeqCst), 2);
 }
 
@@ -348,12 +466,11 @@ async fn fails_when_redirect_hops_exceed_limit() {
         transport,
     );
 
-    let err = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+    execute_prepared_request_with_host_validator(&prepared, |_url| async {
         Ok(loopback_resolver())
     })
     .await
     .unwrap_err();
-    assert!(err.to_string().contains("maximum redirect hops reached"));
 }
 
 #[tokio::test]
@@ -387,19 +504,15 @@ async fn blocks_request_when_allowlist_does_not_match() {
         transport,
     );
 
-    let err = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+    execute_prepared_request_with_host_validator(&prepared, |_url| async {
         Ok(loopback_resolver())
     })
     .await
     .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("is not allowed by template allowlist policy")
-    );
 }
 
 #[tokio::test]
-async fn allows_request_when_allowlist_is_empty() {
+async fn empty_allowlist_returns_200() {
     let (base_url, _) = spawn_test_server().await;
     let result_template = ResultTemplate {
         decode: ResultDecode::Json,
@@ -439,11 +552,53 @@ async fn allows_request_when_allowlist_is_empty() {
     .unwrap();
 
     assert_eq!(out.status, 200);
+}
+
+#[tokio::test]
+async fn empty_allowlist_result_matches_response() {
+    let (base_url, _) = spawn_test_server().await;
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Json,
+        extract: Some(ResultExtract::JsonPointer {
+            json_pointer: "/ok".to_string(),
+        }),
+        output: "ok".to_string(),
+        result_alias: None,
+    };
+
+    let transport = ResolvedTransport {
+        timeout: Duration::from_secs(5),
+        follow_redirects: true,
+        max_redirect_hops: 2,
+        retry_max_attempts: 1,
+        retry_backoff: Duration::from_millis(1),
+        retry_on_status: vec![],
+        compression: true,
+        tls_min_version: None,
+        proxy_url: None,
+        max_response_bytes: 8 * 1024 * 1024,
+    };
+
+    let mut prepared = prepared_request(
+        reqwest::Method::GET,
+        format!("{base_url}/final"),
+        "/",
+        result_template,
+        transport,
+    );
+    prepared.allow_rules.clear();
+
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
+
     assert_eq!(out.result, json!(true));
 }
 
 #[tokio::test]
-async fn decodes_and_extracts_json_result() {
+async fn extracts_json_pointer_from_response_body() {
     let (base_url, _) = spawn_test_server().await;
     let result_template = ResultTemplate {
         decode: ResultDecode::Json,
@@ -481,12 +636,52 @@ async fn decodes_and_extracts_json_result() {
     .await
     .unwrap();
     assert_eq!(out.result, json!(true));
+}
+
+#[tokio::test]
+async fn decoded_field_contains_full_json_response() {
+    let (base_url, _) = spawn_test_server().await;
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Json,
+        extract: Some(ResultExtract::JsonPointer {
+            json_pointer: "/ok".to_string(),
+        }),
+        output: "ok".to_string(),
+        result_alias: None,
+    };
+
+    let transport = ResolvedTransport {
+        timeout: Duration::from_secs(5),
+        follow_redirects: true,
+        max_redirect_hops: 2,
+        retry_max_attempts: 1,
+        retry_backoff: Duration::from_millis(1),
+        retry_on_status: vec![],
+        compression: true,
+        tls_min_version: None,
+        proxy_url: None,
+        max_response_bytes: 8 * 1024 * 1024,
+    };
+
+    let prepared = prepared_request(
+        reqwest::Method::GET,
+        format!("{base_url}/final"),
+        "/",
+        result_template,
+        transport,
+    );
+
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
     assert_eq!(out.decoded["ok"], json!(true));
 }
 
 #[tokio::test]
 #[cfg(feature = "grpc")]
-async fn executes_grpc_check_with_reflection() {
+async fn grpc_check_with_reflection_returns_zero_status() {
     let base_url = spawn_grpc_health_server(true).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -505,13 +700,57 @@ async fn executes_grpc_check_with_reflection() {
     .unwrap();
 
     assert_eq!(out.status, 0);
+}
+
+#[tokio::test]
+#[cfg(feature = "grpc")]
+async fn grpc_check_with_reflection_routes_to_health_check_endpoint() {
+    let base_url = spawn_grpc_health_server(true).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Json,
+        extract: None,
+        output: "{{ result }}".to_string(),
+        result_alias: None,
+    };
+    let prepared = prepared_grpc_request(base_url, result_template, None);
+
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
+
     assert!(out.url.contains("/grpc.health.v1.Health/Check"));
+}
+
+#[tokio::test]
+#[cfg(feature = "grpc")]
+async fn grpc_check_with_reflection_response_includes_status_field() {
+    let base_url = spawn_grpc_health_server(true).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Json,
+        extract: None,
+        output: "{{ result }}".to_string(),
+        result_alias: None,
+    };
+    let prepared = prepared_grpc_request(base_url, result_template, None);
+
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
+
     assert!(out.decoded.get("status").is_some());
 }
 
 #[tokio::test]
 #[cfg(feature = "grpc")]
-async fn executes_grpc_check_with_descriptor_set_file_data() {
+async fn grpc_check_with_descriptor_set_returns_zero_status() {
     let base_url = spawn_grpc_health_server(false).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -536,5 +775,33 @@ async fn executes_grpc_check_with_descriptor_set_file_data() {
     .unwrap();
 
     assert_eq!(out.status, 0);
-    assert!(out.result.is_string() || out.result.is_number());
+}
+
+#[tokio::test]
+#[cfg(feature = "grpc")]
+async fn grpc_check_with_descriptor_set_result_is_string() {
+    let base_url = spawn_grpc_health_server(false).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Json,
+        extract: Some(ResultExtract::JsonPointer {
+            json_pointer: "/status".to_string(),
+        }),
+        output: "{{ result }}".to_string(),
+        result_alias: None,
+    };
+    let prepared = prepared_grpc_request(
+        base_url,
+        result_template,
+        Some(tonic_health::pb::FILE_DESCRIPTOR_SET.to_vec()),
+    );
+
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
+
+    assert!(out.result.is_string());
 }

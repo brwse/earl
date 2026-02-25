@@ -185,7 +185,7 @@ command "watch" {
 
 #[test]
 #[cfg(feature = "http")]
-fn is_streaming_returns_true_for_stream_http_template() {
+fn http_operation_with_stream_true_is_streaming() {
     let hcl_src = r#"
 version = 1
 provider = "demo"
@@ -223,7 +223,7 @@ command "events" {
 
 #[test]
 #[cfg(feature = "http")]
-fn is_streaming_returns_false_for_non_stream_http_template() {
+fn http_operation_without_stream_field_is_not_streaming() {
     let hcl_src = r#"
 version = 1
 provider = "demo"

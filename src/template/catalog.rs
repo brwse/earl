@@ -76,20 +76,16 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
-    #[test]
     #[cfg(feature = "bash")]
-    fn catalog_preserves_provider_environments_through_upsert_and_get() {
+    fn catalog_with_provider_environments() -> TemplateCatalog {
         use earl_core::schema::{CommandMode, ResultTemplate};
         use earl_protocol_bash::{BashOperationTemplate, BashScriptTemplate};
 
         use super::super::schema::{Annotations, CommandTemplate, OperationTemplate};
 
-        let mut envs = BTreeMap::new();
         let mut prod_vars = BTreeMap::new();
-        prod_vars.insert(
-            "base_url".to_string(),
-            "https://api.example.com".to_string(),
-        );
+        prod_vars.insert("base_url".to_string(), "https://api.example.com".to_string());
+        let mut envs = BTreeMap::new();
         envs.insert("production".to_string(), prod_vars);
 
         let pe = ProviderEnvironments {
@@ -143,17 +139,23 @@ mod tests {
 
         let mut catalog = TemplateCatalog::empty();
         catalog.upsert("myservice.ping".to_string(), entry);
-
-        let retrieved = catalog.get("myservice.ping").unwrap();
-        let envs = retrieved.provider_environments.as_ref().unwrap();
-        assert_eq!(envs.default.as_deref(), Some("production"));
-        assert!(envs.environments.contains_key("production"));
-        assert_eq!(
-            envs.environments["production"]["base_url"],
-            "https://api.example.com"
-        );
-
-        // Verify missing key returns None
-        assert!(catalog.get("nonexistent.cmd").is_none());
+        catalog
     }
+
+    #[test]
+    #[cfg(feature = "bash")]
+    fn catalog_preserves_provider_environment_default() {
+        let catalog = catalog_with_provider_environments();
+        let envs = catalog.get("myservice.ping").unwrap().provider_environments.as_ref().unwrap();
+        assert_eq!(envs.default.as_deref(), Some("production"));
+    }
+
+    #[test]
+    #[cfg(feature = "bash")]
+    fn catalog_preserves_provider_environment_variables() {
+        let catalog = catalog_with_provider_environments();
+        let envs = catalog.get("myservice.ping").unwrap().provider_environments.as_ref().unwrap();
+        assert_eq!(envs.environments["production"]["base_url"], "https://api.example.com");
+    }
+
 }

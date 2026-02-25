@@ -134,61 +134,8 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    fn write_bash_template(dir: &TempDir, provider: &str, command: &str) {
+    fn write_env_template(dir: &TempDir) {
         let tdir = dir.path().join("templates");
-        std::fs::create_dir_all(&tdir).unwrap();
-        std::fs::write(
-            tdir.join(format!("{provider}.hcl")),
-            format!(
-                r#"version = 1
-provider = "{provider}"
-command "{command}" {{
-  title = "T"
-  summary = "S"
-  description = "D"
-  operation {{
-    protocol = "bash"
-    bash {{
-      script = "echo hi"
-    }}
-  }}
-}}
-"#
-            ),
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn load_catalog_returns_correct_entries() {
-        let tmp = TempDir::new().unwrap();
-        let global = TempDir::new().unwrap();
-        write_bash_template(&tmp, "myprovider", "mycommand");
-
-        let catalog = load_catalog_from_dirs(global.path(), &tmp.path().join("templates")).unwrap();
-        assert!(catalog.get("myprovider.mycommand").is_some());
-    }
-
-    #[test]
-    fn load_catalog_is_idempotent_across_two_calls() {
-        let tmp = TempDir::new().unwrap();
-        let global = TempDir::new().unwrap();
-        write_bash_template(&tmp, "myprovider2", "cmd");
-
-        let local = tmp.path().join("templates");
-        let c1 = load_catalog_from_dirs(global.path(), &local).unwrap();
-        let c2 = load_catalog_from_dirs(global.path(), &local).unwrap();
-
-        let e1 = c1.get("myprovider2.cmd").unwrap();
-        let e2 = c2.get("myprovider2.cmd").unwrap();
-        assert_eq!(e1.title, e2.title);
-    }
-
-    #[test]
-    fn provider_environments_stored_in_catalog_entry() {
-        let tmp = TempDir::new().unwrap();
-        let global = TempDir::new().unwrap();
-        let tdir = tmp.path().join("templates");
         std::fs::create_dir_all(&tdir).unwrap();
         std::fs::write(
             tdir.join("envtest.hcl"),
@@ -218,7 +165,50 @@ command "ping" {
 "#,
         )
         .unwrap();
+    }
 
+    fn write_bash_template(dir: &TempDir, provider: &str, command: &str) {
+        let tdir = dir.path().join("templates");
+        std::fs::create_dir_all(&tdir).unwrap();
+        std::fs::write(
+            tdir.join(format!("{provider}.hcl")),
+            format!(
+                r#"version = 1
+provider = "{provider}"
+command "{command}" {{
+  title = "T"
+  summary = "S"
+  description = "D"
+  operation {{
+    protocol = "bash"
+    bash {{
+      script = "echo hi"
+    }}
+  }}
+}}
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn command_accessible_by_provider_dot_command_key() {
+        let tmp = TempDir::new().unwrap();
+        let global = TempDir::new().unwrap();
+        write_bash_template(&tmp, "myprovider", "mycommand");
+
+        let catalog = load_catalog_from_dirs(global.path(), &tmp.path().join("templates")).unwrap();
+        assert!(catalog.get("myprovider.mycommand").is_some());
+    }
+
+    #[test]
+    fn provider_environments_default_field_stored_in_catalog_entry() {
+        let tmp = TempDir::new().unwrap();
+        let global = TempDir::new().unwrap();
+        write_env_template(&tmp);
+
+        let tdir = tmp.path().join("templates");
         let catalog = load_catalog_from_dirs(global.path(), &tdir).unwrap();
         let entry = catalog.get("envtest.ping").expect("entry should exist");
         let envs = entry
@@ -226,12 +216,42 @@ command "ping" {
             .as_ref()
             .expect("provider_environments should be set");
         assert_eq!(envs.default.as_deref(), Some("production"));
+    }
+
+    #[test]
+    fn provider_environments_production_key_stored_in_catalog_entry() {
+        let tmp = TempDir::new().unwrap();
+        let global = TempDir::new().unwrap();
+        write_env_template(&tmp);
+
+        let tdir = tmp.path().join("templates");
+        let catalog = load_catalog_from_dirs(global.path(), &tdir).unwrap();
+        let entry = catalog.get("envtest.ping").expect("entry should exist");
+        let envs = entry
+            .provider_environments
+            .as_ref()
+            .expect("provider_environments should be set");
         assert!(envs.environments.contains_key("production"));
+    }
+
+    #[test]
+    fn provider_environments_staging_key_stored_in_catalog_entry() {
+        let tmp = TempDir::new().unwrap();
+        let global = TempDir::new().unwrap();
+        write_env_template(&tmp);
+
+        let tdir = tmp.path().join("templates");
+        let catalog = load_catalog_from_dirs(global.path(), &tdir).unwrap();
+        let entry = catalog.get("envtest.ping").expect("entry should exist");
+        let envs = entry
+            .provider_environments
+            .as_ref()
+            .expect("provider_environments should be set");
         assert!(envs.environments.contains_key("staging"));
     }
 
     #[test]
-    fn load_catalog_writes_cache_on_miss_and_hits_on_second_call() {
+    fn cache_file_written_after_catalog_load() {
         let tmp = TempDir::new().unwrap();
         let global = TempDir::new().unwrap();
         let cache_dir = TempDir::new().unwrap();
@@ -239,19 +259,24 @@ command "ping" {
         write_bash_template(&tmp, "myprovider3", "cached_cmd");
 
         let local = tmp.path().join("templates");
-
-        // First call: cache miss — parses HCL and writes cache.
-        assert!(!cache_path.exists());
-        let c1 = load_catalog_with_cache(global.path(), &local, &cache_path).unwrap();
-        assert!(c1.get("myprovider3.cached_cmd").is_some());
+        load_catalog_with_cache(global.path(), &local, &cache_path).unwrap();
         assert!(
             cache_path.exists(),
             "cache file should have been written after miss"
         );
+    }
 
-        // Second call with unchanged files: cache hit — returns same catalog.
+    #[test]
+    fn second_load_returns_same_catalog_entry() {
+        let tmp = TempDir::new().unwrap();
+        let global = TempDir::new().unwrap();
+        let cache_dir = TempDir::new().unwrap();
+        let cache_path = cache_dir.path().join("catalog-test.bin");
+        write_bash_template(&tmp, "myprovider3", "cached_cmd");
+
+        let local = tmp.path().join("templates");
+        let c1 = load_catalog_with_cache(global.path(), &local, &cache_path).unwrap();
         let c2 = load_catalog_with_cache(global.path(), &local, &cache_path).unwrap();
-        assert!(c2.get("myprovider3.cached_cmd").is_some());
         assert_eq!(
             c1.get("myprovider3.cached_cmd").unwrap().title,
             c2.get("myprovider3.cached_cmd").unwrap().title

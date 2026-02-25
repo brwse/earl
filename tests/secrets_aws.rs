@@ -4,7 +4,7 @@ use earl::secrets::resolver::SecretResolver;
 use earl::secrets::resolvers::aws::AwsResolver;
 
 #[test]
-fn aws_resolver_scheme() {
+fn aws_resolver_scheme_is_aws() {
     let resolver = AwsResolver::new();
     assert_eq!(resolver.scheme(), "aws");
 }
@@ -12,6 +12,5 @@ fn aws_resolver_scheme() {
 #[test]
 fn aws_resolver_rejects_empty_name() {
     let resolver = AwsResolver::new();
-    let err = resolver.resolve("aws://").unwrap_err();
-    assert!(err.to_string().contains("invalid"), "got: {}", err);
+    assert!(resolver.resolve("aws://").is_err());
 }

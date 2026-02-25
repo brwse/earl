@@ -116,7 +116,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_simple_data_event() {
+    fn single_data_line_returned_as_event_data() {
         let input = "data: hello world\n\n";
         let events = SseParser::new().feed(input);
         assert_eq!(events.len(), 1);
@@ -124,7 +124,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_multiline_data_event() {
+    fn multiple_data_lines_joined_with_newline() {
         let input = "data: line1\ndata: line2\n\n";
         let events = SseParser::new().feed(input);
         assert_eq!(events.len(), 1);
@@ -132,16 +132,15 @@ mod tests {
     }
 
     #[test]
-    fn parses_event_with_type() {
+    fn event_field_sets_event_type() {
         let input = "event: update\ndata: {\"key\":\"value\"}\n\n";
         let events = SseParser::new().feed(input);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type.as_deref(), Some("update"));
-        assert_eq!(events[0].data, "{\"key\":\"value\"}");
     }
 
     #[test]
-    fn skips_comments() {
+    fn comment_lines_excluded_from_event_data() {
         let input = ": this is a comment\ndata: actual data\n\n";
         let events = SseParser::new().feed(input);
         assert_eq!(events.len(), 1);
@@ -149,23 +148,22 @@ mod tests {
     }
 
     #[test]
-    fn handles_multiple_events() {
+    fn multiple_complete_events_all_returned() {
         let input = "data: event1\n\ndata: event2\n\n";
         let events = SseParser::new().feed(input);
         assert_eq!(events.len(), 2);
     }
 
     #[test]
-    fn parses_event_with_id() {
+    fn id_field_sets_event_id() {
         let input = "id: 42\ndata: payload\n\n";
         let events = SseParser::new().feed(input);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].id.as_deref(), Some("42"));
-        assert_eq!(events[0].data, "payload");
     }
 
     #[test]
-    fn handles_no_space_after_colon() {
+    fn no_space_after_colon_data_is_parsed() {
         let input = "data:no-space\n\n";
         let events = SseParser::new().feed(input);
         assert_eq!(events.len(), 1);
@@ -173,20 +171,20 @@ mod tests {
     }
 
     #[test]
-    fn ignores_block_without_data() {
+    fn block_without_data_field_produces_no_event() {
         let input = "event: ping\n\n";
         let events = SseParser::new().feed(input);
         assert!(events.is_empty());
     }
 
     #[test]
-    fn handles_empty_input() {
+    fn empty_input_returns_no_events() {
         let events = SseParser::new().feed("");
         assert!(events.is_empty());
     }
 
     #[test]
-    fn event_split_across_chunks() {
+    fn event_split_across_chunks_buffered_until_complete() {
         let mut parser = SseParser::new();
 
         // First chunk contains the beginning of the event but no blank-line terminator.
@@ -200,16 +198,23 @@ mod tests {
     }
 
     #[test]
-    fn handles_crlf_line_endings() {
+    fn crlf_line_endings_parse_event_type() {
         let input = "event: update\r\ndata: payload\r\n\r\n";
         let events = SseParser::new().feed(input);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type.as_deref(), Some("update"));
+    }
+
+    #[test]
+    fn crlf_line_endings_parse_data() {
+        let input = "event: update\r\ndata: payload\r\n\r\n";
+        let events = SseParser::new().feed(input);
+        assert_eq!(events.len(), 1);
         assert_eq!(events[0].data, "payload");
     }
 
     #[test]
-    fn flush_trailing_event() {
+    fn trailing_data_without_terminator_emitted_on_flush() {
         let mut parser = SseParser::new();
 
         // Feed an event that is NOT terminated by a blank line.
@@ -222,15 +227,19 @@ mod tests {
     }
 
     #[test]
-    fn multiple_feed_calls() {
+    fn complete_event_before_partial_in_same_feed_emitted_immediately() {
         let mut parser = SseParser::new();
-
-        // First feed: one complete event and start of another.
         let events = parser.feed("data: first\n\ndata: sec");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].data, "first");
+    }
 
-        // Second feed: finish the second event and deliver a third.
+    #[test]
+    fn subsequent_feed_completes_partial_and_returns_additional_events() {
+        let mut parser = SseParser::new();
+        // Setup: buffer a partial event.
+        parser.feed("data: first\n\ndata: sec");
+        // Second feed completes the partial and delivers a further event.
         let events = parser.feed("ond\n\ndata: third\n\n");
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].data, "second");

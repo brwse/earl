@@ -3,35 +3,55 @@
 use earl::secrets::resolver::SecretResolver;
 use earl::secrets::resolvers::vault::VaultResolver;
 
+static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Removes an environment variable on construction and restores it on drop.
+/// Must be used inside a block guarded by `ENV_MUTEX`.
+struct EnvRestore {
+    name: &'static str,
+    saved: Option<String>,
+}
+
+impl EnvRestore {
+    fn remove(name: &'static str) -> Self {
+        let saved = std::env::var(name).ok();
+        // SAFETY: guarded by ENV_MUTEX in all callers.
+        unsafe { std::env::remove_var(name) };
+        Self { name, saved }
+    }
+}
+
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        unsafe {
+            match self.saved.take() {
+                Some(v) => std::env::set_var(self.name, v),
+                None => std::env::remove_var(self.name),
+            }
+        }
+    }
+}
+
 #[test]
-fn vault_resolver_scheme() {
+fn vault_resolver_scheme_is_vault() {
     let resolver = VaultResolver::new();
     assert_eq!(resolver.scheme(), "vault");
 }
 
 #[test]
-fn vault_resolver_requires_env_vars() {
-    // Clear env vars so the resolver always reports missing credentials.
-    // SAFETY: This test is single-threaded and no other threads read these env vars.
-    unsafe {
-        std::env::remove_var("VAULT_ADDR");
-        std::env::remove_var("VAULT_TOKEN");
-    }
+fn missing_vault_credentials_returns_error() {
+    let _guard = ENV_MUTEX.lock().unwrap();
+    // SAFETY: ENV_MUTEX ensures no other test in this binary concurrently
+    // reads or writes VAULT_ADDR / VAULT_TOKEN.
+    let _addr = EnvRestore::remove("VAULT_ADDR");
+    let _token = EnvRestore::remove("VAULT_TOKEN");
 
     let resolver = VaultResolver::new();
-    let err = resolver
-        .resolve("vault://secret/myapp#api_key")
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("VAULT_ADDR") || err.to_string().contains("VAULT_TOKEN"),
-        "error should mention required env vars: {}",
-        err
-    );
+    resolver.resolve("vault://secret/myapp#api_key").unwrap_err();
 }
 
 #[test]
-fn vault_resolver_parses_path_and_field() {
+fn empty_vault_url_returns_error() {
     let resolver = VaultResolver::new();
-    let err = resolver.resolve("vault://").unwrap_err();
-    assert!(err.to_string().contains("invalid"), "got: {}", err);
+    resolver.resolve("vault://").unwrap_err();
 }

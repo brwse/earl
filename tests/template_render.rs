@@ -2,7 +2,7 @@ use earl::template::render::{render_json_value, render_string_raw};
 use serde_json::json;
 
 #[test]
-fn renders_pure_expression_with_typed_value() {
+fn pure_expression_returns_typed_value() {
     let context = json!({"args": {"count": 42}});
     let rendered = render_json_value(&json!("{{ args.count }}"), &context).unwrap();
     assert_eq!(rendered, json!(42));
@@ -26,12 +26,20 @@ fn undefined_variable_renders_as_empty_string() {
 }
 
 #[test]
-fn renders_object_keys_and_values() {
-    // Pure expression rendering preserves context types: integer 123 stays integer.
-    let context = json!({"args": {"key": "x-id", "value": 123}});
-    let value = json!({"{{ args.key }}": "{{ args.value }}"});
+fn expression_in_object_key_evaluates_to_context_value() {
+    let context = json!({"args": {"key": "x-id"}});
+    let value = json!({"{{ args.key }}": "static"});
     let rendered = render_json_value(&value, &context).unwrap();
-    assert_eq!(rendered, json!({"x-id": 123}));
+    assert_eq!(rendered, json!({"x-id": "static"}));
+}
+
+#[test]
+fn pure_expression_value_preserves_numeric_type() {
+    // Pure expression rendering preserves context types: integer 123 stays integer.
+    let context = json!({"args": {"value": 123}});
+    let value = json!({"key": "{{ args.value }}"});
+    let rendered = render_json_value(&value, &context).unwrap();
+    assert_eq!(rendered, json!({"key": 123}));
 }
 
 #[test]

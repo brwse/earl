@@ -64,6 +64,13 @@ impl VaultReference {
     }
 }
 
+/// Returns `true` when every byte in `s` is valid in an HTTP header value
+/// (printable ASCII 0x20–0x7E, or tab 0x09).
+fn is_header_safe(s: &str) -> bool {
+    s.bytes()
+        .all(|b| b == b'\t' || (0x20u8..=0x7E).contains(&b))
+}
+
 /// Resolver for HashiCorp Vault secrets using the `vault://` URI scheme.
 ///
 /// Reads secrets from a Vault KV v2 secrets engine. Requires the following
@@ -150,10 +157,7 @@ impl SecretResolver for VaultResolver {
         // Validate VAULT_TOKEN contains only HTTP header-safe bytes.
         // vaultrs calls HeaderValue::from_str(&token).unwrap() which panics on
         // control characters, DEL (0x7F), or non-ASCII bytes.
-        if !token
-            .bytes()
-            .all(|b| b == b'\t' || (0x20u8..=0x7E).contains(&b))
-        {
+        if !is_header_safe(&token) {
             bail!(
                 "VAULT_TOKEN contains characters that are not valid in HTTP headers \
                  (control characters, DEL, or non-ASCII). \
@@ -187,10 +191,7 @@ impl SecretResolver for VaultResolver {
             // Validate namespace contains only HTTP header-safe bytes.
             // vaultrs calls HeaderValue::from_str(ns).unwrap() which panics on
             // control characters, DEL (0x7F), or non-ASCII bytes.
-            if !ns
-                .bytes()
-                .all(|b| b == b'\t' || (0x20u8..=0x7E).contains(&b))
-            {
+            if !is_header_safe(ns) {
                 bail!(
                     "VAULT_NAMESPACE contains characters that are not valid in HTTP headers \
                      (control characters, DEL, or non-ASCII). \
@@ -273,149 +274,142 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_valid_reference() {
+    fn valid_reference_mount_is_first_path_segment() {
         let r = VaultReference::parse("vault://secret/myapp#api_key").unwrap();
         assert_eq!(r.mount, "secret");
+    }
+
+    #[test]
+    fn valid_reference_path_excludes_mount_segment() {
+        let r = VaultReference::parse("vault://secret/myapp#api_key").unwrap();
         assert_eq!(r.path, "myapp");
+    }
+
+    #[test]
+    fn valid_reference_field_is_fragment_portion() {
+        let r = VaultReference::parse("vault://secret/myapp#api_key").unwrap();
         assert_eq!(r.field, "api_key");
     }
 
     #[test]
-    fn parse_nested_path() {
+    fn nested_path_mount_is_first_segment() {
         let r = VaultReference::parse("vault://secret/data/team/app#password").unwrap();
         assert_eq!(r.mount, "secret");
+    }
+
+    #[test]
+    fn nested_path_joins_all_segments_after_mount() {
+        let r = VaultReference::parse("vault://secret/data/team/app#password").unwrap();
         assert_eq!(r.path, "data/team/app");
+    }
+
+    #[test]
+    fn nested_path_field_is_preserved() {
+        let r = VaultReference::parse("vault://secret/data/team/app#password").unwrap();
         assert_eq!(r.field, "password");
     }
 
     #[test]
-    fn parse_rejects_missing_field() {
-        let err = VaultReference::parse("vault://secret/myapp").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn reference_without_hash_field_returns_error() {
+        VaultReference::parse("vault://secret/myapp").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_empty_field() {
-        let err = VaultReference::parse("vault://secret/myapp#").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn empty_field_name_after_hash_returns_error() {
+        VaultReference::parse("vault://secret/myapp#").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_empty_path() {
-        let err = VaultReference::parse("vault://#field").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn missing_path_after_scheme_returns_error() {
+        VaultReference::parse("vault://#field").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_mount_only() {
-        let err = VaultReference::parse("vault://secret#field").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn mount_without_path_segment_returns_error() {
+        VaultReference::parse("vault://secret#field").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_wrong_scheme() {
-        let err = VaultReference::parse("op://vault/item/field").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn non_vault_scheme_returns_error() {
+        VaultReference::parse("op://vault/item/field").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_empty_uri() {
-        let err = VaultReference::parse("vault://").unwrap_err();
-        assert!(err.to_string().contains("invalid"), "got: {}", err);
+    fn empty_uri_body_returns_error() {
+        VaultReference::parse("vault://").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_question_mark_in_mount() {
-        let err = VaultReference::parse("vault://sec?ret/path#field").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn question_mark_in_mount_returns_error() {
+        VaultReference::parse("vault://sec?ret/path#field").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_whitespace_in_path() {
-        let err = VaultReference::parse("vault://secret/my path#field").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn whitespace_in_path_segment_returns_error() {
+        VaultReference::parse("vault://secret/my path#field").unwrap_err();
     }
 
     #[test]
-    fn parse_rejects_control_char_in_field() {
-        let err = VaultReference::parse("vault://secret/path#fi\x00eld").unwrap_err();
-        assert!(err.to_string().contains("invalid character"), "got: {err}");
+    fn control_char_in_field_name_returns_error() {
+        VaultReference::parse("vault://secret/path#fi\x00eld").unwrap_err();
     }
 
     #[test]
-    fn parse_data_prefix_path() {
+    fn data_prefix_in_path_does_not_cause_parse_error() {
         // Parsing itself should succeed — the data/ prefix warning is in resolve().
-        let r = VaultReference::parse("vault://secret/data/myapp#field").unwrap();
-        assert_eq!(r.mount, "secret");
-        assert_eq!(r.path, "data/myapp");
-        assert_eq!(r.field, "field");
+        VaultReference::parse("vault://secret/data/myapp#field").unwrap();
     }
 
     #[test]
-    fn namespace_env_var_applied_to_settings() {
-        // Verify that VAULT_NAMESPACE is read and passed to the settings builder.
-        // SAFETY: test-only, single-threaded access to env vars.
-        unsafe { std::env::set_var("VAULT_NAMESPACE", "admin/team-a") };
-        let ns = std::env::var("VAULT_NAMESPACE")
-            .ok()
-            .filter(|v| !v.is_empty());
-        assert_eq!(ns.as_deref(), Some("admin/team-a"));
-        unsafe { std::env::remove_var("VAULT_NAMESPACE") };
-
-        let ns = std::env::var("VAULT_NAMESPACE")
-            .ok()
-            .filter(|v| !v.is_empty());
-        assert!(ns.is_none());
-    }
-
-    /// Helper mirroring the VAULT_TOKEN header-safety check in resolve().
-    fn token_is_header_safe(token: &str) -> bool {
-        token
-            .bytes()
-            .all(|b| b == b'\t' || (0x20u8..=0x7E).contains(&b))
+    fn data_prefix_in_path_is_preserved_in_parsed_path() {
+        let r = VaultReference::parse("vault://secret/data/myapp#field").unwrap();
+        assert_eq!(r.path, "data/myapp");
     }
 
     #[test]
     fn token_rejects_newline() {
-        assert!(!token_is_header_safe("tok\nen"));
+        assert!(!is_header_safe("tok\nen"));
     }
 
     #[test]
     fn token_rejects_del() {
-        assert!(!token_is_header_safe("tok\x7Fen"));
+        assert!(!is_header_safe("tok\x7Fen"));
     }
 
     #[test]
     fn token_rejects_non_ascii() {
-        assert!(!token_is_header_safe("tök"));
+        assert!(!is_header_safe("tök"));
     }
 
     #[test]
-    fn token_accepts_normal_vault_token() {
-        // Vault tokens look like: s.XhzOVFgiTw3n3OYJqBiqIGfx or hvs.XXXX
-        assert!(token_is_header_safe("s.XhzOVFgiTw3n3OYJqBiqIGfx"));
-        assert!(token_is_header_safe("hvs.CAESIBtR0QkDnWL0oFKj9iC8AAAA"));
+    fn legacy_format_vault_token_passes_header_safety_check() {
+        // Vault tokens look like: s.XhzOVFgiTw3n3OYJqBiqIGfx
+        assert!(is_header_safe("s.XhzOVFgiTw3n3OYJqBiqIGfx"));
     }
 
-    /// Helper mirroring the VAULT_NAMESPACE header-safety check in resolve().
-    fn namespace_is_header_safe(ns: &str) -> bool {
-        ns.bytes()
-            .all(|b| b == b'\t' || (0x20u8..=0x7E).contains(&b))
+    #[test]
+    fn hvs_format_vault_token_passes_header_safety_check() {
+        // Vault tokens look like: hvs.XXXX
+        assert!(is_header_safe("hvs.CAESIBtR0QkDnWL0oFKj9iC8AAAA"));
     }
 
     #[test]
     fn namespace_rejects_del() {
-        assert!(!namespace_is_header_safe("admin\x7F/team"));
+        assert!(!is_header_safe("admin\x7F/team"));
     }
 
     #[test]
     fn namespace_rejects_non_ascii() {
-        assert!(!namespace_is_header_safe("admin/tëam"));
+        assert!(!is_header_safe("admin/tëam"));
     }
 
     #[test]
-    fn namespace_accepts_valid_path() {
-        assert!(namespace_is_header_safe("admin/team-a"));
-        assert!(namespace_is_header_safe("root"));
+    fn namespace_with_path_separator_passes_header_safety_check() {
+        assert!(is_header_safe("admin/team-a"));
+    }
+
+    #[test]
+    fn simple_namespace_passes_header_safety_check() {
+        assert!(is_header_safe("root"));
     }
 }

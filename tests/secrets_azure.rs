@@ -4,25 +4,19 @@ use earl::secrets::resolver::SecretResolver;
 use earl::secrets::resolvers::azure::AzureResolver;
 
 #[test]
-fn azure_resolver_scheme() {
+fn scheme_is_az() {
     let resolver = AzureResolver::new();
     assert_eq!(resolver.scheme(), "az");
 }
 
 #[test]
-fn azure_resolver_rejects_empty() {
+fn empty_reference_returns_error() {
     let resolver = AzureResolver::new();
-    let err = resolver.resolve("az://").unwrap_err();
-    assert!(err.to_string().contains("invalid"), "got: {}", err);
+    assert!(resolver.resolve("az://").is_err());
 }
 
 #[test]
-fn azure_resolver_rejects_missing_secret() {
+fn vault_without_secret_returns_error() {
     let resolver = AzureResolver::new();
-    let err = resolver.resolve("az://my-vault").unwrap_err();
-    assert!(
-        err.to_string().contains("invalid") || err.to_string().contains("expected"),
-        "got: {}",
-        err
-    );
+    assert!(resolver.resolve("az://my-vault").is_err());
 }

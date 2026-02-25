@@ -471,10 +471,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn subject_debug_redacts_long_values() {
+    fn subject_debug_shows_prefix_when_longer_than_eight_chars() {
         let subject = Subject("user-12345678-abcdefgh".to_string(), None);
         let debug = format!("{:?}", subject);
-        assert!(debug.contains("user-123"));
+        assert_eq!(debug, "Subject(user-123...)");
+    }
+
+    #[test]
+    fn subject_debug_hides_chars_beyond_eight_when_longer_than_eight_chars() {
+        let subject = Subject("user-12345678-abcdefgh".to_string(), None);
+        let debug = format!("{:?}", subject);
         assert!(!debug.contains("abcdefgh"));
     }
 
@@ -493,16 +499,16 @@ mod tests {
     }
 
     #[test]
-    fn subject_handles_multibyte_utf8() {
-        // 9 characters but many bytes: should not panic
+    fn subject_display_truncates_multibyte_utf8_at_eight_chars() {
         let subject = Subject(
             "\u{1F600}\u{1F601}\u{1F602}\u{1F603}\u{1F604}\u{1F605}\u{1F606}\u{1F607}\u{1F608}"
                 .to_string(),
             None,
         );
         let display = format!("{}", subject);
-        assert!(display.ends_with("..."));
-        // Should have first 8 emoji chars
-        assert_eq!(display.chars().filter(|c| !matches!(c, '.')).count(), 8);
+        assert_eq!(
+            display,
+            "\u{1F600}\u{1F601}\u{1F602}\u{1F603}\u{1F604}\u{1F605}\u{1F606}\u{1F607}..."
+        );
     }
 }

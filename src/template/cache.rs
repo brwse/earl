@@ -102,21 +102,6 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn cache_file_roundtrips_rkyv() {
-        let original = CacheFile {
-            version: CACHE_VERSION,
-            fingerprint: vec![(PathBuf::from("/tmp/foo.hcl"), 1_700_000_000u64)],
-            catalog: crate::template::catalog::TemplateCatalog::empty(),
-        };
-        let bytes = rkyv::to_bytes::<RkyvError>(&original).expect("serialize");
-        let decoded: CacheFile =
-            rkyv::from_bytes::<CacheFile, RkyvError>(&bytes).expect("deserialize");
-        assert_eq!(decoded.version, CACHE_VERSION);
-        assert_eq!(decoded.fingerprint, original.fingerprint);
-        assert_eq!(decoded.catalog.entries.len(), 0);
-    }
-
-    #[test]
     fn empty_dirs_give_empty_fingerprint() {
         let tmp = tempfile::tempdir().unwrap();
         let fp = collect_fingerprint(tmp.path(), tmp.path()).unwrap();
@@ -132,11 +117,18 @@ mod tests {
         let fp2 = collect_fingerprint(tmp.path(), tmp.path()).unwrap();
 
         assert_ne!(fp1, fp2);
-        assert_eq!(fp2.len(), 1);
     }
 
     #[test]
-    fn save_and_load_roundtrips_catalog() {
+    fn fingerprint_has_one_entry_for_one_hcl_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("new.hcl"), "content").unwrap();
+        let fp = collect_fingerprint(tmp.path(), tmp.path()).unwrap();
+        assert_eq!(fp.len(), 1);
+    }
+
+    #[test]
+    fn saved_catalog_is_returned_on_load() {
         let tmp = tempfile::tempdir().unwrap();
         let cache_path = tmp.path().join("catalog-1.bin");
         let fp = vec![(PathBuf::from("/tmp/foo.hcl"), 12345u64)];

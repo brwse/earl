@@ -88,17 +88,37 @@ mod tests {
     }
 
     #[test]
-    fn validate_env_name_accepts_valid() {
+    fn alphanumeric_name_is_valid() {
         assert!(validate_env_name("production").is_ok());
+    }
+
+    #[test]
+    fn name_with_hyphens_is_valid() {
         assert!(validate_env_name("staging-eu").is_ok());
+    }
+
+    #[test]
+    fn name_with_underscores_and_digits_is_valid() {
         assert!(validate_env_name("dev_local_2").is_ok());
     }
 
     #[test]
-    fn validate_env_name_rejects_invalid() {
+    fn empty_name_returns_error() {
         assert!(validate_env_name("").is_err());
+    }
+
+    #[test]
+    fn name_with_spaces_returns_error() {
         assert!(validate_env_name("has space").is_err());
+    }
+
+    #[test]
+    fn name_with_path_traversal_returns_error() {
         assert!(validate_env_name("../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn name_exceeding_max_length_returns_error() {
         assert!(validate_env_name(&"a".repeat(65)).is_err());
     }
 }

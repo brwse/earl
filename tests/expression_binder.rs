@@ -1,5 +1,5 @@
 use earl::expression::ast::CallExpression;
-use earl::expression::binder::bind_arguments;
+use earl::expression::binder::{bind_arguments, BindError};
 use earl::template::schema::{ParamSpec, ParamType};
 
 fn params() -> Vec<ParamSpec> {
@@ -41,7 +41,7 @@ fn params_with_optional() -> Vec<ParamSpec> {
 }
 
 #[test]
-fn binds_positional_and_named_arguments() {
+fn positional_argument_binds_by_position() {
     let expr = CallExpression {
         provider: "github".to_string(),
         command: "search_issues".to_string(),
@@ -51,7 +51,31 @@ fn binds_positional_and_named_arguments() {
     let bound = bind_arguments(&expr, &params()).unwrap();
 
     assert_eq!(bound.get("query").unwrap(), "hello");
+}
+
+#[test]
+fn named_argument_binds_by_name() {
+    let expr = CallExpression {
+        provider: "github".to_string(),
+        command: "search_issues".to_string(),
+        positional_args: vec![serde_json::json!("hello")],
+        named_args: vec![("per_page".to_string(), serde_json::json!(10))],
+    };
+    let bound = bind_arguments(&expr, &params()).unwrap();
+
     assert_eq!(bound.get("per_page").unwrap(), 10);
+}
+
+#[test]
+fn optional_param_with_default_is_populated() {
+    let expr = CallExpression {
+        provider: "github".to_string(),
+        command: "search_issues".to_string(),
+        positional_args: vec![serde_json::json!("hello")],
+        named_args: vec![],
+    };
+    let bound = bind_arguments(&expr, &params()).unwrap();
+
     assert_eq!(bound.get("include").unwrap(), false);
 }
 
@@ -79,10 +103,7 @@ fn fails_on_missing_required_argument() {
         named_args: vec![],
     };
     let err = bind_arguments(&expr, &params()).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("missing required argument `query`")
-    );
+    assert!(matches!(err, BindError::MissingRequired(_)));
 }
 
 #[test]
@@ -97,7 +118,7 @@ fn fails_on_unknown_argument() {
         ],
     };
     let err = bind_arguments(&expr, &params()).unwrap_err();
-    assert!(err.to_string().contains("unknown argument `unknown`"));
+    assert!(matches!(err, BindError::UnknownArgument(_)));
 }
 
 #[test]
@@ -114,7 +135,7 @@ fn fails_on_too_many_positional_arguments() {
         named_args: vec![],
     };
     let err = bind_arguments(&expr, &params()).unwrap_err();
-    assert!(err.to_string().contains("too many positional arguments"));
+    assert!(matches!(err, BindError::TooManyPositional { .. }));
 }
 
 #[test]
@@ -129,8 +150,5 @@ fn fails_on_invalid_argument_type() {
         ],
     };
     let err = bind_arguments(&expr, &params()).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("argument `per_page` has invalid type")
-    );
+    assert!(matches!(err, BindError::InvalidType { .. }));
 }

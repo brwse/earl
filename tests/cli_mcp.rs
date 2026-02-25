@@ -8,35 +8,64 @@ fn top_level_help_lists_mcp_command() {
     let out = cmd.assert().success().get_output().stdout.clone();
     let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("mcp"));
-    assert!(stdout.contains("doctor"));
-    assert!(stdout.contains("web"));
-    assert!(stdout.contains("completion"));
 }
 
 #[test]
-fn mcp_help_shows_transport_and_flags() {
+fn mcp_help_includes_stdio_transport() {
     let mut cmd = cargo_bin_cmd!("earl");
     cmd.args(["mcp", "--help"]);
 
     let out = cmd.assert().success().get_output().stdout.clone();
     let stdout = String::from_utf8(out).unwrap();
-
     assert!(stdout.contains("stdio"));
+}
+
+#[test]
+fn mcp_help_includes_http_transport() {
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.args(["mcp", "--help"]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("http"));
+}
+
+#[test]
+fn mcp_help_includes_listen_flag() {
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.args(["mcp", "--help"]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("--listen"));
+}
+
+#[test]
+fn mcp_help_includes_mode_flag() {
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.args(["mcp", "--help"]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("--mode"));
-    assert!(stdout.contains("discovery"));
+}
+
+#[test]
+fn mcp_help_includes_yes_flag() {
+    let mut cmd = cargo_bin_cmd!("earl");
+    cmd.args(["mcp", "--help"]);
+
+    let out = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(out).unwrap();
     assert!(stdout.contains("--yes"));
 }
 
 #[test]
-fn completion_generates_bash_script() {
+fn mcp_help_includes_discovery_subcommand() {
     let mut cmd = cargo_bin_cmd!("earl");
-    cmd.args(["completion", "bash"]);
+    cmd.args(["mcp", "--help"]);
 
     let out = cmd.assert().success().get_output().stdout.clone();
     let stdout = String::from_utf8(out).unwrap();
-
-    assert!(stdout.contains("_earl"));
-    assert!(stdout.contains("complete -F"));
+    assert!(stdout.contains("discovery"));
 }

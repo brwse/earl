@@ -29,22 +29,3 @@ pub struct GrpcTemplate {
     pub body: Option<Value>,
     pub descriptor_set_file: Option<String>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn grpc_operation_defaults_stream_false() {
-        let json = r#"{"url":"https://example.com","grpc":{"service":"test.Svc","method":"Call"}}"#;
-        let op: GrpcOperationTemplate = serde_json::from_str(json).unwrap();
-        assert!(!op.stream);
-    }
-
-    #[test]
-    fn grpc_operation_accepts_stream_true() {
-        let json = r#"{"url":"https://example.com","stream":true,"grpc":{"service":"test.Svc","method":"Call"}}"#;
-        let op: GrpcOperationTemplate = serde_json::from_str(json).unwrap();
-        assert!(op.stream);
-    }
-}
