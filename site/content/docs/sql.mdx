@@ -149,7 +149,7 @@ command "create_user" {
 }
 ```
 
-There is no `sandbox` block here. Write commands can't use `read_only = true`, and adding a sandbox without that flag would still block writes at the transaction level. The `RETURNING` clause is PostgreSQL-specific — adjust for your database if you're on MySQL or SQLite.
+There is no `sandbox` block here. Write commands don't use `read_only = true` — that flag is the only sandbox option that affects whether writes are permitted. The `RETURNING` clause is PostgreSQL-specific — adjust for your database if you're on MySQL or SQLite.
 
 ---
 

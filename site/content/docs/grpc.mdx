@@ -77,6 +77,8 @@ operation {
 
 `protocol = "grpc"` and `url` are required. Use `https://` for TLS — standard for gRPC in production. Use `http://` only for plaintext connections, such as a local development server.
 
+Note: Earl's SSRF protection resolves the gRPC endpoint hostname to an IP at connection setup and pins to that IP for the duration of the call. This causes TLS verification to fail when the resolved IP doesn't match the certificate's hostname. If you encounter this with a server that doesn't have a matching TLS certificate, use `http://` together with `descriptor_set_file` rather than relying on reflection.
+
 ### grpc block
 
 ```hcl

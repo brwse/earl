@@ -89,7 +89,7 @@ operation {
 }
 ```
 
-`protocol = "graphql"` and `url` are the only required fields. All GraphQL requests go out as HTTP POST — there is no `method` field.
+`protocol = "graphql"` and `url` are the only required fields. GraphQL requests default to HTTP POST. A `method` field exists but is rarely needed — only set it if the server requires `GET` instead of the standard `POST`.
 
 ### graphql block
 
