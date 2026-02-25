@@ -83,8 +83,8 @@ async fn prefers_remote_results_when_remote_search_succeeds() {
             when.method(POST).path("/rerank");
             then.status(200).json_body_obj(&serde_json::json!({
                 "data": [
-                    {"index": 1, "score": 0.99},
-                    {"index": 0, "score": 0.75}
+                    {"index": 0, "score": 0.99},
+                    {"index": 1, "score": 0.75}
                 ]
             }));
         })
