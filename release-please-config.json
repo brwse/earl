@@ -23,6 +23,9 @@
     },
     "crates/earl-protocol-sql": {
       "release-type": "rust"
+    },
+    "crates/earl-protocol-browser": {
+      "release-type": "rust"
     }
   },
   "plugins": [
@@ -35,7 +38,8 @@
         "earl-protocol-http",
         "earl-protocol-grpc",
         "earl-protocol-bash",
-        "earl-protocol-sql"
+        "earl-protocol-sql",
+        "earl-protocol-browser"
       ]
     },
     {
