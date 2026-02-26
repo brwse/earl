@@ -1,9 +1,9 @@
 {
-  ".": "0.5.0",
-  "crates/earl-core": "0.5.0",
-  "crates/earl-protocol-http": "0.5.0",
-  "crates/earl-protocol-grpc": "0.5.0",
-  "crates/earl-protocol-bash": "0.5.0",
-  "crates/earl-protocol-sql": "0.5.0",
-  "crates/earl-protocol-browser": "0.5.0"
+  ".": "0.5.1",
+  "crates/earl-core": "0.5.1",
+  "crates/earl-protocol-http": "0.5.1",
+  "crates/earl-protocol-grpc": "0.5.1",
+  "crates/earl-protocol-bash": "0.5.1",
+  "crates/earl-protocol-sql": "0.5.1",
+  "crates/earl-protocol-browser": "0.5.1"
 }

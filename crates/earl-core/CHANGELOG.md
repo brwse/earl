@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/brwse/earl/compare/earl-core-v0.5.0...earl-core-v0.5.1) (2026-02-26)
+
+
+### Miscellaneous Chores
+
+* **earl-core:** Synchronize earl versions
+
 ## [0.5.0](https://github.com/brwse/earl/compare/earl-core-v0.4.1...earl-core-v0.5.0) (2026-02-24)
 
 

@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.5.1](https://github.com/brwse/earl/compare/v0.5.0...v0.5.1) (2026-02-26)
+
+
+### Features
+
+* add earl runtime skill and reorganize skills by category ([#66](https://github.com/brwse/earl/issues/66)) ([9bec065](https://github.com/brwse/earl/commit/9bec06510536ad6d3bb11d5119f19cdd3fe939aa))
+* **browser:** add browser protocol with full Playwright MCP parity ([#59](https://github.com/brwse/earl/issues/59)) ([65f01da](https://github.com/brwse/earl/commit/65f01daf7a3c2ad63a737cd075d06fa06f975bd7))
+* **browser:** default to 'default' session when session_id is omitted ([#63](https://github.com/brwse/earl/issues/63)) ([99c3a66](https://github.com/brwse/earl/commit/99c3a66e2be92c951b48f3c948961b168435b46e))
+
+
+### Bug Fixes
+
+* add earl-protocol-browser to release-please config and manifest ([#67](https://github.com/brwse/earl/issues/67)) ([6f18bc2](https://github.com/brwse/earl/commit/6f18bc24d1563225559a9e82a79b6f30e8528335))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * earl-core bumped from 0.5.0 to 0.5.1
+    * earl-protocol-grpc bumped from 0.5.0 to 0.5.1
+    * earl-protocol-http bumped from 0.5.0 to 0.5.1
+    * earl-protocol-bash bumped from 0.5.0 to 0.5.1
+    * earl-protocol-sql bumped from 0.5.0 to 0.5.1
+    * earl-protocol-browser bumped from 0.5.0 to 0.5.1
+
 ## [0.5.0](https://github.com/brwse/earl/compare/v0.4.1...v0.5.0) (2026-02-24)
 
 

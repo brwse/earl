@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.1](https://github.com/brwse/earl/compare/earl-protocol-bash-v0.5.0...earl-protocol-bash-v0.5.1) (2026-02-26)
+
+
+### Miscellaneous Chores
+
+* **earl-protocol-bash:** Synchronize earl versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * earl-core bumped from 0.5.0 to 0.5.1
+
 ## [0.5.0](https://github.com/brwse/earl/compare/earl-protocol-bash-v0.4.1...earl-protocol-bash-v0.5.0) (2026-02-24)
 
 

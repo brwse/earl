@@ -1,6 +1,6 @@
 [package]
 name = "earl-protocol-grpc"
-version = "0.5.0"
+version = "0.5.1"
 edition.workspace = true
 description = "gRPC execution protocol for earl"
 license.workspace = true
@@ -11,7 +11,7 @@ documentation.workspace = true
 [dependencies]
 anyhow = "1.0"
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }
-earl-core = { version = "0.5.0", path = "../earl-core" }
+earl-core = { version = "0.5.1", path = "../earl-core" }
 futures-util = "0.3"
 http = "1"
 http-body = "1"

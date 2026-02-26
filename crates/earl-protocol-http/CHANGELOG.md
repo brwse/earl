@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.1](https://github.com/brwse/earl/compare/earl-protocol-http-v0.5.0...earl-protocol-http-v0.5.1) (2026-02-26)
+
+
+### Miscellaneous Chores
+
+* **earl-protocol-http:** Synchronize earl versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * earl-core bumped from 0.5.0 to 0.5.1
+
 ## [0.5.0](https://github.com/brwse/earl/compare/earl-protocol-http-v0.4.1...earl-protocol-http-v0.5.0) (2026-02-24)
 
 

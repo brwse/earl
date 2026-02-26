@@ -1,6 +1,6 @@
 [package]
 name = "earl-protocol-browser"
-version = "0.5.0"
+version = "0.5.1"
 edition.workspace = true
 description = "Browser automation protocol for earl (chromiumoxide)"
 license.workspace = true
@@ -14,7 +14,7 @@ base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 chromiumoxide = { version = "0.9", default-features = false, features = ["bytes"] }
 directories = "6.0"
-earl-core = { version = "0.5.0", path = "../earl-core" }
+earl-core = { version = "0.5.1", path = "../earl-core" }
 fs4 = { version = "0.12", features = ["tokio"] }
 futures = "0.3"
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }
