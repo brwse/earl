@@ -44,6 +44,7 @@ pub struct PreparedRequest {
     pub mode: CommandMode,
     pub stream: bool,
     pub allow_rules: Vec<crate::template::schema::AllowRule>,
+    pub allow_private_ips: bool,
     pub transport: ResolvedTransport,
     pub result_template: crate::template::schema::ResultTemplate,
     pub args: Map<String, Value>,
@@ -94,6 +95,7 @@ pub async fn build_prepared_request(
     allow_rules: &[AllowRule],
     proxy_profiles: &BTreeMap<String, ProxyProfile>,
     sandbox_config: &SandboxConfig,
+    allow_private_ips: bool,
     active_env: Option<&str>,
 ) -> Result<PreparedRequest> {
     build_prepared_request_with_token_provider(
@@ -104,6 +106,7 @@ pub async fn build_prepared_request(
         allow_rules,
         proxy_profiles,
         sandbox_config,
+        allow_private_ips,
         active_env,
     )
     .await
@@ -118,6 +121,7 @@ pub async fn build_prepared_request_with_token_provider<F, Fut>(
     allow_rules: &[AllowRule],
     proxy_profiles: &BTreeMap<String, ProxyProfile>,
     sandbox_config: &SandboxConfig,
+    allow_private_ips: bool,
     active_env: Option<&str>,
 ) -> Result<PreparedRequest>
 where
@@ -212,6 +216,7 @@ where
                 mode: entry.mode,
                 stream: operation.is_streaming(),
                 allow_rules: allow_rules.to_vec(),
+                allow_private_ips,
                 transport,
                 result_template: result_template.clone(),
                 args,
@@ -247,6 +252,7 @@ where
                 mode: entry.mode,
                 stream: operation.is_streaming(),
                 allow_rules: allow_rules.to_vec(),
+                allow_private_ips,
                 transport,
                 result_template: result_template.clone(),
                 args,
@@ -295,6 +301,7 @@ where
                 mode: entry.mode,
                 stream: operation.is_streaming(),
                 allow_rules: allow_rules.to_vec(),
+                allow_private_ips,
                 transport,
                 result_template: result_template.clone(),
                 args,
@@ -324,6 +331,7 @@ where
                 mode: entry.mode,
                 stream: operation.is_streaming(),
                 allow_rules: Vec::new(),
+                allow_private_ips,
                 transport,
                 result_template: result_template.clone(),
                 args,
@@ -376,6 +384,7 @@ where
                 mode: entry.mode,
                 stream: operation.is_streaming(),
                 allow_rules: Vec::new(),
+                allow_private_ips,
                 transport,
                 result_template: result_template.clone(),
                 args,
@@ -396,6 +405,7 @@ where
                 mode: entry.mode,
                 stream: operation.is_streaming(),
                 allow_rules: Vec::new(),
+                allow_private_ips,
                 transport,
                 result_template: result_template.clone(),
                 args,

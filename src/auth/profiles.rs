@@ -140,7 +140,7 @@ async fn validate_endpoint_url(field: &str, parsed: &Url) -> Result<()> {
 
     match parsed.scheme() {
         "https" => {
-            resolve_and_validate_host(host).await?;
+            resolve_and_validate_host(host, false).await?;
             Ok(())
         }
         "http" if is_loopback_host(host) => Ok(()),

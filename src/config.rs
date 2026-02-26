@@ -128,6 +128,11 @@ pub struct NetworkConfig {
     pub allow: Vec<AllowRule>,
     #[serde(default)]
     pub proxy_profiles: BTreeMap<String, ProxyProfile>,
+    /// Allow requests to RFC 1918 private addresses and loopback interfaces.
+    /// Disabled by default to prevent SSRF attacks. Enable only for trusted
+    /// homelab or self-hosted service environments.
+    #[serde(default)]
+    pub allow_private_ips: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

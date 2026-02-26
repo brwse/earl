@@ -113,6 +113,7 @@ async fn run_call(
     let allow_rules = cfg.network.allow.clone();
     let proxy_profiles = cfg.network.proxy_profiles.clone();
     let sandbox_config = cfg.sandbox.clone();
+    let allow_private_ips = cfg.network.allow_private_ips;
     let oauth_manager = OAuthManager::new(cfg, SecretManager::new())?; // OAuthManager takes ownership, so a separate instance is needed
 
     let prepared = build_prepared_request(
@@ -123,6 +124,7 @@ async fn run_call(
         &allow_rules,
         &proxy_profiles,
         &sandbox_config,
+        allow_private_ips,
         active_env,
     )
     .await?;

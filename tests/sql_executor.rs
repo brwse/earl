@@ -41,6 +41,7 @@ fn prepared_sql_request(
         mode: CommandMode::Read,
         stream: false,
         allow_rules: vec![],
+        allow_private_ips: false,
         transport: default_transport(),
         result_template: ResultTemplate {
             decode: ResultDecode::Json,

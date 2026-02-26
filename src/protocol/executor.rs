@@ -23,11 +23,12 @@ use super::builder::PreparedRequest;
 pub use earl_core::ExecutionResult;
 
 pub async fn execute_prepared_request(prepared: &PreparedRequest) -> Result<ExecutionResult> {
+    let allow_private_ips = prepared.allow_private_ips;
     execute_prepared_request_with_host_validator(prepared, |url: Url| async move {
         let host = url
             .host_str()
             .ok_or_else(|| anyhow::anyhow!("request URL missing host"))?;
-        resolve_and_validate_host(host).await
+        resolve_and_validate_host(host, allow_private_ips).await
     })
     .await
 }
@@ -147,11 +148,12 @@ pub fn start_streaming_request(
     let (tx, rx) = mpsc::channel(64);
 
     let handle = tokio::spawn(async move {
+        let allow_private_ips = prepared.allow_private_ips;
         let mut host_validator = |url: Url| async move {
             let host = url
                 .host_str()
                 .ok_or_else(|| anyhow::anyhow!("request URL missing host"))?;
-            resolve_and_validate_host(host).await
+            resolve_and_validate_host(host, allow_private_ips).await
         };
 
         let context = to_context(&prepared);

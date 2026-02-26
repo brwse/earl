@@ -84,143 +84,245 @@ fn empty_allowlist_allows_all_urls() {
 #[test]
 fn loopback_ipv4_is_blocked() {
     let ip = IpAddr::from_str("127.0.0.1").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn loopback_ipv4_is_rejected() {
     let ip = IpAddr::from_str("127.0.0.1").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn private_class_a_ip_is_blocked() {
     let ip = IpAddr::from_str("10.0.0.1").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn private_class_a_ip_is_rejected() {
     let ip = IpAddr::from_str("10.0.0.1").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn link_local_ipv4_is_blocked() {
     let ip = IpAddr::from_str("169.254.169.254").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn link_local_ipv4_is_rejected() {
     let ip = IpAddr::from_str("169.254.169.254").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn shared_address_space_ip_is_blocked() {
     let ip = IpAddr::from_str("100.64.0.1").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn shared_address_space_ip_is_rejected() {
     let ip = IpAddr::from_str("100.64.0.1").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn benchmarking_ip_is_blocked() {
     let ip = IpAddr::from_str("198.18.0.1").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn benchmarking_ip_is_rejected() {
     let ip = IpAddr::from_str("198.18.0.1").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn reserved_ipv4_is_blocked() {
     let ip = IpAddr::from_str("240.0.0.1").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn reserved_ipv4_is_rejected() {
     let ip = IpAddr::from_str("240.0.0.1").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn unspecified_ipv4_is_blocked() {
     let ip = IpAddr::from_str("0.0.0.0").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn unspecified_ipv4_is_rejected() {
     let ip = IpAddr::from_str("0.0.0.0").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn loopback_ipv6_is_blocked() {
     let ip = IpAddr::from_str("::1").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn loopback_ipv6_is_rejected() {
     let ip = IpAddr::from_str("::1").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn link_local_ipv6_is_blocked() {
     let ip = IpAddr::from_str("fe80::1").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn link_local_ipv6_is_rejected() {
     let ip = IpAddr::from_str("fe80::1").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn unique_local_ipv6_is_blocked() {
     let ip = IpAddr::from_str("fd00::1").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn unique_local_ipv6_is_rejected() {
     let ip = IpAddr::from_str("fd00::1").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn ipv4_mapped_ipv6_is_blocked() {
     let ip = IpAddr::from_str("::ffff:10.0.0.1").unwrap();
-    assert!(is_blocked_ip(ip));
+    assert!(is_blocked_ip(ip, false));
 }
 
 #[test]
 fn ipv4_mapped_ipv6_is_rejected() {
     let ip = IpAddr::from_str("::ffff:10.0.0.1").unwrap();
-    assert!(ensure_safe_ip(ip).is_err());
+    assert!(ensure_safe_ip(ip, false).is_err());
 }
 
 #[test]
 fn public_ip_is_not_blocked() {
     let public = IpAddr::from_str("8.8.8.8").unwrap();
-    assert!(!is_blocked_ip(public));
+    assert!(!is_blocked_ip(public, false));
 }
 
 #[test]
 fn public_ip_is_permitted() {
     let public = IpAddr::from_str("8.8.8.8").unwrap();
-    ensure_safe_ip(public).unwrap();
+    ensure_safe_ip(public, false).unwrap();
+}
+
+// ── allow_private_ips = true ──────────────────────────────────────────────────
+
+#[test]
+fn private_class_a_allowed_when_allow_private_ips() {
+    let ip = IpAddr::from_str("10.1.2.101").unwrap();
+    assert!(!is_blocked_ip(ip, true));
+}
+
+#[test]
+fn private_class_a_permitted_when_allow_private_ips() {
+    let ip = IpAddr::from_str("10.1.2.101").unwrap();
+    ensure_safe_ip(ip, true).unwrap();
+}
+
+#[test]
+fn private_class_b_allowed_when_allow_private_ips() {
+    let ip = IpAddr::from_str("172.16.0.1").unwrap();
+    assert!(!is_blocked_ip(ip, true));
+}
+
+#[test]
+fn private_class_c_allowed_when_allow_private_ips() {
+    let ip = IpAddr::from_str("192.168.1.1").unwrap();
+    assert!(!is_blocked_ip(ip, true));
+}
+
+#[test]
+fn loopback_ipv4_allowed_when_allow_private_ips() {
+    let ip = IpAddr::from_str("127.0.0.1").unwrap();
+    assert!(!is_blocked_ip(ip, true));
+}
+
+#[test]
+fn loopback_ipv6_allowed_when_allow_private_ips() {
+    let ip = IpAddr::from_str("::1").unwrap();
+    assert!(!is_blocked_ip(ip, true));
+}
+
+#[test]
+fn unique_local_ipv6_allowed_when_allow_private_ips() {
+    let ip = IpAddr::from_str("fd00::1").unwrap();
+    assert!(!is_blocked_ip(ip, true));
+}
+
+#[test]
+fn ipv4_mapped_private_ipv6_allowed_when_allow_private_ips() {
+    let ip = IpAddr::from_str("::ffff:10.0.0.1").unwrap();
+    assert!(!is_blocked_ip(ip, true));
+}
+
+#[test]
+fn cloud_metadata_endpoint_still_blocked_when_allow_private_ips() {
+    // 169.254.169.254 must remain blocked even with allow_private_ips=true
+    let ip = IpAddr::from_str("169.254.169.254").unwrap();
+    assert!(is_blocked_ip(ip, true));
+}
+
+#[test]
+fn link_local_ipv4_still_blocked_when_allow_private_ips() {
+    // Generic link-local remains blocked (includes cloud metadata range)
+    let ip = IpAddr::from_str("169.254.1.1").unwrap();
+    assert!(is_blocked_ip(ip, true));
+}
+
+#[test]
+fn link_local_ipv6_still_blocked_when_allow_private_ips() {
+    let ip = IpAddr::from_str("fe80::1").unwrap();
+    assert!(is_blocked_ip(ip, true));
+}
+
+#[test]
+fn shared_address_space_still_blocked_when_allow_private_ips() {
+    let ip = IpAddr::from_str("100.64.0.1").unwrap();
+    assert!(is_blocked_ip(ip, true));
+}
+
+#[test]
+fn public_ip_still_permitted_when_allow_private_ips() {
+    let ip = IpAddr::from_str("8.8.8.8").unwrap();
+    assert!(!is_blocked_ip(ip, true));
+}
+
+// ── config parsing ────────────────────────────────────────────────────────────
+
+#[test]
+fn default_network_config_has_allow_private_ips_false() {
+    let cfg: earl::config::Config = toml::from_str("").unwrap();
+    assert!(!cfg.network.allow_private_ips);
+}
+
+#[test]
+fn allow_private_ips_parsed_from_toml() {
+    let cfg: earl::config::Config = toml::from_str(
+        r#"
+[network]
+allow_private_ips = true
+"#,
+    )
+    .unwrap();
+    assert!(cfg.network.allow_private_ips);
 }

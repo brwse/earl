@@ -140,6 +140,7 @@ fn prepared_request(
             port,
             path_prefix: path_prefix.to_string(),
         }],
+        allow_private_ips: false,
         transport,
         result_template,
         args: Map::new(),
@@ -175,6 +176,7 @@ fn prepared_grpc_request(
             port,
             path_prefix: "/grpc.health.v1.Health/".to_string(),
         }],
+        allow_private_ips: false,
         transport: ResolvedTransport {
             timeout: Duration::from_secs(5),
             follow_redirects: false,

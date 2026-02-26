@@ -128,7 +128,7 @@ impl JwtState {
             let url = url::Url::parse(discovery_url)
                 .with_context(|| format!("invalid oidc_discovery_url: {discovery_url}"))?;
             let host = url.host_str().context("oidc_discovery_url has no host")?;
-            resolve_and_validate_host(host).await?;
+            resolve_and_validate_host(host, false).await?;
 
             let resp =
                 http.get(discovery_url).send().await.with_context(|| {
@@ -160,7 +160,7 @@ impl JwtState {
         let jwks_url =
             url::Url::parse(&jwks_uri).with_context(|| format!("invalid jwks_uri: {jwks_uri}"))?;
         let jwks_host = jwks_url.host_str().context("jwks_uri has no host")?;
-        resolve_and_validate_host(jwks_host).await?;
+        resolve_and_validate_host(jwks_host, false).await?;
 
         let algorithms: Vec<Algorithm> = jwt_config
             .algorithms
@@ -211,7 +211,7 @@ impl JwtState {
         // SSRF-validate on every fetch (DNS rebinding protection)
         let url = url::Url::parse(&self.config.jwks_uri)?;
         let host = url.host_str().context("jwks_uri has no host")?;
-        resolve_and_validate_host(host).await?;
+        resolve_and_validate_host(host, false).await?;
 
         let resp = self
             .http

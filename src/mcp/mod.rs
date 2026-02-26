@@ -657,6 +657,7 @@ async fn execute_template_tool(
     let allow_rules = state.cfg.network.allow.clone();
     let proxy_profiles = state.cfg.network.proxy_profiles.clone();
     let sandbox_config = state.cfg.sandbox.clone();
+    let allow_private_ips = state.cfg.network.allow_private_ips;
     let oauth_manager = OAuthManager::new(state.cfg.clone(), SecretManager::new())?;
 
     let prepared = build_prepared_request(
@@ -667,6 +668,7 @@ async fn execute_template_tool(
         &allow_rules,
         &proxy_profiles,
         &sandbox_config,
+        allow_private_ips,
         state.active_env.as_deref(),
     )
     .await?;

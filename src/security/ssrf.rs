@@ -2,18 +2,20 @@ use std::net::{IpAddr, Ipv6Addr};
 
 use anyhow::{Result, bail};
 
-pub fn ensure_safe_ip(ip: IpAddr) -> Result<()> {
-    if is_blocked_ip(ip) {
+pub fn ensure_safe_ip(ip: IpAddr, allow_private_ips: bool) -> Result<()> {
+    if is_blocked_ip(ip, allow_private_ips) {
         bail!("blocked potentially unsafe IP address `{ip}`");
     }
     Ok(())
 }
 
-pub fn is_blocked_ip(ip: IpAddr) -> bool {
+pub fn is_blocked_ip(ip: IpAddr, allow_private_ips: bool) -> bool {
     match ip {
         IpAddr::V4(v4) => {
-            v4.is_private()
-                || v4.is_loopback()
+            // When allow_private_ips is enabled, RFC 1918 private ranges and
+            // loopback are permitted (homelab/self-hosted service use case).
+            // Cloud metadata endpoints and other hazardous ranges are always blocked.
+            (!allow_private_ips && (v4.is_private() || v4.is_loopback()))
                 || v4.is_link_local()
                 || v4.is_multicast()
                 || v4.is_broadcast()
@@ -28,15 +30,15 @@ pub fn is_blocked_ip(ip: IpAddr) -> bool {
         }
         IpAddr::V6(v6) => {
             if let Some(mapped) = v6.to_ipv4_mapped() {
-                return is_blocked_ip(IpAddr::V4(mapped));
+                return is_blocked_ip(IpAddr::V4(mapped), allow_private_ips);
             }
 
-            v6.is_loopback()
+            // When allow_private_ips is enabled, loopback and unique-local
+            // (ULA, fc00::/7) addresses are permitted.
+            (!allow_private_ips && (v6.is_loopback() || v6.is_unique_local() || is_ipv6_site_local(v6)))
                 || v6.is_unspecified()
                 || v6.is_multicast()
                 || v6.is_unicast_link_local()
-                || v6.is_unique_local()
-                || is_ipv6_site_local(v6)
                 || is_ipv6_documentation(v6)
                 || is_ipv6_metadata(v6)
         }

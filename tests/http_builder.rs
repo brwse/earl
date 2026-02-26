@@ -118,6 +118,7 @@ async fn api_key_in_header_sets_request_header() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -162,6 +163,7 @@ async fn api_key_secret_is_registered_in_redactor() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -197,6 +199,7 @@ async fn api_key_in_query_sets_query_param() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -241,6 +244,7 @@ async fn api_key_in_cookie_sets_cookie() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -285,6 +289,7 @@ async fn bearer_auth_sets_authorization_header() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -330,6 +335,7 @@ async fn basic_auth_sets_authorization_header() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -368,6 +374,7 @@ async fn oauth2_profile_auth_sets_bearer_token() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -408,6 +415,7 @@ async fn json_body_renders_template_variables() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -446,6 +454,7 @@ async fn form_urlencoded_body_includes_scalar_fields() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -486,6 +495,7 @@ async fn form_urlencoded_body_expands_array_to_repeated_pairs() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -524,6 +534,7 @@ async fn raw_text_body_preserves_content_bytes() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -562,6 +573,7 @@ async fn raw_text_body_defaults_content_type_to_text_plain() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -619,6 +631,7 @@ async fn multipart_body_inline_part_reads_value() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -676,6 +689,7 @@ async fn multipart_body_file_part_reads_file_content() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -714,6 +728,7 @@ async fn raw_bytes_base64_body_decodes_to_bytes() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -753,6 +768,7 @@ async fn file_stream_body_reads_file_content() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -803,6 +819,7 @@ async fn graphql_request_uses_post_method() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -851,6 +868,7 @@ async fn graphql_body_renders_variables() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -911,6 +929,7 @@ async fn graphql_request_sets_content_type_header() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -964,6 +983,7 @@ async fn graphql_request_sets_accept_header() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -1028,6 +1048,7 @@ async fn grpc_bearer_auth_sets_authorization_header() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -1092,6 +1113,7 @@ async fn grpc_template_header_renders_arg() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -1156,6 +1178,7 @@ async fn grpc_secret_is_registered_in_redactor() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -1211,6 +1234,7 @@ async fn grpc_body_renders_template_variables() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -1275,6 +1299,7 @@ async fn grpc_service_is_preserved() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -1334,6 +1359,7 @@ async fn grpc_method_is_preserved() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
@@ -1393,6 +1419,7 @@ async fn grpc_descriptor_set_is_none_when_not_specified() {
         &default_allow_rules(),
         &default_proxy_profiles(),
         &SandboxConfig::default(),
+        false,
         None,
     )
     .await
