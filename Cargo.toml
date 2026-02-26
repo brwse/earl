@@ -16,7 +16,7 @@ strip = true
 
 [package]
 name = "earl"
-version = "0.5.1"
+version = "0.5.2"
 edition.workspace = true
 build = "build.rs"
 description = "AI-safe CLI for AI agents"

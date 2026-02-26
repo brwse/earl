@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.2](https://github.com/brwse/earl/compare/v0.5.1...v0.5.2) (2026-02-26)
+
+
+### Features
+
+* add allow_private_ips config option for homelab/self-hosted services ([#71](https://github.com/brwse/earl/issues/71)) ([9a79efb](https://github.com/brwse/earl/commit/9a79efba6dac613d2508a7d28e3e65b6786c35d6))
+
+
+### Bug Fixes
+
+* prevent bash injection in examples and clarify SQL injection risk ([#68](https://github.com/brwse/earl/issues/68)) ([2b8f0de](https://github.com/brwse/earl/commit/2b8f0de9d7f0c8de1369c778055c9022a083f776))
+
 ## [0.5.1](https://github.com/brwse/earl/compare/v0.5.0...v0.5.1) (2026-02-26)
 
 
