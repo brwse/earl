@@ -22,7 +22,10 @@ command "disk_usage" {
     protocol = "bash"
 
     bash {
-      script = "du -sh {{ args.path }}"
+      script = "du -sh \"$EARL_PATH\""
+      env = {
+        EARL_PATH = "{{ args.path }}"
+      }
       sandbox {
         network = false
       }
@@ -51,7 +54,10 @@ command "list_files" {
     protocol = "bash"
 
     bash {
-      script = "ls -la {{ args.path }}"
+      script = "ls -la \"$EARL_PATH\""
+      env = {
+        EARL_PATH = "{{ args.path }}"
+      }
       sandbox {
         network = false
       }

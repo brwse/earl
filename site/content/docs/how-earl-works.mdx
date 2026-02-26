@@ -133,6 +133,16 @@ If an allowlist is set, Earl rejects any request to a host not on it. This limit
 
 See [Hardening](/docs/hardening) for the full configuration syntax.
 
+## Principals and trust levels
+
+Earl operates with two distinct trust levels.
+
+**Templates are trusted.** Template files are committed to a version-controlled repository by human engineers with access controls applied. Earl executes what the template says unconditionally. If an attacker can write to that repository, they control what the agent can do.
+
+**Arguments are untrusted.** Arguments come from the AI agent, which may have processed arbitrary external content — API responses, user messages, document contents. An agent that has been subject to prompt injection may pass malicious values for any declared parameter.
+
+The sandbox (bash), read-only transactions (SQL), and SSRF blocking are the mechanisms that make untrusted arguments workable. They limit what a malicious argument value can reach even when the template author didn't anticipate every possible input. Template authors are responsible for not rendering string arguments directly into positions where the shell or database engine would interpret them — see [Hardening](/docs/hardening) for the safe patterns.
+
 ## What Earl doesn't protect against
 
 **Compromised template files.** Templates are HCL files committed to a repository. If an attacker can write to that repository, they can modify what operations an agent can perform. Earl trusts the template files on disk. This is intentional — the security model assumes templates are in a controlled repository with normal access controls applied. If your templates are in a shared repo with loose write permissions, that's the weak point.
@@ -143,7 +153,7 @@ See [Hardening](/docs/hardening) for the full configuration syntax.
 
 **Bash scripts with `network = true`.** If you explicitly enable network access in a bash sandbox, the SSRF layer still blocks private ranges, but the script can make arbitrary outbound requests to public hosts. Earl can't know whether those requests are legitimate. If you're running bash commands from agent input, keep `network = false`.
 
-**Query injection through SQL parameters.** Earl uses parameterized queries — parameters go through the driver's parameter binding, not string interpolation. But the security of parameterized queries depends on the database driver and your connection setup. Earl doesn't protect against a misconfigured driver that doesn't actually parameterize.
+**SQL injection via direct query interpolation.** Parameterized queries protect values in the `params` array. The `query` string itself is rendered by Earl's template engine before it reaches the driver, so an arg interpolated directly into `query` — rather than into `params` — is raw SQL. Dynamic table or column names are the common case where this matters, since SQL doesn't allow parameterizing identifiers. Restrict those to an explicit allowlist in the template. Earl doesn't protect against a misconfigured driver that doesn't actually parameterize bound parameters either.
 
 ## Write-mode safety in MCP deployments
 
