@@ -197,6 +197,35 @@ async fn bash_env_var_is_accessible_in_script() {
     assert_eq!(out.result.as_str().unwrap().trim(), "test_value_123");
 }
 
+/// Test that shell metacharacters in an env var value are not interpreted as shell code.
+/// This verifies the safe arg-passing pattern: env vars referenced as "$VAR" treat their
+/// value as a literal string, so `. ; echo injected` does not execute a second command.
+#[tokio::test]
+async fn bash_env_var_metacharacters_are_not_interpreted() {
+    let result_template = ResultTemplate {
+        decode: ResultDecode::Text,
+        extract: None,
+        output: "{{ result }}".to_string(),
+        result_alias: None,
+    };
+
+    let prepared = prepared_bash_request_with_env(
+        r#"echo "$EARL_PATH""#,
+        result_template,
+        vec![("EARL_PATH".to_string(), ". ; echo injected".to_string())],
+    );
+
+    let out = execute_prepared_request_with_host_validator(&prepared, |_url| async {
+        Ok(loopback_resolver())
+    })
+    .await
+    .unwrap();
+
+    let output = out.result.as_str().unwrap().trim();
+    // The value should be echoed literally, not interpreted as two commands.
+    assert_eq!(output, ". ; echo injected");
+}
+
 /// Test that sandbox max_time_ms overrides transport timeout.
 #[tokio::test]
 async fn bash_sandbox_timeout_overrides_transport() {

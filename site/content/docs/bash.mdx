@@ -39,8 +39,12 @@ command "count_lines" {
 
     bash {
       script = <<-SH
-        grep -c "{{ args.pattern }}" "{{ args.path }}" || echo 0
+        grep -c "$EARL_PATTERN" "$EARL_PATH" || echo 0
       SH
+      env = {
+        EARL_PATH    = "{{ args.path }}"
+        EARL_PATTERN = "{{ args.pattern }}"
+      }
       sandbox {
         network          = false
         max_time_ms      = 5000
@@ -69,13 +73,17 @@ earl call local.count_lines --path /var/log/syslog --pattern ERROR
 ```hcl
 bash {
   script = <<-SH
-    grep -c "{{ args.pattern }}" "{{ args.path }}" || echo 0
+    grep -c "$EARL_PATTERN" "$EARL_PATH" || echo 0
   SH
+  env = {
+    EARL_PATH    = "{{ args.path }}"
+    EARL_PATTERN = "{{ args.pattern }}"
+  }
   ...
 }
 ```
 
-`script` is the shell script. The heredoc syntax (`<<-SH ... SH`) keeps multi-line scripts readable without escaping. Jinja expressions inside the script are rendered before it runs — `{{ args.pattern }}` is replaced with the actual value before the shell sees the string.
+`script` is the shell script. The heredoc syntax (`<<-SH ... SH`) keeps multi-line scripts readable without escaping. Args are passed through `env` and referenced in the script as `"$VAR_NAME"`. When a variable is expanded with double quotes, the shell treats its value as a literal string — shell operators, command substitution, and word splitting in the value are not interpreted. Rendering args directly into the script string (`{{ args.path }}`) instead of through env vars allows values containing `;`, `$()`, or backticks to inject additional shell commands.
 
 ### sandbox block
 
@@ -108,7 +116,7 @@ Bash output is plain text. `decode = "text"` gives the full stdout string as `re
 
 ## Env vars and writable_paths
 
-Using env vars instead of inline interpolation avoids quoting issues with values that contain spaces or special characters.
+Pass string args through `env` and reference them as `"$VAR_NAME"` in the script. This prevents shell injection: a value like `. ; rm -rf .` is passed as a literal string to the command rather than being interpreted by the shell. Rendering args directly into the script (`{{ args.path }}`) does not have this property — values containing `$()`, backticks, or `;` execute as shell code.
 
 ```hcl
 command "extract_json_field" {
