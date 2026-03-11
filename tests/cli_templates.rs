@@ -471,7 +471,7 @@ fn templates_import_rejects_unsupported_url_scheme() {
     cmd.current_dir(cwd.path()).env("HOME", home.path()).args([
         "templates",
         "import",
-        "git://github.com/brwse/earl-core/templates/github.hcl",
+        "git://github.com/mathematic-inc/earl/templates/github.hcl",
     ]);
 
     let out = cmd.assert().failure().get_output().stderr.clone();
@@ -1131,7 +1131,7 @@ fn templates_validate_supports_nested_template_paths() {
     let home = tempfile::tempdir().unwrap();
     write_config(home.path());
 
-    let templates_dir = cwd.path().join("templates/brwse/core");
+    let templates_dir = cwd.path().join("templates/mathematic-inc/core");
     fs::create_dir_all(&templates_dir).unwrap();
     fs::write(
         templates_dir.join("ok.hcl"),
@@ -1150,7 +1150,7 @@ fn templates_validate_supports_nested_template_paths() {
     assert_eq!(files.len(), 1);
     let validated_path = std::path::Path::new(files[0].as_str().unwrap());
     let expected_suffix = std::path::Path::new("templates")
-        .join("brwse")
+        .join("mathematic-inc")
         .join("core")
         .join("ok.hcl");
     assert!(validated_path.ends_with(expected_suffix));

@@ -2,6 +2,12 @@
   "name": "site",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mathematic-inc/earl.git",
+    "directory": "site"
+  },
   "scripts": {
     "rustdoc": "cd .. && cargo doc --workspace --no-deps && mkdir -p site/public/rustdoc && cp -r target/doc/* site/public/rustdoc/",
     "prebuild": "pnpm run rustdoc",

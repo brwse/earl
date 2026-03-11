@@ -12,7 +12,7 @@ Earl ships six skills in two categories: **development** skills for setting up a
 
 ```bash
 mkdir -p ~/.claude/skills/<skill-name>
-curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/skills/<category>/<skill-name>/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/mathematic-inc/earl/main/skills/<category>/<skill-name>/SKILL.md \
   -o ~/.claude/skills/<skill-name>/SKILL.md
 ```
 
@@ -25,7 +25,7 @@ Use the <skill-name> skill to <goal>.
 If you'd rather not install the file, paste this into your agent:
 
 ```
-Fetch https://raw.githubusercontent.com/brwse/earl/main/skills/<category>/<skill-name>/SKILL.md
+Fetch https://raw.githubusercontent.com/mathematic-inc/earl/main/skills/<category>/<skill-name>/SKILL.md
 and follow the skill to <goal>.
 ```
 
@@ -107,13 +107,13 @@ Install it once and the agent uses it automatically:
 
 ```bash
 mkdir -p ~/.claude/skills/earl
-curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/skills/runtime/earl/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/mathematic-inc/earl/main/skills/runtime/earl/SKILL.md \
   -o ~/.claude/skills/earl/SKILL.md
 ```
 
 ## The skill repository
 
-Skills are organized by category at [`github.com/brwse/earl/tree/main/skills/`](https://github.com/brwse/earl/tree/main/skills/):
+Skills are organized by category at [`github.com/mathematic-inc/earl/tree/main/skills/`](https://github.com/mathematic-inc/earl/tree/main/skills/):
 
 - `skills/development/` — setup, template authoring, migration, hardening, troubleshooting
 - `skills/runtime/` — the `earl` skill for agent runtime use

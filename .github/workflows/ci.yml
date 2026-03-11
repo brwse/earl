@@ -1,13 +1,13 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -20,12 +20,12 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
+          toolchain: stable
           components: rustfmt
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -33,36 +33,34 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Install system dependencies
-        run: sudo apt-get install -y libdbus-1-dev
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+        run: sudo apt-get update -y && sudo apt-get install -y libdbus-1-dev
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
+          toolchain: stable
           components: clippy
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
-      - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@v2
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        with:
+          cache-on-failure: true
       - name: Lint
         run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Install system dependencies
-        run: sudo apt-get install -y libdbus-1-dev bubblewrap
+        run: sudo apt-get update -y && sudo apt-get install -y libdbus-1-dev bubblewrap
       - name: Allow bwrap unprivileged user namespaces
         run: |
           echo 'abi <abi/4.0>,' | sudo tee /etc/apparmor.d/bwrap
@@ -71,72 +69,40 @@ jobs:
           echo '  userns,' | sudo tee -a /etc/apparmor.d/bwrap
           echo '}' | sudo tee -a /etc/apparmor.d/bwrap
           sudo apparmor_parser -r /etc/apparmor.d/bwrap
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
-          node-version: "22"
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
-      - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@v2
+          toolchain: stable
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        with:
+          cache-on-failure: true
       - name: Run tests
         run: cargo test --all-targets --all-features
 
-  publish-dry-run:
-    name: Publish Dry Run
-    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
+  typescript:
+    name: TypeScript
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install system dependencies
-        run: sudo apt-get install -y libdbus-1-dev
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
-          node-version: "22"
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
-      - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@v2
-      - name: Validate crates.io package
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # Publish in dependency order matching release.yml.
-          # - Skip crates that already exist on crates.io (idempotent).
-          # - Skip crates whose workspace dependencies haven't been
-          #   published yet (valid for newly-added protocol crates before
-          #   their first release).
-          CRATES=(
-            earl-core
-            earl-protocol-http
-            earl-protocol-grpc
-            earl-protocol-bash
-            earl-protocol-sql
-            earl-protocol-browser
-            earl
-          )
-
-          for crate in "${CRATES[@]}"; do
-            echo "Dry-run for $crate..."
-            output=$(cargo publish --dry-run --locked --no-verify -p "$crate" 2>&1) && echo "$output" || {
-              if echo "$output" | grep -q "already exists on crates.io index"; then
-                echo "$crate already on crates.io, skipping."
-              elif echo "$output" | grep -q "no matching package named"; then
-                echo "$crate has unpublished workspace dependencies, skipping."
-              else
-                echo "$output" >&2
-                exit 1
-              fi
-            }
-          done
+          toolchain: stable
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        with:
+          cache-on-failure: true
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm turbo run build
+      - name: Typecheck
+        run: pnpm turbo run types:check

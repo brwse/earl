@@ -7,6 +7,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
+keywords = ["browser", "automation", "agent", "chromium"]
+categories = ["web-programming"]
 
 [dependencies]
 anyhow = "1.0"

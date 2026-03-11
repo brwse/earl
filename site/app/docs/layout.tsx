@@ -9,7 +9,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <DocsLayout
       tree={tree}
       {...baseOptions()}
-      githubUrl="https://github.com/brwse/earl"
+      githubUrl="https://github.com/mathematic-inc/earl"
       sidebar={{
         defaultOpenLevel: 1,
       }}

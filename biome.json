@@ -1,22 +1,19 @@
 {
-  "root": false,
-  "$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
-    "useIgnoreFile": false
+    "useIgnoreFile": true
   },
   "files": {
     "ignoreUnknown": true,
     "includes": [
-      "**",
       "!node_modules",
-      "!.next",
       "!dist",
       "!build",
-      "!.source",
-      "!out",
-      "!public/rustdoc"
+      "!**/dist",
+      "!**/build",
+      "!.pnpm-store"
     ]
   },
   "formatter": {
@@ -28,10 +25,6 @@
     "enabled": true,
     "rules": {
       "recommended": true
-    },
-    "domains": {
-      "next": "recommended",
-      "react": "recommended"
     }
   },
   "assist": {
@@ -40,5 +33,6 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "extends": ["ultracite/core", "ultracite/biome/react", "ultracite/biome/next"]
 }

@@ -24,7 +24,7 @@ These rules prevent context window exhaustion and partial-migration messes:
 
 ## Phase 1: Scan All Providers
 
-Read `references/cli-to-earl-mapping.md` (or fetch from `https://raw.githubusercontent.com/brwse/earl/main/skills/development/migrate-to-earl/references/cli-to-earl-mapping.md`) for the full list of patterns and files to scan.
+Read `references/cli-to-earl-mapping.md` (or fetch from `https://raw.githubusercontent.com/mathematic-inc/earl/main/skills/development/migrate-to-earl/references/cli-to-earl-mapping.md`) for the full list of patterns and files to scan.
 
 Grep across all relevant files for every pattern in the mapping table. Even on repeated
 invocations, always do a full scan first.
@@ -55,7 +55,7 @@ Check `earl templates list` first — if the provider is already imported, skip 
 command below and go directly to showing available commands.
 
 ```bash
-earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/<provider>.hcl
+earl templates import https://raw.githubusercontent.com/mathematic-inc/earl/main/examples/<provider>.hcl
 earl templates list
 ```
 

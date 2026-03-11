@@ -50,7 +50,7 @@ Check the list carefully:
 # Available: github, stripe, slack, notion, openai, anthropic, recall_ai, discord, gitlab, jira, linear,
 #            pagerduty, twilio, sendgrid, cloudflare, vercel, render, shopify, hubspot,
 #            mailchimp, datadog, sentry, airtable, auth0, supabase, resend
-earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/<provider>.hcl
+earl templates import https://raw.githubusercontent.com/mathematic-inc/earl/main/examples/<provider>.hcl
 ```
 
 If a pre-built template was imported, skip to **Phase 7: Set Secrets** — phases 2–6 are not
@@ -67,11 +67,11 @@ Map the user's description to a protocol:
 
 | User mentions                                | Protocol  | Reference file                                                                                                                         |
 | -------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| REST, HTTP, API, endpoint, JSON API, webhook | `http`    | `../references/http-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/http-templates.md))       |
-| GraphQL, query/mutation (in API context)     | `graphql` | `../references/graphql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/graphql-templates.md)) |
-| gRPC, protobuf, service mesh                 | `grpc`    | `../references/grpc-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/grpc-templates.md))       |
-| shell, bash, CLI, script, command line       | `bash`    | `../references/bash-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/bash-templates.md))       |
-| SQL, database, postgres, mysql, sqlite       | `sql`     | `../references/sql-templates.md` ([raw](https://raw.githubusercontent.com/brwse/earl/main/skills/development/references/sql-templates.md))         |
+| REST, HTTP, API, endpoint, JSON API, webhook | `http`    | `../references/http-templates.md` ([raw](https://raw.githubusercontent.com/mathematic-inc/earl/main/skills/development/references/http-templates.md))       |
+| GraphQL, query/mutation (in API context)     | `graphql` | `../references/graphql-templates.md` ([raw](https://raw.githubusercontent.com/mathematic-inc/earl/main/skills/development/references/graphql-templates.md)) |
+| gRPC, protobuf, service mesh                 | `grpc`    | `../references/grpc-templates.md` ([raw](https://raw.githubusercontent.com/mathematic-inc/earl/main/skills/development/references/grpc-templates.md))       |
+| shell, bash, CLI, script, command line       | `bash`    | `../references/bash-templates.md` ([raw](https://raw.githubusercontent.com/mathematic-inc/earl/main/skills/development/references/bash-templates.md))       |
+| SQL, database, postgres, mysql, sqlite       | `sql`     | `../references/sql-templates.md` ([raw](https://raw.githubusercontent.com/mathematic-inc/earl/main/skills/development/references/sql-templates.md))         |
 
 If the answer is genuinely ambiguous, ask one follow-up question.
 
@@ -125,7 +125,7 @@ file rather than overwriting it.
 
 **Environments (optional):** If the user needs staging/production separation, add an
 `environments` block at the provider level. Environment variables are available as `vars.*`
-in all template expressions. See the [template schema docs](https://brwse.github.io/earl/docs/template-schema#environments)
+in all template expressions. See the [template schema docs](https://mathematic-inc.github.io/earl/docs/template-schema#environments)
 for full syntax. Only add environments when the user explicitly needs them — most templates
 don't.
 

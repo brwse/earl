@@ -8,13 +8,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://brwse.github.io/earl"),
+  metadataBase: new URL("https://mathematic-inc.github.io/earl"),
   title: "Earl",
   description: "AI-safe CLI for AI agents",
   openGraph: {
     title: "Earl",
     description: "AI-safe CLI for AI agents",
-    url: "https://brwse.github.io/earl",
+    url: "https://mathematic-inc.github.io/earl",
     siteName: "Earl",
     images: [
       {

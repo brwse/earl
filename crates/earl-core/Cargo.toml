@@ -7,6 +7,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
+keywords = ["ai", "agent", "protocol", "sandboxing"]
+categories = ["network-programming"]
 
 [dependencies]
 anyhow = "1.0"

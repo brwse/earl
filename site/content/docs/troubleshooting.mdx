@@ -22,7 +22,7 @@ earl --version
 If the binary is missing, reinstall:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mathematic-inc/earl/main/scripts/install.sh | bash
 ```
 
 **Keychain unavailable.** Doctor tries to access the OS keychain when checking for required secrets. If it reports a keychain error, see the Linux keychain section below.
@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/brwse/earl/main/scripts/install.sh 
 **No templates found.** This is a warning, not an error. Doctor looks in `./templates/` (relative to cwd) and `~/.config/earl/templates/`. If both are empty, import a template:
 
 ```bash
-earl templates import https://raw.githubusercontent.com/brwse/earl/main/examples/github.hcl
+earl templates import https://raw.githubusercontent.com/mathematic-inc/earl/main/examples/github.hcl
 ```
 
 **Template validation failed.** Doctor runs `earl templates validate` internally. If it errors here, run validation directly to see the specific file and line:

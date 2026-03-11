@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${EARL_INSTALL_REPO:-brwse/earl}"
+REPO="${EARL_INSTALL_REPO:-mathematic-inc/earl}"
 VERSION="latest"
 INSTALL_DIR=""
 BIN_DIR=""

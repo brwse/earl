@@ -7,6 +7,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
+keywords = ["bash", "agent", "sandboxing", "security"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 anyhow = "1.0"

@@ -1,7 +1,13 @@
 {
-  "packageManager": "pnpm@10.28.2",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mathematic-inc/earl.git"
+  },
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.31.0+sha512.e3927388bfaa8078ceb79b748ffc1e8274e84d75163e67bc22e06c0d3aed43dd153151cbf11d7f8301ff4acb98c68bdc5cadf6989532801ffafe3b3e4a63c268",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "lefthook": "catalog:",
     "ultracite": "catalog:",
     "turbo": "catalog:"
   },
@@ -13,6 +19,9 @@
     "dev:site": "turbo run dev --filter=site",
     "dev:web": "turbo run dev --filter=earl-web",
     "types:check": "turbo run types:check --filter=site",
+    "prepare": "test -n \"$CI\" || lefthook install",
+    "lint": "ultracite check",
+    "format": "ultracite fix",
     "check": "ultracite check",
     "fix": "ultracite fix"
   }

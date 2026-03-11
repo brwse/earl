@@ -10,7 +10,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$repo = if ($env:EARL_INSTALL_REPO) { $env:EARL_INSTALL_REPO } else { "brwse/earl" }
+$repo = if ($env:EARL_INSTALL_REPO) { $env:EARL_INSTALL_REPO } else { "mathematic-inc/earl" }
 
 $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
 switch ($arch) {

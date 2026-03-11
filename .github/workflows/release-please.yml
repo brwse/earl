@@ -1,9 +1,8 @@
-name: Release PR
+name: Release Please
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -18,8 +17,8 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
-      - name: Run release-please
-        uses: googleapis/release-please-action@v4
+      - name: Run Release Please
+        uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
           config-file: release-please-config.json
